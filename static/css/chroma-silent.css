@@ -1,45 +1,98 @@
 /* =====================================================
    Chroma 高亮覆盖
-   目标：保留当前冷淡风格，同时修正代码块容器、滚动和 token 不完整的问题
+   目标：保留当前冷淡风格，同时弱化代码块边界、滚动和 token 不完整的问题
    ===================================================== */
 
 .highlight {
-  margin: 1.6rem 0;
+  margin: 1.35rem 0 1.55rem;
   position: relative;
   overflow: hidden;
-  padding: 0.95rem 1.05rem 0.85rem;
-  border-radius: 16px;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
   background:
     linear-gradient(
-      to bottom,
-      rgba(230, 235, 242, 0.96),
-      rgba(222, 228, 236, 0.96)
+      135deg,
+      rgba(244, 249, 253, 0.74),
+      rgba(232, 240, 248, 0.42) 44%,
+      rgba(250, 253, 255, 0.3)
     );
-  color: #2f3b4a;
+  color: #283747;
   box-shadow:
-    inset 0 0 0 1px rgba(190, 200, 215, 0.55),
-    0 6px 18px rgba(0, 0, 0, 0.12);
+    inset 0 1px 0 rgba(255, 255, 255, 0.62),
+    inset 0 0 0 1px rgba(179, 198, 218, 0.22),
+    inset 2px 0 0 rgba(112, 150, 190, 0.28),
+    0 12px 28px rgba(27, 40, 55, 0.055);
 }
 
 .highlight::before,
 .highlight::after {
   content: "";
   position: absolute;
-  top: 0.7rem;
-  bottom: 0.7rem;
-  width: 2rem;
   pointer-events: none;
-  z-index: 2;
 }
 
 .highlight::before {
-  left: 0;
-  background: linear-gradient(90deg, rgba(228, 233, 241, 0.88), rgba(228, 233, 241, 0));
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(255, 255, 255, 0.64) 42%,
+      rgba(112, 151, 191, 0)
+    );
 }
 
 .highlight::after {
-  right: 0;
-  background: linear-gradient(270deg, rgba(224, 230, 238, 0.92), rgba(224, 230, 238, 0));
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(228, 238, 248, 0.52),
+      rgba(248, 251, 254, 0.22) 58%,
+      rgba(248, 251, 254, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.highlight:has(.line:only-child)::after {
+  content: none;
 }
 
 .highlight pre,
@@ -52,10 +105,12 @@
 }
 
 .highlight pre {
+  position: relative;
+  z-index: 1;
   overflow-x: auto;
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
-  padding: 0 0.15rem 0;
+  padding: 0 0.22rem;
   white-space: pre;
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -80,7 +135,7 @@
     "Liberation Mono",
     monospace;
   font-size: 0.92em;
-  line-height: 1.72;
+  line-height: 1.6;
 }
 
 .highlight .line,

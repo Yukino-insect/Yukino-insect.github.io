@@ -139,7 +139,7 @@ public class SseController {
 
 与 WebSocket 对比：
 
-- SSE 是单向（服务器 → 客户端），WebSocket 双向。
+- SSE 是单向（服务器 -> 客户端），WebSocket 双向。
 - SSE 基于 HTTP/1.1，自动重连，适合低频更新场景。
 - SSE 事件流是文本（text/event-stream），浏览器自带 EventSource 支持。
 

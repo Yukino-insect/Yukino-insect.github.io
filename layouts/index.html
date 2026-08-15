@@ -5,6 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 {{ $siteTitle := .Site.Title | default "个人博客" }}
 <title>{{ $siteTitle }}</title>
+{{ $homeImages := slice }}
+{{ range (.Site.Data.home_backgrounds.images | default (slice "/images/cover/cover1.jpg")) }}
+    {{ $homeImageFile := printf "static%s" . }}
+    {{ if and (not (in $homeImages .)) (fileExists $homeImageFile) }}
+        {{ $homeImages = $homeImages | append . }}
+    {{ end }}
+{{ end }}
+{{ if eq (len $homeImages) 0 }}
+    {{ $homeImages = slice "/images/cover/cover1.jpg" }}
+{{ end }}
 
 <style>
 html, body {
@@ -25,7 +35,7 @@ html, body {
     width: 100vw;
     height: 100vh;
     min-height: 100svh;
-    background-image: url("/images/cover1.jpg");
+    background-image: url("{{ index $homeImages 0 }}");
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
@@ -123,6 +133,17 @@ html, body {
 
     text-decoration: none;
     color: #1f2d3d;
+    transition:
+        transform .18s ease,
+        box-shadow .18s ease;
+}
+
+.category-card:hover {
+    transform: translateY(-3px);
+    box-shadow:
+        0 1px 0 rgba(255,255,255,.92),
+        0 16px 34px rgba(155,180,205,.22),
+        0 0 0 1px rgba(216,226,236,.92);
 }
 
 .chat-avatar {
@@ -209,116 +230,56 @@ html, body {
 <section class="categories">
 <h2>博客分类</h2>
 
-{{ $preferredKeys := slice
-    "computerorganization"
-    "algorithm"
-    "internet"
-    "linux"
-    "javase"
-    "javaee"
-    "jvm"
-    "juc"
-    "spring"
-    "springboot"
-    "mybatis"
-    "mysql"
-    "redis"
-    "elasticsearch"
-    "nacos"
-    "sentinel"
-    "microservices"
-    "projectexperience"
-    "git"
-    "randomthoughts"
-}}
-{{ $preferredImageKeys := slice "linux" "git" "elasticsearch" "algorithm" "redis" "juc" "spring" "mysql" "javase" "springboot" "internet" }}
-{{ $preferredSections := slice
-    (dict "key" "computerorganization" "name" "ComputerOrganization")
-    (dict "key" "algorithm" "name" "Algorithm")
-    (dict "key" "internet" "name" "Internet")
-    (dict "key" "linux" "name" "Linux")
-    (dict "key" "javase" "name" "JavaSE")
-    (dict "key" "javaee" "name" "JavaEE")
-    (dict "key" "jvm" "name" "JVM")
-    (dict "key" "juc" "name" "JUC")
-    (dict "key" "spring" "name" "Spring")
-    (dict "key" "springboot" "name" "SpringBoot")
-    (dict "key" "mybatis" "name" "MyBatis")
-    (dict "key" "mysql" "name" "Mysql")
-    (dict "key" "redis" "name" "Redis")
-    (dict "key" "elasticsearch" "name" "Elasticsearch")
-    (dict "key" "nacos" "name" "Nacos")
-    (dict "key" "sentinel" "name" "Sentinel")
-    (dict "key" "microservices" "name" "Microservices")
-    (dict "key" "projectexperience" "name" "ProjectExperience")
-    (dict "key" "git" "name" "Git")
-    (dict "key" "randomthoughts" "name" "RandomThoughts")
-}}
-{{ $sectionNames := dict }}
-{{ $availableSectionKeys := slice }}
-{{ range .Site.RegularPages }}
-    {{ $sectionKey := .Section }}
-    {{ $sectionName := path.Base .File.Dir }}
-    {{ if not (in $availableSectionKeys $sectionKey) }}
-        {{ $availableSectionKeys = $availableSectionKeys | append $sectionKey }}
-        {{ $sectionNames = merge $sectionNames (dict $sectionKey $sectionName) }}
-    {{ end }}
-{{ end }}
-
-{{ $sections := slice }}
-{{ range $preferredSections }}
-    {{ $key := .key }}
-    {{ if in $availableSectionKeys $key }}
-        {{ $displayName := index $sectionNames $key | default .name }}
-        {{ $sections = $sections | append (dict "key" $key "name" $displayName) }}
-    {{ end }}
-{{ end }}
-
-{{ range $key := $availableSectionKeys }}
-    {{ if not (in $preferredKeys $key) }}
-        {{ $sections = $sections | append (dict "key" $key "name" (index $sectionNames $key)) }}
-    {{ end }}
-{{ end }}
-
-{{ range $i, $section := $sections }}
+{{ $topicGroups := .Site.Data.topic_groups.groups }}
+{{ $primaryIcons := .Site.Data.category_icons.primary }}
+{{ range $i, $group := $topicGroups }}
     {{ if eq (mod $i 2) 0 }}<div class="row">{{ end }}
-    {{ $name := index $section "name" }}
-    {{ $key := index $section "key" }}
-    {{ $imageKey := $key }}
-    {{ if lt $i (len $preferredImageKeys) }}
-        {{ $imageKey = index $preferredImageKeys $i }}
+    {{ $avatarPath := "" }}
+    {{ if lt $i (len $primaryIcons) }}
+        {{ $avatarPath = index $primaryIcons $i }}
     {{ end }}
-    {{ $avatarPath := printf "/images/category/%s.jpg" ($imageKey | lower) }}
-    {{ $avatarFile := printf "static/images/category/%s.jpg" ($imageKey | lower) }}
-    <a class="category-card" href="/{{ $key }}/">
-        {{ if fileExists $avatarFile }}
+    {{ $avatarFile := printf "static%s" $avatarPath }}
+    <a class="category-card" href="/groups/{{ $group.slug }}/">
+        {{ if and $avatarPath (fileExists $avatarFile) }}
         <div class="chat-avatar">
-            <img src="{{ $avatarPath }}" alt="{{ $name }}">
+            <img src="{{ $avatarPath }}" alt="{{ $group.title }}">
         </div>
         {{ else }}
-        <div class="chat-avatar chat-avatar--fallback">{{ upper (slicestr $name 0 1) }}</div>
+        <div class="chat-avatar chat-avatar--fallback">{{ upper (slicestr $group.title 0 1) }}</div>
         {{ end }}
-        <div class="chat-name">{{ $name }}</div>
+        <div class="chat-name">{{ $group.title }}</div>
     </a>
-    {{ if or (eq (mod $i 2) 1) (eq (add $i 1) (len $sections)) }}</div>{{ end }}
+    {{ if or (eq (mod $i 2) 1) (eq (add $i 1) (len $topicGroups)) }}</div>{{ end }}
 {{ end }}
 </section>
 
 <script>
 /* Hero 背景切换 */
 const hero = document.getElementById("hero");
-const images = [
-    "/images/cover1.jpg",
-    "/images/cover2.jpg",
-    "/images/cover3.jpg",
-    "/images/cover4.jpg",
-    "/images/cover5.jpg",
-    "/images/cover6.jpg"
-];
+const images = {{ $homeImages | jsonify | safeJS }};
+
+function shuffledDeck(values) {
+    const deck = [...new Set(values.filter(Boolean))];
+    for (let i = deck.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [deck[i], deck[j]] = [deck[j], deck[i]];
+    }
+    return deck;
+}
+
+let deck = shuffledDeck(images);
 let current = 0;
+if (deck.length) {
+    hero.style.backgroundImage = `url('${deck[current]}')`;
+}
+
 hero.onclick = () => {
-    current = (current + 1) % images.length;
-    hero.style.backgroundImage = `url('${images[current]}')`;
+    if (deck.length <= 1) return;
+    current = (current + 1) % deck.length;
+    if (current === 0) {
+        deck = shuffledDeck(images);
+    }
+    hero.style.backgroundImage = `url('${deck[current]}')`;
 };
 
 /* ❄️ 原雪生成（未改变，仅增强视觉） */

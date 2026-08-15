@@ -293,10 +293,10 @@ mybatis 通过加载配置文件来获取一个 SqlSessionFactory，再由它获
 
 - **作用**：真正的数据库操作对象，包含执行 SQL 的所有方法。
 - **常见方法**：
-  - `selectOne()`、`selectList()` → 查询
-  - `insert()`、`update()`、`delete()` → 写操作
-  - `commit()`、`rollback()` → 事务控制
-  - `getMapper()` → 获取 Mapper 接口代理对象
+  - `selectOne()`、`selectList()` -> 查询
+  - `insert()`、`update()`、`delete()` -> 写操作
+  - `commit()`、`rollback()` -> 事务控制
+  - `getMapper()` -> 获取 Mapper 接口代理对象
 - **特点**：
   - 线程不安全。
   - 一般是 **方法内获取，用完立即关闭**，不要长时间保存。
@@ -305,7 +305,7 @@ mybatis 通过加载配置文件来获取一个 SqlSessionFactory，再由它获
 
 当我们通过 `sqlSessionFactory.openSession()` 获取一个 `SqlSession` 时：
 
-- 默认情况下：**`openSession(false)`** → 事务关闭自动提交，需要手动 `commit()`。
+- 默认情况下：**`openSession(false)`** -> 事务关闭自动提交，需要手动 `commit()`。
 
 - 如果希望自动提交，可以将 false 改为 true：
 
@@ -432,14 +432,14 @@ MyBatis 会解析 SQL 文本，找到所有`#{xxx}`占位符。接着会将每�
 如果是**对象参数**（JavaBean）
 
 - mybatis 会直接通过反射获取属性值，将属性名和占位符匹配：
-  - `#{name}` → `user.getName()`
-  - `#{age}` → `user.getAge()`
+  - `#{name}` -> `user.getName()`
+  - `#{age}` -> `user.getAge()`
 
 如果是**Map 参数**
 
 - 直接按 key 查找：
-  - `#{name}` → `map.get("name")`
-  - `#{age}` → `map.get("age")`
+  - `#{name}` -> `map.get("name")`
+  - `#{age}` -> `map.get("age")`
 
 可以看到，可以传入的参数类型是很多的
 
@@ -456,7 +456,7 @@ User{id=1, userName='null', age=18}
 整体流程如下
 
 ```bash
-SQL 执行 → JDBC ResultSet → ResultSetHandler → TypeHandler → Java 对象 → 返回给调用者
+SQL 执行 -> JDBC ResultSet -> ResultSetHandler -> TypeHandler -> Java 对象 -> 返回给调用者
 ```
 
 JDBC PreparedStatement 执行完 SQL后返回 `ResultSet`，**ResultSetHandler** 类会获取结果，读取 ResultSet 的每一行并对其执行**行到对象的映射**
@@ -481,22 +481,22 @@ MyBatis 会递归调用 ResultSetHandler
 执行流程图：
 
 ```bash
-SQL 执行 → JDBC ResultSet
+SQL 执行 -> JDBC ResultSet
          │
          ▼
 ResultSetHandler.handleResultSets()
          │
          ▼
-遍历 ResultSet 每行 → 创建 Java 对象
+遍历 ResultSet 每行 -> 创建 Java 对象
          │
          ▼
-遍历每列 → TypeHandler 转换值
+遍历每列 -> TypeHandler 转换值
          │
          ▼
-列值设置到对象属性 → 完成一行映射
+列值设置到对象属性 -> 完成一行映射
          │
          ▼
-集合封装 → 返回给调用者
+集合封装 -> 返回给调用者
 ```
 
 **ResultMapping** 如何处理类和数据库列的匹配
@@ -505,8 +505,8 @@ ResultSetHandler.handleResultSets()
 
 如果是**驼峰映射**
 
-- 数据库列名 `user_name` → Java 属性 `userName`
-- 数据库列名 `id` → Java 属性 `id`
+- 数据库列名 `user_name` -> Java 属性 `userName`
+- 数据库列名 `id` -> Java 属性 `id`
 
 但是它默认不开启，需要自己手动配置，这就是为什么我们的 userName 属性拿不到值的原因
 
@@ -628,19 +628,19 @@ MappedStatement ← Mapper XML / 注解
 SqlSession 执行 SQL
           │
           ▼
-Executor → StatementHandler → JDBC PreparedStatement
+Executor -> StatementHandler -> JDBC PreparedStatement
           │
           ▼
-ParameterHandler 绑定参数 → ? 占位符
+ParameterHandler 绑定参数 -> ? 占位符
           │
           ▼
-SQL 执行 → ResultSet
+SQL 执行 -> ResultSet
           │
           ▼
-ResultSetHandler → TypeHandler → Java对象
+ResultSetHandler -> TypeHandler -> Java对象
           │
           ▼
-MapperProxy 返回结果 → 业务层
+MapperProxy 返回结果 -> 业务层
 ```
 
 当调用该方法时
@@ -702,7 +702,7 @@ Proxy.newProxyInstance(
 
 1. **全局配置加载时**：
    - `SqlSessionFactory` 解析 Mapper XML
-   - 每个 `&lt;select&gt;` / `&lt;insert&gt;` / `&lt;update&gt;` / `&lt;delete&gt;` → 封装为 `MappedStatement`
+   - 每个 `&lt;select&gt;` / `&lt;insert&gt;` / `&lt;update&gt;` / `&lt;delete&gt;` -> 封装为 `MappedStatement`
    - 存储在 `Configuration.mappedStatements` Map 中
 2. **使用阶段**：
    - **MapperProxy.invoke()** 调用方法时：
@@ -721,13 +721,13 @@ MyBatis 把 SQL 解析、参数绑定、结果映射的职责拆分到不同类�
 ```bash
 Executor
    │
-   ├─ StatementHandler.prepare() → 生成 JDBC PreparedStatement
+   ├─ StatementHandler.prepare() -> 生成 JDBC PreparedStatement
    │
-   ├─ ParameterHandler.setParameters() → 将方法参数绑定到 ? 占位符
+   ├─ ParameterHandler.setParameters() -> 将方法参数绑定到 ? 占位符
    │
-   ├─ StatementHandler.execute() → 执行 SQL
+   ├─ StatementHandler.execute() -> 执行 SQL
    │
-   └─ ResultSetHandler.handleResultSets() → 将 ResultSet 映射成 Java 对象
+   └─ ResultSetHandler.handleResultSets() -> 将 ResultSet 映射成 Java 对象
 ```
 
 现在来描述一下 Executor 调用 ParameterHandler、StatementHandler、ResultSetHandler 等组件完成 SQL 执行和结果映射的过程：
@@ -743,7 +743,7 @@ preparedStatement.setInt(1, 123);
 preparedStatement.setString(2, "abc");
 ```
 
-执行**PreparedStatement.execute()**，JDBC 执行 SQL → 返回 ResultSet
+执行**PreparedStatement.execute()**，JDBC 执行 SQL -> 返回 ResultSet
 
 **ResultSetHandler**，会将 JDBC ResultSet 转换成 Java 对象
 
@@ -1119,8 +1119,8 @@ Spring 的声明式事务底层依赖 **AOP（代理）机制**：
 3. 调用方法时：
    - 代理先开启事务（TransactionManager）
    - 执行业务方法
-   - 方法正常返回 → 提交事务
-   - 方法抛异常 → 回滚事务
+   - 方法正常返回 -> 提交事务
+   - 方法抛异常 -> 回滚事务
 
 最后调用
 
@@ -1144,9 +1144,9 @@ public class App {
 
 `AnnotationConfigApplicationContext` 是 Spring 提供的一个容器实现，它主要用来加载 **基于注解的配置类**，区别于：
 
-- `ClassPathXmlApplicationContext` → 加载 XML 配置
-- `FileSystemXmlApplicationContext` → 加载磁盘路径下的 XML
-- `AnnotationConfigApplicationContext` → 加载 `@Configuration`、`@ComponentScan`、`@Import` 等注解驱动的配置
+- `ClassPathXmlApplicationContext` -> 加载 XML 配置
+- `FileSystemXmlApplicationContext` -> 加载磁盘路径下的 XML
+- `AnnotationConfigApplicationContext` -> 加载 `@Configuration`、`@ComponentScan`、`@Import` 等注解驱动的配置
 
 当执行以下代码时
 
@@ -1424,10 +1424,10 @@ public class User {
 MyBatis-Plus 的映射关系依赖两个核心原则：
 
 1. **表名与类名的映射**
-   - 默认规则：`UserInfo` → `user_info`（驼峰转下划线，全部小写）
+   - 默认规则：`UserInfo` -> `user_info`（驼峰转下划线，全部小写）
    - 可通过注解 `@TableName` 显式指定表名
 2. **字段与列名的映射**
-   - 默认规则：Java 字段 `userName` → 数据库列 `user_name`
+   - 默认规则：Java 字段 `userName` -> 数据库列 `user_name`
    - 可通过注解 `@TableField("user_name")` 显式指定
    - 主键必须用 `@TableId` 注解
 
@@ -1487,8 +1487,8 @@ mybatis-plus:
 
 效果：
 
-- `user_name` → `userName`
-- `create_time` → `createTime`
+- `user_name` -> `userName`
+- `create_time` -> `createTime`
 - **不需要显式 `@TableField` 注解**，除非列名特殊
 
 数据类型映射
@@ -1518,8 +1518,8 @@ private Integer deleted; // 对应数据库的 deleted 列
 
 &gt; 逻辑删除并不是把数据库中的记录真正删除掉，而是**在数据库中增加一个标识字段**，记录该条数据是否被“删除”。
 &gt;
-&gt; - **物理删除（Physical Delete）**：`DELETE FROM user WHERE id=1;` → 数据真正被删除
-&gt; - **逻辑删除（Logical Delete）**：`UPDATE user SET deleted=1 WHERE id=1;` → 数据仍存在，只是标记为已删除
+&gt; - **物理删除（Physical Delete）**：`DELETE FROM user WHERE id=1;` -> 数据真正被删除
+&gt; - **逻辑删除（Logical Delete）**：`UPDATE user SET deleted=1 WHERE id=1;` -> 数据仍存在，只是标记为已删除
 &gt;
 &gt; 逻辑删除的好处：
 &gt;

@@ -185,10 +185,10 @@ public interface CaptchaCacheService {
 
 `CaptchaCacheService` 的作用
 
-验证码有生命周期（生成 → 缓存 → 校验 → 删除），这就要求框架必须有一个地方来存验证码相关的数据。
+验证码有生命周期（生成 -> 缓存 -> 校验 -> 删除），这就要求框架必须有一个地方来存验证码相关的数据。
 
-- **单机模式** → 用内存存储（`CaptchaCacheServiceMemImpl`）。
-- **分布式模式** → 用 Redis 存储（`CaptchaCacheServiceRedisImpl`）。
+- **单机模式** -> 用内存存储（`CaptchaCacheServiceMemImpl`）。
+- **分布式模式** -> 用 Redis 存储（`CaptchaCacheServiceRedisImpl`）。
 
 为了兼容不同存储方式，anji-plus 定义了这个接口，只要实现它，就能把验证码存到任何你想要的地方。
 

@@ -148,8 +148,8 @@ TransactionStatus status = tm.getTransaction(txAttr);
 这里会根据 **传播行为**：
 
 - REQUIRED：
-  - 有事务 → 加入
-  - 无事务 → 新建
+  - 有事务 -> 加入
+  - 无事务 -> 新建
 - REQUIRES_NEW：
   - 挂起旧事务
   - 新建事务
@@ -234,7 +234,7 @@ AOP 代理拦截
  ↓
 TransactionInterceptor
  ↓
-解析 @Transactional → TransactionAttribute
+解析 @Transactional -> TransactionAttribute
  ↓
 选择 PlatformTransactionManager
  ↓
@@ -242,8 +242,8 @@ getTransaction()（新建 / 加入）
  ↓
 执行业务方法
  ↓
-异常？→ rollback
-正常？→ commit
+异常？-> rollback
+正常？-> commit
  ↓
 清理 ThreadLocal & 连接
  ↓

@@ -30,8 +30,8 @@ title = '使用 MySQL 的 Binlog 更新 ES 数据时，如何判断下一次数�
 - **按批次**：一批事件处理完（写 ES 成功）再更新一次 checkpoint
 - **按时间**：每 N 秒刷一次 checkpoint（且只刷“已确认成功处理”的最大位点）
 
-✅ 关键原则：**checkpoint 必须在“下游处理成功”之后提交**
- 否则会出现：位点前移了但 ES 没写成功 → 数据丢失。
+ 关键原则：**checkpoint 必须在“下游处理成功”之后提交**
+ 否则会出现：位点前移了但 ES 没写成功 -> 数据丢失。
 
 ------
 
@@ -53,7 +53,7 @@ title = '使用 MySQL 的 Binlog 更新 ES 数据时，如何判断下一次数�
 
 ## 3) “下一次读取的位置”具体怎么判断？（精确规则）
 
-### ✅ 正确方式：用**最后一条已成功处理事件**的位点
+###  正确方式：用**最后一条已成功处理事件**的位点
 
 对于每个 binlog event，client 都能拿到一个“事件结束位置”或“下一个位置”（next_position）。
  你应保存：
@@ -71,7 +71,7 @@ binlog 里事务是多事件组成（BEGIN/ROW events/XID）。如果你在事�
 常见策略：
 
 - **只在事务提交（XID）后提交 checkpoint**
-- 或者“按事务聚合”：收齐同一事务的 row events → 写 ES 成功 → 再提交该事务对应的位点
+- 或者“按事务聚合”：收齐同一事务的 row events -> 写 ES 成功 -> 再提交该事务对应的位点
 
 这也是为什么很多工具会提供 “transactional” 的 offset 提交方式。
 
@@ -79,11 +79,11 @@ binlog 里事务是多事件组成（BEGIN/ROW events/XID）。如果你在事�
 
 ## 5) 如何保证“不丢不重”（至少一次 / 精确一次）
 
-严格来说，Binlog→ES 很难做到真正 exactly-once，工程上通常做：
+严格来说，Binlog->ES 很难做到真正 exactly-once，工程上通常做：
 
 ### A. 至少一次（At-least-once）+ ES 写入幂等（最常见）
 
-- checkpoint 在 ES 写成功后提交 → 可能重复消费（崩溃在 checkpoint 前）
+- checkpoint 在 ES 写成功后提交 -> 可能重复消费（崩溃在 checkpoint 前）
 - ES 写入用幂等策略：
   - `_id = mysql primary key`
   - 更新覆盖 `index()` 或 `update()`

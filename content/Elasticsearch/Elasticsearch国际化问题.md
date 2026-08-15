@@ -278,7 +278,7 @@ public class SearchService {
 例如：
 
 - `product_us_v1`, `product_us_v2`
-- `product_us_alias` → 指向当前版本
+- `product_us_alias` -> 指向当前版本
 
 mapping
 

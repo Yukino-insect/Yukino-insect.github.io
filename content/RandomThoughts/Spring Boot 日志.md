@@ -314,7 +314,7 @@ private static final Log log = LogFactory.getLog(MyClass.class); // Commons Logg
      - `slf4j-api`（接口）
      - `logback-classic`（默认实现）
      - `jul-to-slf4j`、`jcl-over-slf4j`（桥接包）
-   - 结果是无论是 Commons Logging、JUL、Log4j1 都会被桥接到 **SLF4J → Logback**。
+   - 结果是无论是 Commons Logging、JUL、Log4j1 都会被桥接到 **SLF4J -> Logback**。
 
    所以即使用 `Commons Logging` 写日志，最终也会走到 Logback。
 

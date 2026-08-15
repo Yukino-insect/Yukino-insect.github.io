@@ -32,11 +32,11 @@ title = 'Java 类加载的生命周期'
 
 因为有第 2 步“清零”，所以即使你没写任何赋值，实例字段也会有默认值：
 
-- `int/long/short/...` → `0`
-- `boolean` → `false`
-- `char` → `\u0000`
-- 引用类型 → `null`
-- `float/double` → `0.0`
+- `int/long/short/...` -> `0`
+- `boolean` -> `false`
+- `char` -> `\u0000`
+- 引用类型 -> `null`
+- `float/double` -> `0.0`
 
 这就是你 new 出来的对象“实例字段也会有值”的根本原因：**对象内存先被清零了**。
 

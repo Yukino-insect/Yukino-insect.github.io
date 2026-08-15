@@ -7,6 +7,23 @@
 {{- with .Site.Title }} | {{ . }}{{ end -}}
 {{ end }}
 {{ define "main" }}
+{{ $pageBackgroundImages := slice }}
+{{ range (.Site.Data.page_backgrounds.images | default (slice "/images/cover/cover1.jpg")) }}
+    {{ $pageBackgroundFile := printf "static%s" . }}
+    {{ if and (not (in $pageBackgroundImages .)) (fileExists $pageBackgroundFile) }}
+        {{ $pageBackgroundImages = $pageBackgroundImages | append . }}
+    {{ end }}
+{{ end }}
+{{ if eq (len $pageBackgroundImages) 0 }}
+    {{ $pageBackgroundImages = slice "/images/cover/cover1.jpg" }}
+{{ end }}
+{{ $postAvatarImages := slice }}
+{{ range (.Site.Data.category_icons.secondary | default (slice)) }}
+    {{ $postAvatarFile := printf "static%s" . }}
+    {{ if and (not (in $postAvatarImages .)) (fileExists $postAvatarFile) }}
+        {{ $postAvatarImages = $postAvatarImages | append . }}
+    {{ end }}
+{{ end }}
 
 <style>
 /* ======================
@@ -228,23 +245,13 @@ main[role="main"] {
 
 <div class="content">
     <div class="post-list">
-    {{ $avatarFiles := slice
-        "avatar1.jpg"
-        "avatar2.jpg"
-        "avatar3.jpg"
-        "avatar4.jpg"
-        "avatar5.jpg"
-        "avatar6.jpg"
-        "avatar7.jpg"
-        "avatar8.jpg"
-    }}
     {{ range $index, $page := .RegularPages.ByDate.Reverse }}
     {{ $avatarOrdinal := add $index 1 }}
     <div class="post-card">
         <a class="post-link" href="{{ $page.RelPermalink }}">
             <div class="post-avatar">
-                {{ if lt $index (len $avatarFiles) }}
-                <img src="/images/post-avatar/{{ index $avatarFiles $index }}" alt="{{ $page.Title }}">
+                {{ if lt $index (len $postAvatarImages) }}
+                <img class="js-random-post-avatar" src="{{ index $postAvatarImages $index }}" alt="{{ $page.Title }}">
                 {{ else }}
                 <div class="post-avatar-fallback">{{ printf "%02d" $avatarOrdinal }}</div>
                 {{ end }}
@@ -263,25 +270,34 @@ main[role="main"] {
 
 <script>
 /* ======================
-   背景图片：恢复为原始随机逻辑
+   背景图片：从共享 YAML 配置中随机选择
    ====================== */
 (function () {
-    const images = [
-    "/images/background-image/background-img1.jpg",
-    "/images/background-image/background-img2.jpg",
-    "/images/background-image/background-img3.jpg",
-    "/images/background-image/background-img4.jpg",
-    "/images/background-image/background-img5.jpg",
-    "/images/background-image/background-img6.jpg",
-    "/images/background-image/background-img7.jpg",
-    "/images/background-image/background-img8.jpg",
-    "/images/background-image/background-img9.jpg",
-    "/images/background-image/background-img10.jpg"
-    ];
+    const images = {{ $pageBackgroundImages | jsonify | safeJS }};
 
     const bg = document.getElementById("pageBg");
     bg.style.backgroundImage =
         `url('${images[Math.floor(Math.random() * images.length)]}')`;
+})();
+
+(function () {
+    const images = {{ $postAvatarImages | jsonify | safeJS }};
+
+    function shuffledDeck(values) {
+        const deck = [...new Set(values.filter(Boolean))];
+        for (let i = deck.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [deck[i], deck[j]] = [deck[j], deck[i]];
+        }
+        return deck;
+    }
+
+    const deck = shuffledDeck(images);
+    document.querySelectorAll(".js-random-post-avatar").forEach((img, index) => {
+        if (index < deck.length) {
+            img.src = deck[index];
+        }
+    });
 })();
 
 /* ======================

@@ -24,16 +24,16 @@ Spring Security 默认链中主要 Filter 按顺序如下：
 
 **请求处理流程的主要流程**
 
-1. **客户端请求** → 进入 Servlet Filter
-2. **DelegatingFilterProxy** → 委托给 `FilterChainProxy`
-3. **SecurityContextPersistenceFilter** → 从 Session/Token 加载 `SecurityContext`
-4. **UsernamePasswordAuthenticationFilter / BasicAuthenticationFilter** → 认证处理
+1. **客户端请求** -> 进入 Servlet Filter
+2. **DelegatingFilterProxy** -> 委托给 `FilterChainProxy`
+3. **SecurityContextPersistenceFilter** -> 从 Session/Token 加载 `SecurityContext`
+4. **UsernamePasswordAuthenticationFilter / BasicAuthenticationFilter** -> 认证处理
    - 调用 `AuthenticationManager.authenticate()`
    - 返回认证成功的 `Authentication`，存入 `SecurityContext`
-5. **SessionManagementFilter / CsrfFilter / LogoutFilter / RememberMeFilter** → 执行安全功能
-6. **FilterSecurityInterceptor** → 权限判断，调用 `AccessDecisionManager`
-7. **DispatcherServlet → Controller** → 业务处理
-8. **响应返回** → Filter 链逆序执行后处理（如清理 SecurityContext）
+5. **SessionManagementFilter / CsrfFilter / LogoutFilter / RememberMeFilter** -> 执行安全功能
+6. **FilterSecurityInterceptor** -> 权限判断，调用 `AccessDecisionManager`
+7. **DispatcherServlet -> Controller** -> 业务处理
+8. **响应返回** -> Filter 链逆序执行后处理（如清理 SecurityContext）
 
 其中重要的 Filter 有
 
@@ -48,7 +48,7 @@ Spring Security 默认链中主要 Filter 按顺序如下：
 主要的认证流程是
 
 ```bash
-接收一个 Authentication 请求对象 → 找到合适的认证器 → 调用认证逻辑 → 返回一个认证成功的 Authentication 对象（带上用户权限信息等
+接收一个 Authentication 请求对象 -> 找到合适的认证器 -> 调用认证逻辑 -> 返回一个认证成功的 Authentication 对象（带上用户权限信息等
 ```
 
 Spring Secturity 在基于内存中的用户认证过程中，是通过 `loadUserByUserName` 获取的账号和密码并存入内存中的。之后会再调用其他方法来判断客户端输入的账号密码是否和内存中的数据匹配。
@@ -298,9 +298,9 @@ BCrypt 是一种安全的密码哈希算法，具有以下特点：
 
 - **存储位置**：服务器端存储用户认证信息在 **HttpSession** 中
 - **流程**：
-  1. 用户登录 → Spring Security 校验用户名密码
-  2. 生成 `Authentication` → 保存到 `SecurityContext` → 存入 Session
-  3. 后续请求带上 Session ID → 服务端读取 Session → 获取用户信息
+  1. 用户登录 -> Spring Security 校验用户名密码
+  2. 生成 `Authentication` -> 保存到 `SecurityContext` -> 存入 Session
+  3. 后续请求带上 Session ID -> 服务端读取 Session -> 获取用户信息
 - **特点**：
   - 服务端维护状态
   - 容易实现登出（删除 Session）
@@ -346,7 +346,7 @@ SecurityContextPersistenceFilter
 
 - **存储位置**：客户端持有 Token（如 JWT），服务端不保存认证状态
 - **流程**：
-  1. 用户登录 → Spring Security 验证用户名密码
+  1. 用户登录 -> Spring Security 验证用户名密码
   2. 生成 Token（JWT）返回给客户端
   3. 客户端每次请求带上 Token（Header/Query）
   4. 服务端通过 Token 验证用户身份（无需 Session）
@@ -537,13 +537,13 @@ public class UserController {
 
 Spring Security 提供 SpEL 表达式，可以写得更灵活：
 
-- `@PreAuthorize("isAuthenticated()")` → 必须登录
-- `@PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")` → 多角色支持
-- `@PreAuthorize("#id == authentication.principal.id")` → 只能访问自己的数据
+- `@PreAuthorize("isAuthenticated()")` -> 必须登录
+- `@PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")` -> 多角色支持
+- `@PreAuthorize("#id == authentication.principal.id")` -> 只能访问自己的数据
 
 > 用户权限信息来自 **UserDetailsService.loadUserByUsername()** 里返回的 `UserDetails` 对象的 `getAuthorities()`。
 >
-> - 一般从数据库里查用户 → 查询角色/权限 → 封装成 `GrantedAuthority`。
+> - 一般从数据库里查用户 -> 查询角色/权限 -> 封装成 `GrantedAuthority`。
 >
 > **FilterSecurityInterceptor** 是最终的拦截器，会根据配置的规则校验是否允许访问。
 >
@@ -743,7 +743,7 @@ web 服务中，一个请求的执行顺序是
    ↓
 Servlet Filter（普通 Web Filter）
    ↓
-DelegatingFilterProxy → Spring Security FilterChain
+DelegatingFilterProxy -> Spring Security FilterChain
    ↓
 DispatcherServlet
    ↓
@@ -779,7 +779,7 @@ Servlet Filter.doFilter() 的后续逻辑
 **Spring MVC HandlerInterceptor**
 
 - 属于 Spring MVC 层面。
-- 在请求被分派到 `Controller` 前后执行（`preHandle → Controller → postHandle → afterCompletion`）。
+- 在请求被分派到 `Controller` 前后执行（`preHandle -> Controller -> postHandle -> afterCompletion`）。
 
 所以可以看出
 

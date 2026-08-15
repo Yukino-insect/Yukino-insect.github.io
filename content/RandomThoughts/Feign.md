@@ -26,9 +26,9 @@ title = 'Feign'
 
 > 例如 ：
 >
-> OrderService 下单 → 发送 `order_created` 消息
+> OrderService 下单 -> 发送 `order_created` 消息
 >
-> InventoryService 订阅消息 → 扣减库存
+> InventoryService 订阅消息 -> 扣减库存
 
 ### 微服务调用的关键组件
 
@@ -55,11 +55,11 @@ title = 'Feign'
 
 > 假设有 **订单服务 (OrderService)** 和 **用户服务 (UserService)**：
 >
-> 1. UserService 启动 → 注册到 **Nacos**，服务名 `user-service`
-> 2. OrderService 需要调用 `user-service` → 向 Nacos 请求 `user-service` 的实例列表
+> 1. UserService 启动 -> 注册到 **Nacos**，服务名 `user-service`
+> 2. OrderService 需要调用 `user-service` -> 向 Nacos 请求 `user-service` 的实例列表
 > 3. Ribbon / LoadBalancer 挑选一台 `user-service` 实例
 > 4. 通过 HTTP/Feign 调用 `http://user-service/users/{id}`
-> 5. UserService 返回数据 → OrderService 处理
+> 5. UserService 返回数据 -> OrderService 处理
 
 这里，我们只详细介绍一下**服务调用功能**
 
@@ -220,10 +220,10 @@ public RestTemplate restTemplate(){
 
 例如有 3 台服务器：
 
-- 第 1 个请求 → Server A
-- 第 2 个请求 → Server B
-- 第 3 个请求 → Server C
-- 第 4 个请求 → 再回到 Server A
+- 第 1 个请求 -> Server A
+- 第 2 个请求 -> Server B
+- 第 3 个请求 -> Server C
+- 第 4 个请求 -> 再回到 Server A
    ... 以此类推。
 
 为什么要用轮询
@@ -255,7 +255,7 @@ public Server getServer(List<Server> servers) {
 - A 权重 5
 - B 权重 3
 - C 权重 2
-   10. 个请求 → A 处理 5 个，B 3 个，C 2 个。
+   10. 个请求 -> A 处理 5 个，B 3 个，C 2 个。
 
 这样可以避免“短时间内倾斜”，分布更均匀。
 

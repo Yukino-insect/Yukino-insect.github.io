@@ -174,9 +174,9 @@ springdoc:
     path: /swagger-ui.html   # Swagger UI 页面访问路径
 ```
 
-`/v3/api-docs` → JSON 格式接口文档
+`/v3/api-docs` -> JSON 格式接口文档
 
-`/swagger-ui.html` → 可视化界面
+`/swagger-ui.html` -> 可视化界面
 
 Swagger 配置类
 

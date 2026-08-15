@@ -40,14 +40,14 @@ URI uri = new URI("https", "example.com", "/api", q, null);
 
 #### D. URL 与文件路径互转
 
-- 文件路径 → URI：
+- 文件路径 -> URI：
 
 ```java
 Path p = Path.of("D:/data/a b.png");
 URI fileUri = p.toUri();  // file:///D:/data/a%20b.png
 ```
 
-- URI → Path：
+- URI -> Path：
 
 ```java
 Path p2 = Path.of(fileUri);   // JDK 11+ OK

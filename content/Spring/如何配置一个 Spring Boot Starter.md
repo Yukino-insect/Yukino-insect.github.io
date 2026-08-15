@@ -71,9 +71,9 @@ public class MyLoggerAutoConfiguration {
 
 > @EnableConfigurationProperties管理的 bean 只有在自动配置类真正加载时，Properties 才会被注册，避免无用的 Bean
 
-**`@ConditionalOnProperty`** → 只有在 `my.logger.enabled=true` 或没写时才生效
+**`@ConditionalOnProperty`** -> 只有在 `my.logger.enabled=true` 或没写时才生效
 
-**`@ConditionalOnMissingBean`** → 如果用户没有自定义 `MyLoggerService`，才注入默认的
+**`@ConditionalOnMissingBean`** -> 如果用户没有自定义 `MyLoggerService`，才注入默认的
 
 注册自动配置类
 

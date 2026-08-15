@@ -275,7 +275,7 @@ public void testConsumer() throws Exception {
 >
 > **重试 / DLQ**
 >
-> - 失败（抛异常/返回重试）→ Broker 按退避策略重投（默认最多 16 次）
+> - 失败（抛异常/返回重试）-> Broker 按退避策略重投（默认最多 16 次）
 > - 超过阈值进入 **死信队列**：`%DLQ%<consumerGroup>`
 > - **位点存储**：**Broker 端**统一维护（`CONSUMER_OFFSET`）
 >
@@ -1158,13 +1158,13 @@ public class ConsumerService implements RocketMQListener<String> {
 
 Spring Boot 自动完成的流程：
 
-- 启动时扫描到注解 → 注册 `DefaultRocketMQListenerContainer`
+- 启动时扫描到注解 -> 注册 `DefaultRocketMQListenerContainer`
 - 创建并启动一个 **DefaultMQPushConsumer**
 - 根据注解参数配置订阅信息：`topic`, `selectorType`, `selectorExpression`, `messageModel`
 - 设置消息监听器：
   - 将 `DemoListener` 注册为回调处理器
   - 实际调用 `consumer.registerMessageListener(MessageListenerConcurrently)`
-    - 启动消费线程 → 开始长轮询从 Broker 拉取消息
+    - 启动消费线程 -> 开始长轮询从 Broker 拉取消息
     - 拉到消息后自动回调 `onMessage()`
 
 RocketMQ 与 Spring Boot 集成也支持事务消息，只需实现 `RocketMQLocalTransactionListener`

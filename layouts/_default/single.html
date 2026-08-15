@@ -1,5 +1,15 @@
 {{ define "title" }}{{ .Title }}{{ with .Site.Title }} | {{ . }}{{ end }}{{ end }}
 {{ define "main" }}
+{{ $pageBackgroundImages := slice }}
+{{ range (.Site.Data.page_backgrounds.images | default (slice "/images/cover/cover1.jpg")) }}
+  {{ $pageBackgroundFile := printf "static%s" . }}
+  {{ if and (not (in $pageBackgroundImages .)) (fileExists $pageBackgroundFile) }}
+    {{ $pageBackgroundImages = $pageBackgroundImages | append . }}
+  {{ end }}
+{{ end }}
+{{ if eq (len $pageBackgroundImages) 0 }}
+  {{ $pageBackgroundImages = slice "/images/cover/cover1.jpg" }}
+{{ end }}
 
 <style>
 header,
@@ -15,6 +25,7 @@ body {
   margin: 0;
   font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
   color: #2a3441;
+  background: #f5f8fb;
   scrollbar-gutter: stable both-edges;
 }
 
@@ -41,56 +52,75 @@ main[role="main"] {
   background:
     linear-gradient(
       180deg,
-      rgba(32, 41, 55, 0.28) 0%,
-      rgba(40, 50, 65, 0.42) 100%
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 54%,
+      rgba(245, 248, 251, 0.88) 100%
     );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
 }
 
 .page-shell {
   display: flex;
   justify-content: center;
-  padding: 0 20px 132px;
+  min-height: 100vh;
+  padding: clamp(74px, 8vh, 112px) 20px 132px;
 }
 
 .post-card {
   width: 100%;
-  max-width: 860px;
+  max-width: 900px;
   overflow: clip;
-  padding: 52px 56px;
-  border-radius: 18px;
+  padding: 58px 66px 64px;
+  border-radius: 20px;
   background:
     linear-gradient(
       to bottom,
-      rgba(245, 248, 252, 0.92),
-      rgba(238, 242, 248, 0.9)
+      rgba(248, 251, 254, 0.94),
+      rgba(240, 245, 250, 0.92)
     );
   box-shadow:
-    inset 0 0 0 1px rgba(210, 220, 235, 0.44),
-    0 12px 30px rgba(20, 28, 38, 0.12);
+    inset 0 0 0 1px rgba(214, 224, 236, 0.62),
+    0 18px 42px rgba(20, 28, 38, 0.16);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
 }
 
 .post-title {
-  margin: 0 0 14px;
-  color: #2a3441;
-  font-size: 31px;
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
   font-weight: 300;
-  letter-spacing: 0.02em;
-  line-height: 1.35;
+  letter-spacing: 0;
+  line-height: 1.32;
 }
 
 .post-date {
-  margin-bottom: 34px;
+  margin-bottom: 38px;
   font-size: 14px;
-  color: #7a8796;
+  color: #78889a;
 }
 
 .post-content {
   font-size: 17px;
   font-weight: 350;
-  letter-spacing: 0.015em;
-  line-height: 1.68;
+  letter-spacing: 0;
+  line-height: 1.86;
   color: #2a3441;
 }
 
@@ -102,6 +132,10 @@ main[role="main"] {
   margin-bottom: 0;
 }
 
+.post-content p {
+  margin: 0 0 1.32em;
+}
+
 .post-content p,
 .post-content ul,
 .post-content ol,
@@ -110,7 +144,7 @@ main[role="main"] {
 .post-content table,
 .post-content .highlight,
 .post-content hr {
-  margin: 0 0 1.45em;
+  margin: 0 0 1.42em;
 }
 
 .post-content h2,
@@ -118,14 +152,28 @@ main[role="main"] {
 .post-content h4,
 .post-content h5,
 .post-content h6 {
-  margin: 1.9em 0 0.75em;
-  color: #1f2d3d;
-  line-height: 1.38;
+  margin: 2.1em 0 0.82em;
+  color: #213048;
+  line-height: 1.42;
+  letter-spacing: 0;
 }
 
 .post-content h2 {
-  font-size: 28px;
+  position: relative;
+  padding-left: 16px;
+  font-size: 27px;
   font-weight: 400;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.24em;
+  bottom: 0.22em;
+  width: 3px;
+  border-radius: 999px;
+  background: rgba(119, 149, 188, 0.66);
 }
 
 .post-content h3 {
@@ -150,8 +198,9 @@ main[role="main"] {
 }
 
 .post-content a {
-  color: #3368ab;
-  text-underline-offset: 0.18em;
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
 }
 
 .post-content strong {
@@ -164,11 +213,12 @@ main[role="main"] {
 
 .post-content ul,
 .post-content ol {
-  padding-left: 1.45em;
+  padding-left: 1.35em;
 }
 
 .post-content li {
-  margin: 0.38em 0;
+  margin: 0.42em 0;
+  padding-left: 0.12em;
 }
 
 .post-content li > ul,
@@ -179,39 +229,61 @@ main[role="main"] {
 
 .post-content :not(pre) > code {
   display: inline-block;
-  padding: 0.14em 0.48em;
-  border-radius: 0.45em;
-  background: rgba(220, 228, 236, 0.92);
-  color: #2b5fad;
+  padding: 0.1em 0.44em;
+  border-radius: 0.42em;
+  background: rgba(223, 232, 241, 0.92);
+  color: #285b95;
   font-size: 0.92em;
+  line-height: 1.55;
   word-break: break-word;
 }
 
 .post-content pre {
-  padding: 0.95rem 1.05rem 0.85rem;
+  padding: 1.05rem 1.15rem 1rem;
   border-radius: 16px;
   background:
     linear-gradient(
       to bottom,
-      rgba(230, 235, 242, 0.96),
-      rgba(222, 228, 236, 0.96)
+      rgba(233, 239, 246, 0.98),
+      rgba(224, 232, 240, 0.98)
     );
-  color: #2f3b4a;
+  color: #2e3a49;
   box-shadow:
-    inset 0 0 0 1px rgba(190, 200, 215, 0.55),
-    0 6px 18px rgba(0, 0, 0, 0.12);
+    inset 0 0 0 1px rgba(190, 202, 218, 0.66),
+    0 8px 22px rgba(25, 36, 50, 0.13);
   overflow-x: auto;
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .post-content .highlight {
   position: relative;
   overflow: hidden;
+  margin: 1.72rem 0;
+  padding: 1.05rem 1.15rem 1rem;
+  border-radius: 16px;
+  background:
+    linear-gradient(
+      to bottom,
+      rgba(233, 239, 246, 0.98),
+      rgba(224, 232, 240, 0.98)
+    );
+  color: #2e3a49;
+  box-shadow:
+    inset 0 0 0 1px rgba(190, 202, 218, 0.66),
+    0 8px 22px rgba(25, 36, 50, 0.13);
 }
 
 .post-content .highlight pre {
-  padding: 0 0.15rem 0;
+  padding: 0 0.18rem;
   border-radius: 0;
   background: transparent;
   color: inherit;
@@ -219,6 +291,14 @@ main[role="main"] {
   overflow-x: auto;
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .post-content pre code {
@@ -235,15 +315,15 @@ main[role="main"] {
     "Liberation Mono",
     monospace;
   font-size: 0.92em;
-  line-height: 1.72;
+  line-height: 1.78;
 }
 
 .post-content blockquote {
-  padding: 18px 22px;
-  border-left: 4px solid rgba(120, 150, 190, 0.55);
-  border-radius: 12px;
-  background: rgba(232, 238, 245, 0.72);
-  color: #3a4656;
+  padding: 18px 22px 18px 20px;
+  border-left: 4px solid rgba(117, 148, 188, 0.62);
+  border-radius: 14px;
+  background: rgba(231, 238, 246, 0.78);
+  color: #364658;
 }
 
 .post-content blockquote > *:last-child {
@@ -255,14 +335,23 @@ main[role="main"] {
 }
 
 .post-content table {
-  display: table;
-  width: auto;
+  display: block;
+  width: max-content;
   max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
   border-collapse: collapse;
   border-spacing: 0;
   border-radius: 16px;
   background: rgba(246, 249, 252, 0.92);
   box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .post-content thead {
@@ -271,7 +360,7 @@ main[role="main"] {
 
 .post-content th,
 .post-content td {
-  padding: 12px 16px;
+  padding: 11px 15px;
   border: 1px solid rgba(214, 222, 232, 0.82);
   text-align: left;
   vertical-align: top;
@@ -289,7 +378,8 @@ main[role="main"] {
 
 .post-content hr {
   border: 0;
-  border-top: 1px solid rgba(170, 184, 201, 0.45);
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
 }
 
 .snow {
@@ -312,17 +402,17 @@ main[role="main"] {
 
 @media (max-width: 768px) {
   .page-shell {
-    padding: 0 12px 88px;
+    padding: 58px 12px 88px;
   }
 
   .post-card {
-    padding: 30px 22px;
+    padding: 32px 22px 38px;
     border-radius: 16px;
   }
 
   .post-title {
-    font-size: 25px;
-    margin-bottom: 10px;
+    font-size: 26px;
+    margin-bottom: 12px;
   }
 
   .post-date {
@@ -332,8 +422,8 @@ main[role="main"] {
 
   .post-content {
     font-size: 16px;
-    line-height: 1.64;
-    letter-spacing: 0.01em;
+    line-height: 1.78;
+    letter-spacing: 0;
   }
 
   .post-content h2 {
@@ -370,7 +460,7 @@ main[role="main"] {
 <div class="post-bg" id="postBg"></div>
 
 <section class="page-shell">
-  <article class="post-card">
+  <article class="post-card" id="postCard">
     <h1 class="post-title">{{ .Title }}</h1>
 
     {{ with .Date }}
@@ -385,18 +475,7 @@ main[role="main"] {
 
 <script>
 (function () {
-  const imgs = [
-    "/images/background-image/background-img1.jpg",
-    "/images/background-image/background-img2.jpg",
-    "/images/background-image/background-img3.jpg",
-    "/images/background-image/background-img4.jpg",
-    "/images/background-image/background-img5.jpg",
-    "/images/background-image/background-img6.jpg",
-    "/images/background-image/background-img7.jpg",
-    "/images/background-image/background-img8.jpg",
-    "/images/background-image/background-img9.jpg",
-    "/images/background-image/background-img10.jpg"
-  ];
+  const imgs = {{ $pageBackgroundImages | jsonify | safeJS }};
 
   const postBg = document.getElementById("postBg");
   postBg.style.backgroundImage =
@@ -411,6 +490,25 @@ for (let i = 0; i < 22; i++) {
   snow.style.opacity = 0.4 + Math.random() * 0.5;
   document.body.appendChild(snow);
 }
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
 </script>
 
 {{ end }}

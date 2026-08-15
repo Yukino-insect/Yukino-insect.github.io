@@ -93,10 +93,10 @@ java
 
 # jdk 9+ 输出日志的参数
 java -Xlog:gc*,gc+heap=debug:file=../log/ard-user-gc-%t.log:time,uptime,level,tags:filecount=5,filesize=20M Demo
-# gc*,gc+heap=debug → 输出 GC 事件和堆信息
-# file=... → 日志文件路径
-# filecount=5,filesize=20M → 日志轮转 5 个文件，每个 20MB
-#time,uptime,level,tags → 日志信息格式
+# gc*,gc+heap=debug -> 输出 GC 事件和堆信息
+# file=... -> 日志文件路径
+# filecount=5,filesize=20M -> 日志轮转 5 个文件，每个 20MB
+#time,uptime,level,tags -> 日志信息格式
 ```
 
 直接查看得到的日志文档很不方便，将其交给日志分析工具。这里主要使用 **gceasy.io**，它是在线的，将本地日志直接上传即可。
@@ -149,8 +149,8 @@ Java 9+ 常用调优参数：
 - 堆大小：`-Xms` / `-Xmx`
 - 年轻代大小：`-XX:InitialHeapSize` / `-XX:MaxHeapSize`
 - G1 调优：
-  - `-XX:MaxGCPauseMillis=200` → 目标停顿
-  - `-XX:ParallelGCThreads=8` → 并行线程数
+  - `-XX:MaxGCPauseMillis=200` -> 目标停顿
+  - `-XX:ParallelGCThreads=8` -> 并行线程数
 - ZGC / Shenandoah：
   - 自动调节大部分参数，主要调堆大小和停顿目标
 

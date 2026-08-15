@@ -8,7 +8,7 @@ title = 'ThreadPoolExecutor'
 
 ------
 
-## 🧩 一、核心类：`ThreadPoolExecutor`
+##  一、核心类：`ThreadPoolExecutor`
 
 Java 的线程池核心实现类是：
 
@@ -24,18 +24,18 @@ java.util.concurrent.ThreadPoolExecutor
 
 ------
 
-## ⚙️ 二、线程池的核心结构
+##  二、线程池的核心结构
 
-简化理解，线程池里有三样东西👇
+简化理解，线程池里有三样东西
 
 ```
 +------------------------------------------------------+
 | ThreadPoolExecutor                                   |
 |------------------------------------------------------|
-| ▶ BlockingQueue<Runnable> workQueue   —— 任务队列     |
-| ▶ HashSet<Worker> workers             —— 线程集合     |
-| ▶ ctl (AtomicInteger)                 —— 状态 + 数量控制 |
-| ▶ RejectedExecutionHandler            —— 拒绝策略     |
+| - BlockingQueue<Runnable> workQueue   —— 任务队列     |
+| - HashSet<Worker> workers             —— 线程集合     |
+| - ctl (AtomicInteger)                 —— 状态 + 数量控制 |
+| - RejectedExecutionHandler            —— 拒绝策略     |
 +------------------------------------------------------+
 ```
 
@@ -106,7 +106,7 @@ RUNNING = -1 << COUNT_BITS
 
 ------
 
-## 🧠 三、线程池工作流程
+##  三、线程池工作流程
 
 ### 当调用 `execute(Runnable task)` 时：
 
@@ -138,7 +138,7 @@ RUNNING = -1 << COUNT_BITS
 
 ------
 
-## 🧩 四、线程管理的关键方法
+##  四、线程管理的关键方法
 
 | 方法                  | 作用                           |
 | --------------------- | ------------------------------ |
@@ -152,7 +152,7 @@ RUNNING = -1 << COUNT_BITS
 
 ------
 
-## 🧩 五、任务执行的核心循环（源码简化版）
+##  五、任务执行的核心循环（源码简化版）
 
 ```
 final void runWorker(Worker w) {
@@ -178,7 +178,7 @@ final void runWorker(Worker w) {
 
 ------
 
-## ⚖️ 六、线程池的生命周期管理
+##  六、线程池的生命周期管理
 
 | 方法                 | 作用                                     |
 | -------------------- | ---------------------------------------- |
@@ -188,7 +188,7 @@ final void runWorker(Worker w) {
 
 ------
 
-## 🧩 七、可视化总结图
+##  七、可视化总结图
 
 ```
                 ┌──────────────┐
@@ -211,7 +211,7 @@ final void runWorker(Worker w) {
 
 ------
 
-## ✅ 总结一句话
+##  总结一句话
 
 > **线程池 = 阻塞队列 + 线程集合 + 状态控制器**
 >

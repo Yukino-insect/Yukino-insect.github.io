@@ -423,7 +423,7 @@ spring:
 在 Nacos 配置中心里，配置的层级结构是：
 
 ```markdown
-Namespace → Group → DataId
+Namespace -> Group -> DataId
 ```
 
 - **Namespace**：最顶层隔离
@@ -530,9 +530,9 @@ Spring Cloud Alibaba 默认规则：
 DataId = ${spring.application.name}-${spring.profiles.active}.${file-extension}
 ```
 
-- `${spring.application.name}` → 服务名
-- `${spring.profiles.active}` → 当前激活环境（dev/test/prod）
-- `${file-extension}` → 配置文件后缀（yaml / properties）
+- `${spring.application.name}` -> 服务名
+- `${spring.profiles.active}` -> 当前激活环境（dev/test/prod）
+- `${file-extension}` -> 配置文件后缀（yaml / properties）
 
 举个例子
 
@@ -570,9 +570,9 @@ userservice.yaml
 
 常用来 **区分环境**：
 
-- `dev` → 开发环境
-- `test` → 测试环境
-- `prod` → 生产环境
+- `dev` -> 开发环境
+- `test` -> 测试环境
+- `prod` -> 生产环境
 
 这样可以避免不同环境的配置相互影响。
 
@@ -585,7 +585,7 @@ Nacos 的配置加载和更新分 **启动时拉取** 和 **运行时监听更�
 服务启动时会根据配置去 Nacos 拉取 DataId 对应的文件，流程：
 
 ```markdown
-启动 → 读取 application.yml/bootstrap.yml → 获取 Nacos 地址 → 拉取对应 DataId 配置 → 合并到本地配置 → Spring 容器启动
+启动 -> 读取 application.yml/bootstrap.yml -> 获取 Nacos 地址 -> 拉取对应 DataId 配置 -> 合并到本地配置 -> Spring 容器启动
 ```
 
 示例配置：
@@ -677,11 +677,11 @@ Nacos 使用的就是 **长轮询（Long Polling）策略**，具体流程如下
 1. **客户端发起长轮询请求**
    - 调用 Nacos 的 `/v1/cs/configs/listener` 接口，带上本地已知的配置 MD5。
 2. **服务端比较 MD5**
-   - 如果配置没变化 → 服务端阻塞请求，最多等待 30s。
-   - 如果配置有变化 → 立即返回最新版本信息。
+   - 如果配置没变化 -> 服务端阻塞请求，最多等待 30s。
+   - 如果配置有变化 -> 立即返回最新版本信息。
 3. **客户端处理响应**
-   - 如果检测到变化 → 再调用 `/v1/cs/configs` 拉取最新配置。
-   - 如果 30s 超时无变化 → 客户端立即发起新的长轮询。
+   - 如果检测到变化 -> 再调用 `/v1/cs/configs` 拉取最新配置。
+   - 如果 30s 超时无变化 -> 客户端立即发起新的长轮询。
 4. **Spring 环境刷新**
    - 最新配置加载到 **Spring Environment**，触发 `@RefreshScope` 或 `@ConfigurationProperties` 的 Bean 自动更新。
 

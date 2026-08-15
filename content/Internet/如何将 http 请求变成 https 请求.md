@@ -6,7 +6,7 @@ title = '如何将 http 请求变成 https 请求'
 
 把 HTTP 变成 HTTPS，本质是：**让客户端只用 TLS 通道访问**，并且 **把所有 HTTP 流量重定向到 HTTPS**。实际落地一般分三层：证书、入口（网关/反代/负载均衡）、应用（Spring Boot）。
 
-#### 1）最推荐的架构：在网关/Nginx 做 HTTPS 终止 + HTTP→HTTPS 重定向
+#### 1）最推荐的架构：在网关/Nginx 做 HTTPS 终止 + HTTP->HTTPS 重定向
 
 ##### 1. 申请/配置证书
 

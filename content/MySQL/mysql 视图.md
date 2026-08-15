@@ -108,7 +108,7 @@ JOIN user u ON o.user_id = u.id;
 MySQL 的视图：
 
 - 不缓存结果
-- 每次查询 → 展开成原 SQL
+- 每次查询 -> 展开成原 SQL
 
 ```sql
 SELECT * FROM v_xxx;

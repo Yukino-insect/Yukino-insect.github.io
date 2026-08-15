@@ -48,8 +48,8 @@ AOP 理念：将分散在各个业务逻辑代码中相同的代码通过**横�
 
 > **Spring 在实现 AOP 时的默认策略**：
 >
-> - 如果目标对象实现接口 → 使用 JDK 动态代理
-> - 如果目标对象没有接口 → 使用 CGLIB 代理
+> - 如果目标对象实现接口 -> 使用 JDK 动态代理
+> - 如果目标对象没有接口 -> 使用 CGLIB 代理
 > - 可通过 `@EnableAspectJAutoProxy(proxyTargetClass = true)` 强制使用 CGLIB
 
 而另一种则是静态织入的方式，ApectJ 采用的就是这种。在编译其间，使用AspectJ的acj编译器(类似javac)把aspect类编译成class字节码后，在java目标类编译时织入，即先编译aspect类再编译目标类。

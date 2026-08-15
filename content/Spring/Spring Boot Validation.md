@@ -17,7 +17,7 @@ Spring Boot 已经对 **Hibernate Validator** 做了自动集成，只需要引�
 </dependency>
 ```
 
-> ⚠️
+> 注意：
 >
 > - Spring Boot **2.3+** 之后，`spring-boot-starter-web` 不再默认包含 validation，需要**手动引入**
 > - Hibernate Validator 是 **Bean Validation（JSR 380）** 的实现

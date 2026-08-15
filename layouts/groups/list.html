@@ -1,0 +1,667 @@
+{{ define "title" }}
+{{- .Title -}}
+{{- with .Site.Title }} | {{ . }}{{ end -}}
+{{ end }}
+
+{{ define "main" }}
+{{ $groupSlug := .Params.group | default "" }}
+{{ $laneSlug := .Params.lane | default "" }}
+{{ $currentGroup := dict }}
+{{ $currentLane := dict }}
+{{ $pageBackgroundImages := slice }}
+{{ range (.Site.Data.page_backgrounds.images | default (slice "/images/cover/cover1.jpg")) }}
+  {{ $pageBackgroundFile := printf "static%s" . }}
+  {{ if and (not (in $pageBackgroundImages .)) (fileExists $pageBackgroundFile) }}
+    {{ $pageBackgroundImages = $pageBackgroundImages | append . }}
+  {{ end }}
+{{ end }}
+{{ if eq (len $pageBackgroundImages) 0 }}
+  {{ $pageBackgroundImages = slice "/images/cover/cover1.jpg" }}
+{{ end }}
+{{ $secondaryIcons := slice }}
+{{ range (.Site.Data.category_icons.secondary | default (slice)) }}
+  {{ $secondaryIconFile := printf "static%s" . }}
+  {{ if and (not (in $secondaryIcons .)) (fileExists $secondaryIconFile) }}
+    {{ $secondaryIcons = $secondaryIcons | append . }}
+  {{ end }}
+{{ end }}
+{{ $moduleIcons := slice }}
+{{ range (.Site.Data.module_icons.icons | default (slice)) }}
+  {{ $moduleIconFile := printf "static%s" . }}
+  {{ if and (not (in $moduleIcons .)) (fileExists $moduleIconFile) }}
+    {{ $moduleIcons = $moduleIcons | append . }}
+  {{ end }}
+{{ end }}
+{{ range .Site.Data.topic_groups.groups }}
+  {{ if eq .slug $groupSlug }}
+    {{ $currentGroup = . }}
+    {{ range .lanes }}
+      {{ if eq .slug $laneSlug }}
+        {{ $currentLane = . }}
+      {{ end }}
+    {{ end }}
+  {{ end }}
+{{ end }}
+
+<style>
+header, footer {
+    display: none !important;
+}
+
+body {
+    margin: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-gutter: stable both-edges;
+    font-family: "PingFang SC","Microsoft YaHei",sans-serif;
+    background: none;
+    color: #1f2d3d;
+}
+
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+main[role="main"] {
+    padding-bottom: 0 !important;
+}
+
+.group-bg {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.group-bg::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(
+            180deg,
+            rgba(32, 42, 56, .48) 0%,
+            rgba(45, 58, 75, .38) 42%,
+            rgba(247, 250, 253, .96) 100%
+        );
+}
+
+.group-shell {
+    position: relative;
+    z-index: 2;
+    width: min(1080px, calc(100% - 40px));
+    margin: 0 auto;
+    padding: 104px 0 104px;
+}
+
+.group-hero {
+    display: grid;
+    grid-template-columns: 92px minmax(0, 1fr);
+    gap: 24px;
+    align-items: center;
+    margin-bottom: 40px;
+    color: #f8fbff;
+    text-shadow: 0 2px 12px rgba(15, 24, 36, .34);
+}
+
+.group-hero--plain {
+    display: block;
+}
+
+.group-hero--plain .group-lead {
+    grid-column: auto;
+}
+
+.group-cover {
+    grid-row: 1 / span 3;
+    width: 92px;
+    height: 92px;
+    padding: 3px;
+    border-radius: 18px;
+    background: rgba(236, 243, 250, .82);
+    box-shadow:
+        inset 0 0 0 1px rgba(255, 255, 255, .72),
+        0 12px 24px rgba(20, 30, 42, .18);
+    overflow: hidden;
+}
+
+.group-cover img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: 15px;
+    object-fit: cover;
+}
+
+.group-cover-fallback {
+    display: grid;
+    place-items: center;
+    width: 100%;
+    height: 100%;
+    border-radius: 15px;
+    background: linear-gradient(135deg, rgba(105, 133, 170, .95), rgba(184, 203, 224, .95));
+    color: #f8fbff;
+    font-size: 32px;
+    font-weight: 400;
+}
+
+.group-kicker {
+    margin-bottom: 10px;
+    color: rgba(235, 242, 249, .86);
+    font-size: 14px;
+    font-weight: 300;
+    letter-spacing: .12em;
+}
+
+.group-title {
+    margin: 0 0 14px;
+    color: #fff;
+    font-size: 42px;
+    font-weight: 300;
+    line-height: 1.24;
+    letter-spacing: .04em;
+}
+
+.group-lead {
+    grid-column: 2;
+    max-width: 720px;
+    margin: 0;
+    color: rgba(239, 246, 252, .94);
+    font-size: 16px;
+    font-weight: 300;
+    line-height: 1.82;
+}
+
+.lane-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
+}
+
+.lane-card {
+    display: block;
+    min-height: 182px;
+    padding: 22px 22px 20px;
+    border-radius: 16px;
+    background: linear-gradient(to bottom, rgba(246, 249, 252, .9), rgba(238, 243, 248, .86));
+    color: #1f2d3d;
+    text-decoration: none;
+    box-shadow:
+        inset 0 0 0 1px rgba(214, 224, 235, .72),
+        0 10px 24px rgba(36, 50, 68, .12);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    transition:
+        transform .18s ease,
+        box-shadow .18s ease;
+}
+
+.lane-card:hover {
+    transform: translateY(-2px);
+    box-shadow:
+        inset 0 0 0 1px rgba(205, 218, 232, .82),
+        0 14px 28px rgba(36, 50, 68, .15);
+}
+
+.lane-title {
+    margin-bottom: 12px;
+    color: #26364a;
+    font-size: 20px;
+    font-weight: 300;
+    line-height: 1.4;
+}
+
+.lane-summary {
+    margin: 0;
+    color: #607084;
+    font-size: 14px;
+    font-weight: 300;
+    line-height: 1.74;
+}
+
+.module-stack {
+    display: grid;
+    gap: 14px;
+    width: min(860px, 100%);
+    margin: 0 auto;
+}
+
+.module-card {
+    display: block;
+    overflow: hidden;
+    padding: 18px 20px;
+    border-radius: 14px;
+    background: linear-gradient(to bottom, rgba(246, 249, 252, .92), rgba(238, 243, 248, .88));
+    box-shadow:
+        inset 0 0 0 1px rgba(214, 224, 235, .68),
+        0 10px 24px rgba(36, 50, 68, .11);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    transition:
+        transform .18s ease,
+        box-shadow .18s ease,
+        background .18s ease;
+}
+
+.module-card:hover,
+.module-card:focus-within {
+    transform: translateY(-2px);
+    background: linear-gradient(to bottom, rgba(248, 251, 254, .94), rgba(241, 246, 251, .9));
+    box-shadow:
+        inset 0 0 0 1px rgba(204, 218, 232, .78),
+        0 14px 30px rgba(36, 50, 68, .14);
+}
+
+.module-side {
+    min-width: 0;
+}
+
+.module-head {
+    display: grid;
+    grid-template-columns: 48px minmax(0, 1fr);
+    gap: 14px;
+    align-items: center;
+}
+
+.module-card-icon {
+    width: 48px;
+    height: 48px;
+    padding: 2px;
+    border-radius: 12px;
+    background: rgba(230, 236, 244, .92);
+    box-shadow:
+        inset 0 0 0 1px rgba(203, 215, 228, .72),
+        0 5px 12px rgba(36, 50, 68, .1);
+    object-fit: cover;
+}
+
+.module-card-icon--fallback {
+    display: grid;
+    place-items: center;
+    color: #f8fbff;
+    font-size: 18px;
+    font-weight: 400;
+    background: linear-gradient(135deg, rgba(105, 133, 170, .95), rgba(184, 203, 224, .95));
+}
+
+.module-title {
+    margin: 0;
+    color: #26364a;
+    font-size: 19px;
+    font-weight: 300;
+    line-height: 1.38;
+}
+
+.article-list {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    pointer-events: none;
+    transform: translateY(-4px);
+    transition:
+        max-height .28s ease,
+        opacity .2s ease,
+        transform .2s ease,
+        margin-top .2s ease;
+}
+
+.module-card:hover .article-list,
+.module-card:focus-within .article-list {
+    max-height: 1800px;
+    margin-top: 14px;
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+}
+
+.article-link {
+    display: block;
+    min-height: 38px;
+    padding: 9px 12px;
+    border-radius: 10px;
+    background: rgba(232, 239, 246, .5);
+    color: #2d3e53;
+    text-decoration: none;
+    box-shadow: inset 0 0 0 1px rgba(213, 224, 234, .5);
+    transition:
+        background .18s ease,
+        color .18s ease,
+        box-shadow .18s ease;
+}
+
+.article-link:hover {
+    background: rgba(224, 234, 244, .82);
+    color: #24364d;
+    box-shadow: inset 0 0 0 1px rgba(198, 214, 230, .78);
+}
+
+.article-title {
+    overflow: hidden;
+    display: block;
+    font-size: 14px;
+    font-weight: 300;
+    line-height: 1.46;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.group-index {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.group-index-card {
+    display: grid;
+    grid-template-columns: 58px minmax(0, 1fr);
+    gap: 14px;
+    align-items: center;
+    min-height: 112px;
+    padding: 18px;
+    border-radius: 16px;
+    background: linear-gradient(to bottom, rgba(246, 249, 252, .9), rgba(238, 243, 248, .86));
+    color: #1f2d3d;
+    text-decoration: none;
+    box-shadow:
+        inset 0 0 0 1px rgba(214, 224, 235, .72),
+        0 10px 24px rgba(36, 50, 68, .12);
+}
+
+.group-index-avatar {
+    width: 58px;
+    height: 58px;
+    border-radius: 14px;
+    object-fit: cover;
+}
+
+.group-index-title {
+    margin-bottom: 6px;
+    font-size: 18px;
+    font-weight: 300;
+}
+
+.group-index-lead {
+    color: #607084;
+    font-size: 13px;
+    font-weight: 300;
+    line-height: 1.6;
+}
+
+.group-empty {
+    padding: 26px;
+    border-radius: 16px;
+    background: rgba(246, 249, 252, .9);
+    color: #52647b;
+    font-size: 15px;
+    font-weight: 300;
+    line-height: 1.7;
+    box-shadow: inset 0 0 0 1px rgba(214, 224, 235, .72);
+}
+
+.snow {
+    position: fixed;
+    top: -10px;
+    width: 2px;
+    height: 2px;
+    background: rgba(255,255,255,0.85);
+    border-radius: 50%;
+    box-shadow:
+        0 0 2px rgba(180,200,220,0.55),
+        0 0 6px rgba(180,200,220,0.35);
+    pointer-events: none;
+    animation: snow-fall linear infinite;
+    z-index: 1;
+}
+
+@keyframes snow-fall {
+    to {
+        transform: translateY(110vh);
+        opacity: 0;
+    }
+}
+
+@media (max-width: 900px) {
+    .lane-grid,
+    .group-index {
+        grid-template-columns: 1fr;
+    }
+
+    .module-card {
+        grid-template-columns: 1fr;
+    }
+
+    .module-side {
+        padding-right: 0;
+    }
+
+    .article-list {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (hover: none) {
+    .article-list {
+        max-height: none;
+        margin-top: 16px;
+        opacity: 1;
+        pointer-events: auto;
+        transform: none;
+    }
+
+    .module-card:hover,
+    .module-card:focus-within {
+        transform: none;
+    }
+}
+
+@media (max-width: 700px) {
+    .group-shell {
+        width: min(100% - 24px, 1080px);
+        padding: 76px 0 78px;
+    }
+
+    .group-hero {
+        grid-template-columns: 64px minmax(0, 1fr);
+        gap: 16px;
+        margin-bottom: 30px;
+    }
+
+    .group-cover {
+        width: 64px;
+        height: 64px;
+        border-radius: 14px;
+    }
+
+    .group-cover img,
+    .group-cover-fallback {
+        border-radius: 11px;
+    }
+
+    .group-title {
+        font-size: 30px;
+    }
+
+    .group-lead {
+        grid-column: 1 / -1;
+        font-size: 15px;
+    }
+
+    .lane-card,
+    .module-card {
+        padding: 19px;
+        border-radius: 14px;
+    }
+
+    .module-head {
+        grid-template-columns: 44px minmax(0, 1fr);
+        gap: 12px;
+    }
+
+    .module-card-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 11px;
+    }
+
+    .article-link {
+        min-height: 40px;
+    }
+
+    .article-title {
+        white-space: normal;
+    }
+}
+</style>
+
+<div class="group-bg" id="groupBg"></div>
+
+<section class="group-shell">
+  {{ if and $currentGroup.title $currentLane.title }}
+    <div class="group-hero group-hero--plain">
+      <div>
+        <div class="group-kicker">{{ $currentGroup.title }}</div>
+        <h1 class="group-title">{{ $currentLane.title }}</h1>
+      </div>
+      <p class="group-lead">{{ $currentLane.summary }}</p>
+    </div>
+
+    <div class="module-stack">
+      {{ range $moduleIndex, $module := $currentLane.modules }}
+        {{ $modulePages := slice }}
+        {{ range $module.sections }}
+          {{ $modulePages = $modulePages | append (where $.Site.RegularPages "Section" .) }}
+        {{ end }}
+        <section class="module-card">
+          <div class="module-head">
+            {{ if lt $moduleIndex (len $moduleIcons) }}
+              <img class="module-card-icon js-random-module-icon" src="{{ index $moduleIcons $moduleIndex }}" alt="{{ $module.title }}">
+            {{ else }}
+              <div class="module-card-icon module-card-icon--fallback">{{ upper (slicestr $module.title 0 1) }}</div>
+            {{ end }}
+            <div class="module-side">
+              <h2 class="module-title">{{ $module.title }}</h2>
+            </div>
+          </div>
+          {{ if gt (len $modulePages) 0 }}
+            <div class="article-list">
+              {{ range $modulePages.ByDate.Reverse }}
+                <a class="article-link" href="{{ .RelPermalink }}">
+                  <span class="article-title">{{ .Title }}</span>
+                </a>
+              {{ end }}
+            </div>
+          {{ else }}
+            <div class="group-empty">这里暂时还没有文章。</div>
+          {{ end }}
+        </section>
+      {{ end }}
+    </div>
+  {{ else if $currentGroup.title }}
+    <div class="group-hero">
+      <div class="group-cover">
+        {{ if gt (len $secondaryIcons) 0 }}
+          <img class="js-random-secondary-cover" src="{{ index $secondaryIcons 0 }}" alt="{{ $currentGroup.title }}">
+        {{ else }}
+          <div class="group-cover-fallback">{{ upper (slicestr $currentGroup.title 0 1) }}</div>
+        {{ end }}
+      </div>
+      <div>
+        <div class="group-kicker">{{ $currentGroup.subtitle }}</div>
+        <h1 class="group-title">{{ $currentGroup.title }}</h1>
+      </div>
+      <p class="group-lead">{{ $currentGroup.lead }}</p>
+    </div>
+
+    <div class="lane-grid">
+      {{ range $lane := $currentGroup.lanes }}
+        <a class="lane-card" href="/groups/{{ $currentGroup.slug }}/{{ $lane.slug }}/">
+          <div class="lane-title">{{ $lane.title }}</div>
+          <p class="lane-summary">{{ $lane.summary }}</p>
+        </a>
+      {{ end }}
+    </div>
+  {{ else }}
+    <div class="group-hero">
+      <div class="group-cover">
+        <div class="group-cover-fallback">分</div>
+      </div>
+      <div>
+        <div class="group-kicker">Knowledge Map</div>
+        <h1 class="group-title">知识分类</h1>
+      </div>
+      <p class="group-lead">全部一级分类入口都在这里。</p>
+    </div>
+
+    <div class="group-index">
+      {{ range $i, $group := .Site.Data.topic_groups.groups }}
+        <a class="group-index-card" href="/groups/{{ .slug }}/">
+          {{ if lt $i (len $secondaryIcons) }}
+            <img class="group-index-avatar js-random-group-index-avatar" src="{{ index $secondaryIcons $i }}" alt="{{ .title }}">
+          {{ else }}
+            <div class="group-index-avatar">{{ upper (slicestr .title 0 1) }}</div>
+          {{ end }}
+          <div>
+            <div class="group-index-title">{{ .title }}</div>
+            <div class="group-index-lead">{{ .lead }}</div>
+          </div>
+        </a>
+      {{ end }}
+    </div>
+  {{ end }}
+</section>
+
+<script>
+(function () {
+    const images = {{ $pageBackgroundImages | jsonify | safeJS }};
+
+    const bg = document.getElementById("groupBg");
+    bg.style.backgroundImage =
+        `url('${images[Math.floor(Math.random() * images.length)]}')`;
+})();
+
+(function () {
+    const pools = {
+        secondary: {{ $secondaryIcons | jsonify | safeJS }},
+        modules: {{ $moduleIcons | jsonify | safeJS }}
+    };
+
+    function shuffledDeck(values) {
+        const deck = [...new Set(values.filter(Boolean))];
+        for (let i = deck.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [deck[i], deck[j]] = [deck[j], deck[i]];
+        }
+        return deck;
+    }
+
+    function randomizeUnique(selector, images) {
+        const deck = shuffledDeck(images);
+        document.querySelectorAll(selector).forEach((img, index) => {
+            if (index < deck.length) {
+                img.src = deck[index];
+            }
+        });
+    }
+
+    randomizeUnique(".js-random-secondary-cover", pools.secondary);
+    randomizeUnique(".js-random-group-index-avatar", pools.secondary);
+    randomizeUnique(".js-random-module-icon", pools.modules);
+})();
+
+for (let i = 0; i < 30; i++) {
+    const snow = document.createElement("div");
+    snow.className = "snow";
+    snow.style.left = Math.random() * 100 + "vw";
+    snow.style.animationDuration = 10 + Math.random() * 8 + "s";
+    snow.style.opacity = Math.random();
+    snow.style.transform = `scale(${Math.random()})`;
+    document.body.appendChild(snow);
+}
+</script>
+
+{{ end }}

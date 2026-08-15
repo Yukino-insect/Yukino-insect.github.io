@@ -48,10 +48,10 @@ spring.jackson.default-property-inclusion=non_null
 ```java
 ObjectMapper mapper = new ObjectMapper();
 
-// Java 对象 → JSON
+// Java 对象 -> JSON
 String json = mapper.writeValueAsString(user);
 
-// JSON → Java 对象
+// JSON -> Java 对象
 User user2 = mapper.readValue(json, User.class);
 ```
 

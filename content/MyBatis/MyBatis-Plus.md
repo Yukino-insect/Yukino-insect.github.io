@@ -41,7 +41,7 @@ List<User> selectByWrapper(@Param(Constants.WRAPPER) Wrapper<User> wrapper);
 - `ew`：`Wrapper` 的别名（**固定名字**）
 - `customSqlSegment`：MP 在 Wrapper 里**动态生成的 SQL 片段**
 
-👉 本质是：
+ 本质是：
 
 ```
 -- 运行前
@@ -51,7 +51,7 @@ select * from user ${ew.customSqlSegment}
 select * from user WHERE name = ? AND age >= ?
 ```
 
-📌 注意：
+注意： 注意：
 
 - 这是 **SQL 片段拼接**
 - 不是 MyBatis 的 `<if>` 动态标签
@@ -63,8 +63,8 @@ select * from user WHERE name = ? AND age >= ?
 
 这是很多人第一次看到会疑惑的点。
 
-- `#{}` → 预编译参数，占位符 `?`
-- `${}` → **直接 SQL 片段拼接**
+- `#{}` -> 预编译参数，占位符 `?`
+- `${}` -> **直接 SQL 片段拼接**
 
 而 `customSqlSegment`：
 
@@ -72,7 +72,7 @@ select * from user WHERE name = ? AND age >= ?
 - 包含 `WHERE / AND / ORDER BY`
 - 里面的值 **已经被参数化处理过**
 
-👉 **MP 内部保证安全性**
+ **MP 内部保证安全性**
  你不用自己拼字符串（这是关键优势）
 
 ------
@@ -140,7 +140,7 @@ if (condition) {
 - **这一行什么都不会发生**
 - SQL 里根本不会出现 `name = ?`
 
-📌 **这就是 MP Wrapper 动态性的核心：**
+注意： **这就是 MP Wrapper 动态性的核心：**
 
 > 条件在 Java 层判断，而不是 SQL 层判断
 
@@ -164,7 +164,7 @@ mapper.selectByWrapper(qw);
 5. 绑定参数
 6. 执行
 
-👉 **SQL 的最终形态，是在“执行时”才确定的**
+ **SQL 的最终形态，是在“执行时”才确定的**
 
 ------
 
@@ -176,7 +176,7 @@ mapper.selectByWrapper(qw);
 
 ### 1. 对比一眼就懂
 
-#### ❌ 注解 + `<if>`（不推荐）
+####  注解 + `<if>`（不推荐）
 
 ```
 @Select({
@@ -202,7 +202,7 @@ mapper.selectByWrapper(qw);
 
 ------
 
-#### ✅ Wrapper（MP 推荐）
+####  Wrapper（MP 推荐）
 
 ```
 qw.eq(name != null, User::getName, name)
@@ -213,11 +213,11 @@ qw.eq(name != null, User::getName, name)
 
 | 维度          | Wrapper     |
 | ------------- | ----------- |
-| 可读性        | ⭐⭐⭐⭐⭐       |
-| 动态性        | ⭐⭐⭐⭐⭐       |
-| Java IDE 支持 | ✔           |
-| 重构安全      | ✔（Lambda） |
-| SQL 可控性    | ✔           |
+| 可读性        |        |
+| 动态性        |        |
+| Java IDE 支持 |            |
+| 重构安全      | （Lambda） |
+| SQL 可控性    |            |
 | 维护成本      | 极低        |
 
 ------
@@ -232,8 +232,8 @@ qw.eq(name != null, User::getName, name)
 | SQL 结构   | Mapper   |
 | 参数安全   | MP 内部  |
 
-👉 `<if>` 把 **业务判断写进 SQL**
- 👉 Wrapper 把 **业务判断留在 Java**
+ `<if>` 把 **业务判断写进 SQL**
+  Wrapper 把 **业务判断留在 Java**
 
 **这是分层设计的正确姿势**
 
@@ -252,21 +252,21 @@ qw.eq(name != null, User::getName, name)
 
 ## 六、什么时候用这种写法？什么时候不用？
 
-### ✅ 非常适合：
+###  非常适合：
 
 - 条件可选
 - 查询组合多
 - CRUD / 列表 / 统计
 - 后期需求一定会变的接口
 
-### ❌ 不适合：
+###  不适合：
 
 - SQL 结构本身就非常复杂
 - 多表 JOIN + 子查询 + 窗口函数
 - 强数据库特性（Oracle / MySQL 差异）
 
 这种情况：
- 👉 XML / 注解 + 明确 SQL 反而更好
+  XML / 注解 + 明确 SQL 反而更好
 
 ## 逻辑删除
 

@@ -457,7 +457,7 @@ public class DemoApplication {
 
         // 发送消息
         boolean sent = channel.send(message);
-        System.out.println("✅ 消息是否发送成功: " + sent);
+        System.out.println(" 消息是否发送成功: " + sent);
     }
 
     /**
@@ -491,7 +491,7 @@ mqttGateway.sendToMqtt("hello");
 Spring 会自动帮忙完成
 
 ```markdown
-方法调用 → 封装为 Message → 发送到指定 MessageChannel → MessageHandler 处理
+方法调用 -> 封装为 Message -> 发送到指定 MessageChannel -> MessageHandler 处理
 ```
 
 `@MessagingGateway` 会为接口自动创建一个 **代理类 (Proxy)**，这个代理类会把方法调用**转换成一条消息**并发送到指定的通道

@@ -17,13 +17,13 @@ title = 'poi'
 
 **抽象接口**
 
-- `org.apache.poi.ss.usermodel.Workbook`  → 工作簿（一个 Excel 文件）
-- `org.apache.poi.ss.usermodel.Sheet`     → 工作表（一个表）
-- `org.apache.poi.ss.usermodel.Row`       → 行
-- `org.apache.poi.ss.usermodel.Cell`      → 单元格
-- `org.apache.poi.ss.usermodel.CellStyle` → 单元格样式
-- `org.apache.poi.ss.usermodel.DataFormat`→ 数据格式（日期、数字格式等）
-- `org.apache.poi.ss.usermodel.FormulaEvaluator` → 公式计算器（需要时）
+- `org.apache.poi.ss.usermodel.Workbook`  -> 工作簿（一个 Excel 文件）
+- `org.apache.poi.ss.usermodel.Sheet`     -> 工作表（一个表）
+- `org.apache.poi.ss.usermodel.Row`       -> 行
+- `org.apache.poi.ss.usermodel.Cell`      -> 单元格
+- `org.apache.poi.ss.usermodel.CellStyle` -> 单元格样式
+- `org.apache.poi.ss.usermodel.DataFormat`-> 数据格式（日期、数字格式等）
+- `org.apache.poi.ss.usermodel.FormulaEvaluator` -> 公式计算器（需要时）
 
 **具体实现**
 

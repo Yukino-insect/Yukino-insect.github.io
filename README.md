@@ -1,44 +1,40 @@
 # 博客维护说明
 
-这个项目使用 `Hugo` 构建，主题为 `ananke`，但首页、分类页、文章页都已经做了自定义模板。
+这个项目使用 `Hugo` 构建，主题为 `ananke`，但首页、分类页、文章页都使用了自定义模板。
 
-本文档主要说明以下几件事：
-
-1. 如何新增分类
-2. 如何新增文章
-3. 如何新增或替换首页分类图片
-4. 如何在文章正文中插入图片
-5. 如何新增或替换背景图片
-6. 常用运行命令
+站点维护的核心原则是：内容放在 `content/`，分类结构和图片资源放在 `data/`，模板只负责渲染。不要为了改一个分类或一张图片去改模板，除非你确实是在调整页面结构。
 
 文章排版与 Markdown 写作规范请看：
-[文章写作规范.md](d:/Project/blog/文章写作规范.md)
+[文章写作规范.md](D:/Project/blog/文章写作规范.md)
 
 ## 目录结构
 
-项目里和内容维护最相关的目录如下：
-
 ```text
 content/                         文章内容
-archetypes/default.md            新文章默认模板
+content/groups/                  首页泛化分类和二级分类入口页
+data/topic_groups.yaml           首页一级分类、二级分类、三级模块配置
+data/category_icons.yaml         首页图标和一级分类页顶部图片配置
+data/module_icons.yaml           二级分类页中三级模块卡片共享图标池
+data/home_backgrounds.yaml       首页首屏背景图配置
+data/page_backgrounds.yaml       分类页、目录页、文章页共享背景图配置
 layouts/index.html               首页模板
-layouts/_default/list.html       分类索引页模板
+layouts/groups/list.html         泛化分类页与二级分类页模板
+layouts/_default/list.html       原内容目录文章列表页模板
 layouts/_default/single.html     文章详情页模板
-static/images/category/          首页分类卡图片
-static/images/post-avatar/       分类索引页文章卡头像
-static/images/background-image/  分类索引页、文章详情页背景图
-static/images/                   首页首屏背景图、文章正文图片等
+static/images/avatar/            首页图标、分类页顶部图片、模块图标、目录页文章头像
+static/images/cover/             首页、分类页、目录页、文章页背景图
+static/images/posts/             推荐存放文章正文图片
 ```
 
 ## 常用命令
 
-在项目根目录运行：
+本地预览：
 
 ```powershell
 hugo server
 ```
 
-本地预览地址：
+预览地址：
 
 ```text
 http://localhost:1313/
@@ -50,94 +46,243 @@ http://localhost:1313/
 hugo
 ```
 
-## 一、新增分类
+清理并重新生成：
 
-### 1. 创建分类目录
+```powershell
+hugo --cleanDestinationDir
+```
 
-在 `content/` 下新建一个目录，目录名就是分类 key。
+## 分类结构
 
-例如新增 `ComputerOrganization`：
+首页不直接展示 `content/` 下所有真实目录，而是展示 `data/topic_groups.yaml` 中配置的泛化分类。
+
+当前首页一级分类是：
 
 ```text
-content/ComputerOrganization/
+计算机基础
+Java 技术栈
+数据库与检索
+分布式架构
+Python
+Git
 ```
 
-然后把这个分类下的文章都放在这个目录里。
+`工程实践` 分类已取消。`Git`、`ProjectExperience`、`RandomThoughts` 等真实内容目录仍然可以作为普通内容目录存在，但不会出现在首页泛化分类中。
 
-### 2. 新建该分类下的第一篇文章
+## 修改首页一级分类
 
-例如：
+编辑：
 
 ```text
-content/ComputerOrganization/计算机组成原理.md
+data/topic_groups.yaml
 ```
 
-只有当这个目录里至少有一篇文章时，首页和分类页里才会出现这个分类。
+一级分类结构示例：
 
-### 3. 如果希望首页分类顺序固定，修改 `layouts/index.html`
-
-首页分类不是完全自动排序的，而是由下面 3 组变量控制：
-
-文件：
-[layouts/index.html](d:/Project/blog/layouts/index.html)
-
-需要关注的变量：
-
-```gohtml
-{{ $preferredKeys := slice ... }}
-{{ $preferredImageKeys := slice ... }}
-{{ $preferredSections := slice ... }}
+```yaml
+- slug: java-stack
+  title: Java 技术栈
+  subtitle: 语言、虚拟机、框架
+  lead: Java 基础、JVM、并发、Spring 生态和持久层框架放在一起看，脉络会清楚得多。
+  sections:
+    - javase
+    - jvm
+    - juc
+  lanes:
+    - title: 运行时与并发
+      slug: runtime-concurrency
+      summary: JVM 内存、类加载、GC、锁、线程池与并发工具。
+      modules:
+        - title: JVM
+          summary: 对象、类加载、GC、调优。
+          sections:
+            - jvm
 ```
 
-它们的含义分别是：
+字段说明：
 
-1. `$preferredKeys`
-   控制首页分类的显示顺序。
-
-2. `$preferredSections`
-   控制分类 key 和显示名称的映射。
-
-3. `$preferredImageKeys`
-   控制首页分类卡使用哪一张分类图片。
-   注意：当前项目里，首页分类文字顺序和图片顺序是分开控制的。
-
-### 4. 新增分类时的标准做法
-
-假设新增分类 `ComputerOrganization`，推荐这样改：
-
-在 `$preferredKeys` 中加入：
-
-```gohtml
-"computerorganization"
+```text
+slug       URL 片段，例如 /groups/java-stack/
+title      页面显示名称
+subtitle   一级分类页顶部短说明
+lead       一级分类页顶部介绍
+sections   这个一级分类聚合哪些 content 目录
+lanes      二级分类
+modules    三级模块
 ```
 
-在 `$preferredSections` 中加入：
+注意：`sections` 里写的是 Hugo 识别到的 section key，通常是 `content/<目录名>/` 的小写形式。例如 `content/JavaSE/` 对应 `javase`。
 
-```gohtml
-(dict "key" "computerorganization" "name" "ComputerOrganization")
+## 新增二级分类页面
+
+如果你在 `data/topic_groups.yaml` 中新增了一个二级分类：
+
+```yaml
+- title: 新方向
+  slug: new-lane
+  summary: 这里写说明。
+  modules:
+    - title: 新模块
+      summary: 这里写模块说明。
+      sections:
+        - javase
 ```
 
-如果你希望首页图片也为这个分类单独安排一张图，再根据需要修改 `$preferredImageKeys`。
+还需要创建对应入口页：
 
-### 5. 如果不改首页顺序数组会怎样
+```text
+content/groups/<一级分类 slug>/<二级分类 slug>/_index.md
+```
 
-如果只创建 `content/ComputerOrganization/` 并写文章，但不修改 `layouts/index.html`：
+示例：
 
-1. 这个分类仍然会出现
-2. 但它会被追加到首页分类列表最后面
-3. 分类显示名称会取目录名
+```text
+content/groups/java-stack/new-lane/_index.md
+```
 
-## 二、新增文章
+内容：
 
-### 方式 1：直接手动新建
+```toml
++++
+title = "新方向"
+group = "java-stack"
+lane = "new-lane"
++++
+```
 
-例如在 `JavaSE` 分类下新增文章：
+一级分类入口页位于：
+
+```text
+content/groups/<一级分类 slug>/_index.md
+```
+
+内容示例：
+
+```toml
++++
+title = "Java 技术栈"
+group = "java-stack"
++++
+```
+
+## 分类图标与顶部图片
+
+分类相关图片只从下面这个文件读取：
+
+```text
+data/category_icons.yaml
+```
+
+当前维护两组图片：
+
+```yaml
+primary:
+  - /images/avatar/avatar1.jpg
+  - /images/avatar/avatar2.jpg
+  - /images/avatar/avatar3.jpg
+  - /images/avatar/avatar4.jpg
+
+secondary:
+  - /images/avatar/avatar7.jpg
+  - /images/avatar/avatar8.jpg
+```
+
+规则：
+
+1. `primary` 的顺序对应首页一级分类顺序。
+2. 首页有几个一级分类，`primary` 就建议配置几张图。
+3. `secondary` 用于一级分类页顶部标题区图片、分类索引页图片等非首页分类图标场景，随机使用。
+4. 二级分类卡片不显示图标。
+5. 二级分类页顶部标题区不显示图片。
+6. 如果首页图标不存在，首页会显示文字兜底头像。
+7. 除首页一级分类图标外，同一页面出现多张图片时会先去重、再随机分配，尽量避免重复展示。
+
+新增图标时：
+
+1. 把图片放入：
+
+```text
+static/images/avatar/
+```
+
+2. 在 `data/category_icons.yaml` 中追加路径：
+
+```yaml
+primary:
+  - /images/avatar/new-icon.jpg
+```
+
+如果是一级分类页顶部图片，就追加到 `secondary`。
+
+## 三级模块卡片图标
+
+二级分类页中的三级模块卡片图标由独立文件维护：
+
+```text
+data/module_icons.yaml
+```
+
+配置结构是一个共享图标池：
+
+```yaml
+icons:
+  - /images/avatar/avatar1.jpg
+  - /images/avatar/avatar2.jpg
+  - /images/avatar/avatar3.jpg
+```
+
+规则：
+
+1. 所有三级模块总卡片共享 `icons` 里的图片，不需要按一级分类或二级分类单独配置。
+2. 每个二级分类页会先对 `icons` 去重、再随机分配，保证同一页内不重复使用同一张图。
+3. 如果可用图标数量少于当前页面模块数量，缺少的模块会显示文字兜底头像。
+4. 这里的图标只用于三级模块总卡片，不用于文章标题列表。
+
+## 背景图配置
+
+首页首屏背景图单独配置：
+
+```text
+data/home_backgrounds.yaml
+```
+
+示例：
+
+```yaml
+images:
+  - /images/cover/cover1.jpg
+  - /images/cover/cover2.jpg
+```
+
+分类页、二级分类页、原内容目录页、文章页共享背景图配置：
+
+```text
+data/page_backgrounds.yaml
+```
+
+示例：
+
+```yaml
+images:
+  - /images/cover/cover1.jpg
+  - /images/cover/cover2.jpg
+```
+
+新增背景图时：
+
+1. 首页背景图放到 `static/images/cover/`，再写入 `data/home_backgrounds.yaml`。
+2. 分类页和文章页背景图放到 `static/images/cover/`，再写入 `data/page_backgrounds.yaml`。
+3. 背景图会从 YAML 中随机选择；首页背景点击切换时会先打乱图片池，并在一轮内避免重复。
+
+## 新增文章
+
+方式一：手动创建。
 
 ```text
 content/JavaSE/Java异常机制.md
 ```
 
-文章文件开头使用 front matter，例如：
+文章开头写 front matter：
 
 ```toml
 +++
@@ -147,316 +292,110 @@ title = 'Java异常机制'
 +++
 ```
 
-然后下面直接写 Markdown 正文。
-
-### 方式 2：使用 Hugo 命令生成
+方式二：使用 Hugo 命令。
 
 ```powershell
 hugo new JavaSE/Java异常机制.md
 ```
 
-这个命令会使用：
-[archetypes/default.md](d:/Project/blog/archetypes/default.md)
-
-生成默认头部模板。
-
-### 文章列表页排序规则
-
-分类页文章列表目前使用的是：
-
-```gohtml
-{{ range .RegularPages.ByDate.Reverse }}
-```
-
-也就是：
-
-1. 按 `date` 排序
-2. 时间新的在前面
-
-所以如果你想控制同一分类中文章出现顺序，改文章的 `date` 即可。
-
-## 三、新增或替换首页分类图片
-
-首页分类卡图片目录：
+生成模板来自：
 
 ```text
-static/images/category/
+archetypes/default.md
 ```
 
-当前已有的文件名示例：
+文章列表排序默认按 `date` 倒序，新文章会排在前面。
+
+## 文章正文图片
+
+推荐把正文图片放到：
 
 ```text
-algorithm.jpg
-elasticsearch.jpg
-git.jpg
-javase.jpg
-juc.jpg
-linux.jpg
-mysql.jpg
-redis.jpg
-spring.jpg
-springboot.jpg
+static/images/posts/<分类名>/
 ```
 
-### 当前项目的首页分类图片规则
-
-首页图片不是简单按分类 key 自动一一对应，而是由：
-
-[layouts/index.html](d:/Project/blog/layouts/index.html)
-
-中的这一组控制：
-
-```gohtml
-{{ $preferredImageKeys := slice ... }}
-```
-
-例如列表第 1 个分类卡，使用 `$preferredImageKeys` 中第 1 个 key 对应的图片。
-
-所以如果你想修改首页分类图片顺序，需要改的是：
-
-```gohtml
-$preferredImageKeys
-```
-
-不是只改 `content/` 目录名。
-
-### 新增一张分类图片的操作步骤
-
-1. 把图片放到：
-
-```text
-static/images/category/
-```
-
-2. 命名为：
-
-```text
-<image-key>.jpg
-```
-
-例如：
-
-```text
-static/images/category/computerorganization.jpg
-```
-
-3. 如果希望首页某个分类卡使用它，就把这个 key 写进：
-
-```gohtml
-$preferredImageKeys
-```
-
-### 如果分类图片缺失会怎样
-
-如果首页分类卡找不到对应图片，会自动显示一个字母兜底头像，不会报错。
-
-## 四、文章图片怎么加
-
-这里分两种情况。
-
-### 1. 文章正文里的图片
-
-这是最常见的“文章图片”。
-
-推荐做法：
-
-1. 在 `static/images/` 下自建一个更清晰的目录
-2. 然后在 Markdown 里直接引用
-
-例如：
+示例：
 
 ```text
 static/images/posts/javase/exception-flow.png
 ```
 
-Markdown 写法：
+Markdown 引用：
 
 ```md
 ![异常流程图](/images/posts/javase/exception-flow.png)
 ```
 
-因为 `static/` 下的文件会直接映射到站点根路径，所以：
+## 原内容目录页
+
+除了首页泛化分类，真实内容目录仍然可以直接访问，例如：
 
 ```text
-static/images/posts/javase/exception-flow.png
+/JavaSE/
+/Mysql/
+/Redis/
 ```
 
-在文章里就写成：
+这些页面使用：
 
 ```text
-/images/posts/javase/exception-flow.png
+layouts/_default/list.html
 ```
 
-### 2. 分类索引页里每篇文章前面的头像
-
-这不是正文图片，而是分类页文章列表里的小头像。
-
-目录：
+背景图同样来自：
 
 ```text
-static/images/post-avatar/
+data/page_backgrounds.yaml
 ```
 
-当前模板文件：
-[layouts/_default/list.html](d:/Project/blog/layouts/_default/list.html)
+## 推荐维护流程
 
-当前逻辑是：
+新增一篇已有目录下的文章：
 
-1. 同一分类页里，文章会按顺序使用 `avatar1.jpg` 到 `avatar8.jpg`
-2. 超过 8 篇后，会自动显示编号兜底头像
+1. 在 `content/<目录>/` 下新建 `.md`。
+2. 写好 `title`、`date`、`draft`。
+3. 正文图片放到 `static/images/posts/...`。
+4. 运行 `hugo server` 预览。
 
-也就是说：
+新增一个首页一级分类：
 
-1. 如果你想替换这批头像，直接替换 `static/images/post-avatar/` 里的同名文件
-2. 如果你想增加头像数量，需要同时修改 [layouts/_default/list.html](d:/Project/blog/layouts/_default/list.html) 里的 `$avatarFiles`
+1. 修改 `data/topic_groups.yaml`。
+2. 创建 `content/groups/<一级分类 slug>/_index.md`。
+3. 为每个二级分类创建 `content/groups/<一级分类 slug>/<二级分类 slug>/_index.md`。
+4. 如需首页图标，修改 `data/category_icons.yaml` 的 `primary`。
+5. 如需一级分类页顶部图片，修改 `data/category_icons.yaml` 的 `secondary`。
+6. 如需二级分类页里的模块卡片图标，修改 `data/module_icons.yaml` 的共享图标池。
+7. 运行 `hugo --cleanDestinationDir` 检查构建。
 
-## 五、背景图片怎么加
+新增或替换背景图：
 
-这个项目有 3 类背景图，不是同一个地方。
+1. 把图片放到对应 `static/images/...` 目录。
+2. 修改 `data/home_backgrounds.yaml` 或 `data/page_backgrounds.yaml`。
+3. 运行 `hugo server` 预览。
 
-### 1. 首页首屏背景图
+## 容易踩坑
 
-首页模板文件：
-[layouts/index.html](d:/Project/blog/layouts/index.html)
+1. 改了 `data/topic_groups.yaml` 里的二级分类 `slug`，但忘了同步改 `content/groups/.../_index.md`，页面会找不到对应分类数据。
+2. `sections` 必须写 Hugo section key，通常是目录名小写。
+3. 首页一级分类图标顺序由 `data/category_icons.yaml` 的 `primary` 决定，不是按文件名自动匹配。
+4. 二级分类卡片不显示图标；三级模块卡片图标来自 `data/module_icons.yaml` 的共享图标池。
+5. 除首页一级分类图标外，其它图片池都会去重后随机展示；如果图片池数量少于同页展示数量，超出的项会使用文字兜底。
+6. 背景图必须写进 YAML，单纯把图片放进 `static/` 不会被页面随机到。
+7. 宽表格和宽代码块会隐藏明显的滚动条，但仍可横向滚动查看。
 
-当前首页首屏默认图：
+## 修改后检查
 
-```gohtml
-background-image: url("/images/cover1.jpg");
-```
-
-点击首页首屏时，会在下面这组图片中切换：
-
-```js
-const images = [
-    "/images/cover1.jpg",
-    "/images/cover2.jpg",
-    "/images/cover3.jpg",
-    "/images/cover4.jpg",
-    "/images/cover5.jpg",
-    "/images/cover6.jpg"
-];
-```
-
-所以如果你要新增首页首屏图：
-
-1. 把图片放到：
-
-```text
-static/images/
-```
-
-2. 命名为：
-
-```text
-cover7.jpg
-```
-
-3. 再把它追加到 [layouts/index.html](d:/Project/blog/layouts/index.html) 的 `images` 数组里
-
-### 2. 分类索引页背景图
-
-分类页模板：
-[layouts/_default/list.html](d:/Project/blog/layouts/_default/list.html)
-
-背景图目录：
-
-```text
-static/images/background-image/
-```
-
-当前分类页会从下面这些图片里随机取一张：
-
-```js
-"/images/background-image/background-img1.jpg"
-...
-"/images/background-image/background-img10.jpg"
-```
-
-如果要新增：
-
-1. 把图片放到：
-
-```text
-static/images/background-image/
-```
-
-2. 例如命名为：
-
-```text
-background-img11.jpg
-```
-
-3. 把它加到 [layouts/_default/list.html](d:/Project/blog/layouts/_default/list.html) 的 `images` 数组里
-
-### 3. 文章详情页背景图
-
-文章页模板：
-[layouts/_default/single.html](d:/Project/blog/layouts/_default/single.html)
-
-它和分类索引页共用同一套背景图目录：
-
-```text
-static/images/background-image/
-```
-
-如果你新增了背景图，也要同步把它加入：
-
-[layouts/_default/single.html](d:/Project/blog/layouts/_default/single.html)
-
-里的 `imgs` 数组，否则文章页不会随机到新图片。
-
-## 六、推荐维护流程
-
-### 新增一篇已有分类的文章
-
-1. 在对应 `content/<分类>/` 下新建 `.md`
-2. 写好 `title`、`date`、`draft`
-3. 如果正文有图，把图放到 `static/images/posts/...`
-4. 在 Markdown 里用 `/images/...` 引用
-5. 运行 `hugo server` 预览
-
-### 新增一个全新的分类
-
-1. 新建 `content/<分类>/`
-2. 至少写一篇文章
-3. 修改 [layouts/index.html](d:/Project/blog/layouts/index.html) 中：
-   `preferredKeys`
-4. 修改 [layouts/index.html](d:/Project/blog/layouts/index.html) 中：
-   `preferredSections`
-5. 如有需要，修改 [layouts/index.html](d:/Project/blog/layouts/index.html) 中：
-   `preferredImageKeys`
-6. 准备分类图片到 `static/images/category/`
-7. 运行 `hugo server` 检查首页和分类页
-
-### 新增背景图
-
-1. 首页首屏图：
-   放到 `static/images/`，并修改 [layouts/index.html](d:/Project/blog/layouts/index.html)
-2. 分类页 / 文章页背景图：
-   放到 `static/images/background-image/`，并同时修改 [layouts/_default/list.html](d:/Project/blog/layouts/_default/list.html) 和 [layouts/_default/single.html](d:/Project/blog/layouts/_default/single.html)
-
-## 七、容易踩坑的地方
-
-1. `content/` 下只有目录没有文章，这个分类不会正常显示。
-2. 首页分类顺序不是纯自动的，想固定顺序必须改 [layouts/index.html](d:/Project/blog/layouts/index.html)。
-3. 首页分类图片顺序和分类文字顺序目前是分离控制的，改分类顺序时不要忘了看 `$preferredImageKeys`。
-4. 文章正文图片必须放在 `static/` 下，Markdown 里使用站点路径 `/images/...` 引用。
-5. 新增背景图后，如果只改一个模板，另一个页面类型可能随机不到新图。
-6. 分类页文章卡头像不是正文图片，它来自 `static/images/post-avatar/`。
-
-## 八、修改后如何检查
-
-每次修改完建议运行：
+每次改完建议至少运行：
 
 ```powershell
-hugo server
+hugo --cleanDestinationDir
 ```
 
 重点检查：
 
-1. 首页分类顺序是否符合预期
-2. 首页分类图片是否符合预期
-3. 分类页文章排序是否正确
-4. 新图片路径是否能正常打开
-5. 新背景图是否能被随机到
+1. 首页是否只显示预期的一级分类。
+2. 首页图标顺序是否符合 `data/category_icons.yaml`。
+3. 一级分类页是否只显示二级分类卡片。
+4. 二级分类页是否显示三级模块和文章列表。
+5. 文章页代码块、表格是否没有明显底部滑条。
+6. 新增图片是否能通过 `/images/...` 路径正常访问。

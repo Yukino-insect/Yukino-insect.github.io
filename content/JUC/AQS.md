@@ -45,7 +45,7 @@ private volatile int state;
 
 ```markdown
 Thread-1 调用 acquire(1)
- ├─ tryAcquire(1) → 成功？（CAS修改state=1）
+ ├─ tryAcquire(1) -> 成功？（CAS修改state=1）
  │     ├─ 成功：拿到锁，继续执行
  │     └─ 失败：进入等待队列
  │
@@ -56,8 +56,8 @@ Thread-1 调用 acquire(1)
 当锁被释放时
 
 ```markdown
-unlock() → release(1)
- ├─ tryRelease(1) → state=0？
+unlock() -> release(1)
+ ├─ tryRelease(1) -> state=0？
  ├─ 成功则唤醒队列中下一个等待线程（LockSupport.unpark）
 ```
 
@@ -65,15 +65,15 @@ unlock() → release(1)
 
 它可以被视为时一个 FIFO 双向队列
 ```markdown
-head → [Node-1] → [Node-2] → [Node-3] → tail
+head -> [Node-1] -> [Node-2] -> [Node-3] -> tail
 ```
 
 每个节点 Node 存储等待线程 `Thread`、等待状态 `waitStatus`、前后指针 `prev/next`
 
 等待机制：
 
-1. 线程获取锁失败 → 进入队列尾部；
-2. 前一个节点释放资源 → 唤醒下一个节点；
+1. 线程获取锁失败 -> 进入队列尾部；
+2. 前一个节点释放资源 -> 唤醒下一个节点；
 3. 被唤醒的线程重新竞争锁。
 
 ##### 共享模式下的流程
@@ -81,9 +81,9 @@ head → [Node-1] → [Node-2] → [Node-3] → tail
 ```markdown
 acquireShared(n)
  ├─ tryAcquireShared(n)
- │     ├─ 返回负数 → 获取失败，入队
- │     ├─ 返回0 → 成功但不再共享
- │     └─ 返回正数 → 成功且可继续共享
+ │     ├─ 返回负数 -> 获取失败，入队
+ │     ├─ 返回0 -> 成功但不再共享
+ │     └─ 返回正数 -> 成功且可继续共享
  ├─ 等待队列中线程逐个唤醒（releaseShared）
 ```
 
@@ -91,7 +91,7 @@ acquireShared(n)
 
 ```markdown
 acquire(arg)
- ├─ if tryAcquire(arg) → 成功
+ ├─ if tryAcquire(arg) -> 成功
  └─ 否则：
      ├─ addWaiter(Node.EXCLUSIVE)
      ├─ acquireQueued(node, arg)

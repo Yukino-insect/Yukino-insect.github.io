@@ -39,7 +39,7 @@ public class App {
 }
 ```
 
-`@SpringBootApplication` 是 Spring Boot 应用的核心入口注解，它本身是一个**组合注解**，把多个常用注解整合在一起，使应用可以“一步启动”。我帮你拆解一下它包含的注解和作用：
+`@SpringBootApplication` 是 Spring Boot 应用的核心入口注解，它本身是一个**组合注解**，把多个常用注解整合在一起，使应用可以“一步启动”。下面按组成注解说明它的作用：
 
 **注解定义**
 
@@ -231,11 +231,11 @@ Spring Boot 的 **内嵌服务器（Embedded Server）** 是它最核心的特�
 **启动流程**
 
 ```
-SpringApplication.run() →
-创建 ApplicationContext →
-自动配置 WebServerFactory Bean →
-启动内嵌服务器 (Tomcat/Jetty/Undertow) →
-部署 DispatcherServlet →
+SpringApplication.run() ->
+创建 ApplicationContext ->
+自动配置 WebServerFactory Bean ->
+启动内嵌服务器 (Tomcat/Jetty/Undertow) ->
+部署 DispatcherServlet ->
 应用就绪，监听端口
 ```
 
@@ -468,8 +468,8 @@ spring boot 可快速集成 **Spring Security**。支持 **OAuth2**、**JWT** �
 
 - 集成 Spring Test、JUnit 5、Mockito 等，方便单元测试和集成测试。
 - 提供注解如：
-  - `@SpringBootTest` → 启动完整 Spring Boot 上下文
-  - `@WebMvcTest` → Web 层测试
+  - `@SpringBootTest` -> 启动完整 Spring Boot 上下文
+  - `@WebMvcTest` -> Web 层测试
 
 #### DevTools & 热部署
 

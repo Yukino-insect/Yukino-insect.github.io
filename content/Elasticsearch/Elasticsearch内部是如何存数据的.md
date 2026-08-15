@@ -61,7 +61,7 @@ Index（索引）
 用于全文检索（text 字段）
 
 ```text
-term → [docID1, docID2, docID3]
+term -> [docID1, docID2, docID3]
 ```
 
 - 每个 term 对应一组 docID
@@ -159,8 +159,8 @@ POST index/_doc
 2. 每个 Shard 内：
    - 多个 Segment **并行查询**
 3. 每个 Segment：
-   - text → 倒排索引
-   - vector → HNSW
+   - text -> 倒排索引
+   - vector -> HNSW
 4. Shard 汇总结果
 5. Coordinator 节点做全局排序 & 返回
 

@@ -52,7 +52,7 @@ title = 'Flowable'
 这些配置：
 
 - 存数据库
-- 在发布流程时 → 注入到 BPMN 模型
+- 在发布流程时 -> 注入到 BPMN 模型
 
 ### 方式三：手写 XML
 
@@ -140,8 +140,8 @@ Flowable 本身不管怎么登录，不管用什么用户表
 
 后端要做的事是：
 
-- 把系统里的 userId → Flowable 的 assignee
-- 把部门 / 角色 → candidateGroup
+- 把系统里的 userId -> Flowable 的 assignee
+- 把部门 / 角色 -> candidateGroup
 
 ## 五、MySQL 数据库存的到底是什么？
 
@@ -521,7 +521,7 @@ Flowable 的 API 设计非常清晰：**所有能力都通过 Service 暴露**�
 核心方法
 
 ```java
-// 部署流程（BPMN XML → 可执行流程）
+// 部署流程（BPMN XML -> 可执行流程）
 repositoryService.createDeployment()
     .addClasspathResource("processes/leave.bpmn20.xml")
     .deploy();
@@ -758,7 +758,7 @@ historyService.createHistoricActivityInstanceQuery()
 
 ## Flowable 里有哪些核心数据承载对象
 
-从 **流程设计 → 运行 → 结束** 的生命周期看，Flowable 主要靠 **9 类核心对象** 来承载中间数据。
+从 **流程设计 -> 运行 -> 结束** 的生命周期看，Flowable 主要靠 **9 类核心对象** 来承载中间数据。
 
 ### 一、设计与部署阶段（Repository 层）
 
@@ -972,11 +972,11 @@ HistoricProcessInstance
 
 在 flowable 框架中，xml 经过部署成为流程定义，然后从流程定义可以启动一个流程实例。一个流程实例中可以有很多任务节点，每一个任务节点都可以有相应的负责人
 
-你这段理解是 ✅ **完全正确的**，而且逻辑已经非常清晰了。我帮你把概念再系统梳理一下，让你形成一个完整的 Flowable 结构认知。
+下面按 Flowable 的核心结构重新梳理。
 
 ------
 
-# 🔷 一、整体关系结构
+#  一、整体关系结构
 
 在 **Flowable** 中，核心结构是：
 
@@ -994,20 +994,20 @@ BPMN XML
 
 ------
 
-# 🔷 二、逐层解释
+#  二、逐层解释
 
-## 1. BPMN XML → 流程定义（Process Definition）
+## 1. BPMN XML -> 流程定义（Process Definition）
 
 - 你写的 `.bpmn20.xml`
 - 描述流程图结构（节点、连线、条件、审批人等）
 - 部署后生成流程定义
 - 数据表：`act_re_procdef`
 
-👉 流程定义 = 模板（蓝图）
+ 流程定义 = 模板（蓝图）
 
 ------
 
-## 2. 流程定义 → 流程实例（Process Instance）
+## 2. 流程定义 -> 流程实例（Process Instance）
 
 当你调用：
 
@@ -1025,7 +1025,7 @@ runtimeService.startProcessInstanceByKey("processKey");
 - 运行中：`act_ru_procinst`
 - 历史：`act_hi_procinst`
 
-👉 流程实例 = 模板的一次实际执行
+ 流程实例 = 模板的一次实际执行
 
 比如：
 
@@ -1035,7 +1035,7 @@ runtimeService.startProcessInstanceByKey("processKey");
 
 ------
 
-## 3. 流程实例 → 任务（Task）
+## 3. 流程实例 -> 任务（Task）
 
 流程走到用户节点（UserTask）时：
 
@@ -1046,7 +1046,7 @@ Flowable 会创建 Task
 - 运行中任务：`act_ru_task`
 - 历史任务：`act_hi_taskinst`
 
-👉 一个流程实例会随着流转生成多个任务
+ 一个流程实例会随着流转生成多个任务
 
 - 可能串行
 - 可能并行
@@ -1054,7 +1054,7 @@ Flowable 会创建 Task
 
 ------
 
-## 4. 任务 → 负责人
+## 4. 任务 -> 负责人
 
 每个 Task 都可以配置：
 
@@ -1084,9 +1084,9 @@ candidateGroups = "manager"
 
 ------
 
-# 🔷 三、核心关系总结
+#  三、核心关系总结
 
-### 1. 一个流程定义 → 可以启动多个流程实例
+### 1. 一个流程定义 -> 可以启动多个流程实例
 
 ```
 流程定义 A
@@ -1097,7 +1097,7 @@ candidateGroups = "manager"
 
 ------
 
-### 2. 一个流程实例 → 可以产生多个任务
+### 2. 一个流程实例 -> 可以产生多个任务
 
 ```
 实例 1
@@ -1108,7 +1108,7 @@ candidateGroups = "manager"
 
 ------
 
-### 3. 一个任务 → 有一个最终负责人
+### 3. 一个任务 -> 有一个最终负责人
 
 即使是候选人机制：
 

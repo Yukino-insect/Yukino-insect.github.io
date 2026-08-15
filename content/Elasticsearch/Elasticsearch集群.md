@@ -125,9 +125,9 @@ ES 是通过 hash 选择分片的，如果该参数在线上被修改，那之�
 副本是每一个主分片的数据冗余，用于保证主分片所在服务挂掉之后，从分片可以继续提供服务。
 
 ```text
-shard 0 → 1 个 replica
-shard 1 → 1 个 replica
-shard 2 → 1 个 replica
+shard 0 -> 1 个 replica
+shard 1 -> 1 个 replica
+shard 2 -> 1 个 replica
 ```
 
 当写请求到达主分片时，主分片在写入成功后才会将数据异步同步到 replica。当主分片挂掉后，从分片自动提升为主分片。读请求可被负载均衡到主从分片，减小 ES 读请求压力。副本参数可以在运行时被修改。
@@ -293,9 +293,9 @@ DELETE /_search/scroll
    ↓
 返回成功（客户端看到成功）
    ↓
-refresh → 可搜索
+refresh -> 可搜索
    ↓
-flush → 持久化检查点操作
+flush -> 持久化检查点操作
 ```
 
 ES 在一次 Index 请求中，会在同一线程内串行完成 Lucene Index buffer 写入和 translog 追加；写入是否被确认成功并不取决于 Index buffer，而是取决于 translog 是否满足 durability 要求（如 request 模式下完成 fsync）。
@@ -404,7 +404,7 @@ analyzer 本身不实现分词逻辑，而是通过引用在 analysis 下定义�
 分词器的处理流程是 char_filter 文本预处理、tokenizer 切词、token filter 词加工
 
 ```text
-char_filter → tokenizer → filter
+char_filter -> tokenizer -> filter
 ```
 
 `char_filter` 会对原始字符串做字符级别的替换或清洗，比如去除 HTML 标签，全角改为半角，符号统一，特殊字符替换。

@@ -25,7 +25,7 @@ title = 'Spring MVC'
 **Controller（控制器）**
 
 - **请求处理逻辑**
-- 接收用户请求 → 调用模型处理数据 → 选择视图返回响应
+- 接收用户请求 -> 调用模型处理数据 -> 选择视图返回响应
 
 **MVC 的工作流程**：
 
@@ -555,8 +555,8 @@ public String save(Person person) {
 
 请求到达 Controller 的流程
 
-1. 请求到来 → `DispatcherServlet`
-2. 找到对应的 `HandlerMapping` → 定位到某个 `Controller` 方法
+1. 请求到来 -> `DispatcherServlet`
+2. 找到对应的 `HandlerMapping` -> 定位到某个 `Controller` 方法
 3. `HandlerAdapter` 调用这个方法时，会先去解析方法参数
 4. **SpringMVC 内部有一组 ArgumentResolver（参数解析器）**，专门负责不同类型参数的解析和赋值
 
@@ -587,7 +587,7 @@ public String save(Person person) { ... }
 - 解析器：`ModelAttributeMethodProcessor`
 - 工作方式：
   - Spring 会先创建一个 `Person` 实例
-  - 按照 **参数名 → 属性名** 规则匹配
+  - 按照 **参数名 -> 属性名** 规则匹配
   - 调用 `setName("Tom")`, `setAge(20)`
   - 完成对象的自动封装
 
@@ -609,7 +609,7 @@ public String save(@RequestParam("name") String name) { ... }
 
 - URL: `/save?name=Tom`
 - 解析器：`RequestParamMethodArgumentResolver`
-- 自动从请求参数中取 `name=Tom` → 注入到 `name`
+- 自动从请求参数中取 `name=Tom` -> 注入到 `name`
 
 参数在 **请求体** 中（但用 `@RequestParam` 依然能接到）
 
@@ -623,7 +623,7 @@ public String save(@RequestBody Person person) { ... }
 - Content-Type: `application/json`
 - 解析器：`RequestResponseBodyMethodProcessor`
 - 依赖 `HttpMessageConverter`（例如 Jackson）把 JSON 转换成对象
-- 请求体：`{"name":"Tom","age":20}` → 反序列化成 `Person`
+- 请求体：`{"name":"Tom","age":20}` -> 反序列化成 `Person`
 
 **Servlet API 注入**
 
@@ -735,7 +735,7 @@ public class PersonController {
 1. **传统 MVC 流程**
 
 - 方法返回 `String`（逻辑视图名）、`ModelAndView`
-- `DispatcherServlet → HandlerAdapter → Controller → 视图解析器(ViewResolver) → 渲染 JSP/Thymeleaf`
+- `DispatcherServlet -> HandlerAdapter -> Controller -> 视图解析器(ViewResolver) -> 渲染 JSP/Thymeleaf`
 - 最后输出 HTML 给浏览器
 
 适合页面渲染型应用。
@@ -743,7 +743,7 @@ public class PersonController {
 2. **现代 Web API 流程**
 
 - 方法标注 `@ResponseBody` **或** 返回 `ResponseEntity<T>`
-- `DispatcherServlet → HandlerAdapter → Controller → HttpMessageConverter`
+- `DispatcherServlet -> HandlerAdapter -> Controller -> HttpMessageConverter`
 - 将 Java 对象转换为 JSON/XML/二进制，直接写入 **HTTP 响应体**
 - 不再走视图解析器
 

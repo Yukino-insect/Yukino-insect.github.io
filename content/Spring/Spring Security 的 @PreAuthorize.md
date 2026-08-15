@@ -56,7 +56,7 @@ public String admin() {
 @PreAuthorize("hasAuthority('ROLE_ADMIN')")
 ```
 
-> ⚠️ `hasRole` **会自动加 `ROLE_` 前缀**
+> 注意： `hasRole` **会自动加 `ROLE_` 前缀**
 
 ------
 
@@ -148,7 +148,7 @@ public void edit(Long userId) {
 }
 ```
 
-> ⭐ **企业项目最推荐的写法**
+>  **企业项目最推荐的写法**
 
 ------
 
@@ -156,8 +156,8 @@ public void edit(Long userId) {
 
 | 层级       | 建议                 |
 | ---------- | -------------------- |
-| Controller | ❌ 不推荐（容易绕过） |
-| Service    | ✅ 强烈推荐           |
+| Controller |  不推荐（容易绕过） |
+| Service    |  强烈推荐           |
 
 ```
 @Service
@@ -195,8 +195,8 @@ hasRole('ADMIN')
 ADMIN
 ```
 
-❌ 错
- ✔ 正确应为：
+ 错
+  正确应为：
 
 ```
 ROLE_ADMIN

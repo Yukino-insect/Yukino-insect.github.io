@@ -430,7 +430,7 @@ results.removeIf(item -> recentItemIds.contains(item.getId()));
 Step 1：用户浏览内容
 
 ```text
-用户 → 内容 A
+用户 -> 内容 A
 ```
 
 写入 Redis：

@@ -100,7 +100,7 @@ sh bin/startup.sh
 
 ### 典型实战案例
 
-1. **MySQL → Elasticsearch**
+1. **MySQL -> Elasticsearch**
 
    业务数据库写入/更新商品信息
 
@@ -108,15 +108,15 @@ sh bin/startup.sh
 
    搜索引擎里的商品数据保持实时一致
 
-2. **MySQL → Redis 缓存**
+2. **MySQL -> Redis 缓存**
 
-   用户修改资料 → 写入数据库
+   用户修改资料 -> 写入数据库
 
-   Canal 捕获 binlog → 更新 Redis 中的缓存
+   Canal 捕获 binlog -> 更新 Redis 中的缓存
 
    避免出现缓存与数据库不一致问题
 
-3. **MySQL → Kafka → Flink → 数据仓库**
+3. **MySQL -> Kafka -> Flink -> 数据仓库**
 
    电商订单表的 binlog 通过 Canal 投递到 Kafka
 
@@ -409,7 +409,7 @@ canal.instance.filter.black.regex=.*\\.(binlog_backup|sys_log)
  MySQL (binlog)
        │
        ▼
-  Canal Server (解析 binlog → 事件)
+  Canal Server (解析 binlog -> 事件)
        │
        ▼
   Canal Adapter (kafka/rocketmq/rabbitmq)
@@ -424,7 +424,7 @@ ES/Redis          业务微服务
 
 在生产环境中，Canal 一般不会让业务系统直接连它，而是 **把数据写入消息队列/ES**，由下游异步消费。
 
-##### Canal → Kafka
+##### Canal -> Kafka
 
 使用 Canal Kafka Adapter
 
@@ -455,7 +455,7 @@ public class CanalKafkaConsumer {
 }
 ```
 
-##### Canal → RocketMQ
+##### Canal -> RocketMQ
 
 ```yaml
 canal:
@@ -479,7 +479,7 @@ public class CanalRocketMqConsumer implements RocketMQListener<String> {
 }
 ```
 
-##### Canal → Elasticsearch
+##### Canal -> Elasticsearch
 
 使用 Canal 提供的 **ElasticSearch Adapter**
 
@@ -525,10 +525,10 @@ Canal Server 解析 binlog 后，会输出类似的 JSON 消息到 Kafka/RocketM
 
 字段含义：
 
-- **database/table** → 来自哪个库、哪个表
-- **type** → 事件类型（INSERT/UPDATE/DELETE/DDL）
-- **before/after** → 修改前/修改后的行数据
-- **ts** → 事件时间戳
+- **database/table** -> 来自哪个库、哪个表
+- **type** -> 事件类型（INSERT/UPDATE/DELETE/DDL）
+- **before/after** -> 修改前/修改后的行数据
+- **ts** -> 事件时间戳
 
 它本质上就是一个 **通用的数据库行级别变更事件**。
 
@@ -591,13 +591,13 @@ Canal 提供的 ES 转换器在 `canal.adapter` 包里，主要有以下两类�
 
 1. **ES Adapter（es7 / es6）**
    - 直接将 MySQL 表的数据映射到 Elasticsearch 索引。
-   - 自动处理 **INSERT/UPDATE/DELETE** → ES 的 **index/update/delete**。
+   - 自动处理 **INSERT/UPDATE/DELETE** -> ES 的 **index/update/delete**。
    - 支持 SQL 映射配置，可以灵活选择表字段与 ES 文档的对应关系。
-2. **通用 RDB → ES 映射器**
-   - 使用配置文件 `yml` 定义 MySQL → ES 的映射规则。
+2. **通用 RDB -> ES 映射器**
+   - 使用配置文件 `yml` 定义 MySQL -> ES 的映射规则。
    - 支持多表映射、字段重命名、函数计算。
 
-配置示例（MySQL → ES）
+配置示例（MySQL -> ES）
 
 在 `canal.adapter/conf/es7/` 下新建配置文件，比如 `user.yml`：
 
@@ -621,24 +621,24 @@ esMapping:
 
 运行机制
 
-1. **Canal Server** 采集 MySQL binlog → 生成 Entry/FlatMessage。
+1. **Canal Server** 采集 MySQL binlog -> 生成 Entry/FlatMessage。
 2. **Canal Adapter (ES)** 订阅 Canal Server 的数据。
 3. 按照 `esMapping` 配置，把数据转成 **Elasticsearch JSON 文档**：
-   - INSERT → `index`
-   - UPDATE → `update`
-   - DELETE → `delete`
+   - INSERT -> `index`
+   - UPDATE -> `update`
+   - DELETE -> `delete`
 
 ```markdown
-MySQL → Canal Server → Canal Adapter(ES) → Elasticsearch
+MySQL -> Canal Server -> Canal Adapter(ES) -> Elasticsearch
 ```
 
 ##### 既然 canal 提供了直接将增量消息传递给 elasticsearch 的 adapter，那为什么再一些项目中还需要引入 mq 插件来做中转站。
 
 接下来我们以一个电商项目为例
 
-**电商项目中，不直接用 Canal → Elasticsearch，而是用 Canal → MQ → 消费端 → Elasticsearch**。原因并不是 Elasticsearch 消息适配器本身有致命问题，而是涉及到 **可靠性、解耦、伸缩性和容错**
+**电商项目中，不直接用 Canal -> Elasticsearch，而是用 Canal -> MQ -> 消费端 -> Elasticsearch**。原因并不是 Elasticsearch 消息适配器本身有致命问题，而是涉及到 **可靠性、解耦、伸缩性和容错**
 
-##### 直接 Canal → Elasticsearch 的问题
+##### 直接 Canal -> Elasticsearch 的问题
 
 Canal 有官方的 Adapter 可以把 binlog 增量同步到 Elasticsearch，例如 canal-adapter 提供了 ES Sink。
 
@@ -650,7 +650,7 @@ Canal 有官方的 Adapter 可以把 binlog 增量同步到 Elasticsearch，例�
    - 如果直接写 ES，失败重试逻辑较复杂，需要自己管理批量重试、死信队列等。
 2. **扩展性受限**
    - Canal-adapter 内部是单线程或者线程池模式，写 ES 高峰可能导致阻塞。
-   - 对于电商项目，SKU、订单、商品库数据量巨大，直接 Canal → ES 很难做横向扩展。
+   - 对于电商项目，SKU、订单、商品库数据量巨大，直接 Canal -> ES 很难做横向扩展。
    - MQ 作为中间件可以天然做流量削峰、分组订阅、多消费者并行处理。
 3. **解耦性差**
    - 如果 Canal Adapter 直接写 ES，那么 Adapter 就必须知道业务 ES 结构（索引、mapping、BO 映射规则），耦合度高。
@@ -683,7 +683,7 @@ Elasticsearch Adapter 本身的局限性
   - 大量 SKU/订单数据，高峰期可能直接 Adapter 写 ES 失败；
   - Adapter 没有天然消息重试机制，失败后可能丢消息；
   - Adapter 和业务逻辑耦合高，维护成本大。
-- 因此实际生产中，大多改成 **Canal → MQ → Spring Boot 消费 → ES**。
+- 因此实际生产中，大多改成 **Canal -> MQ -> Spring Boot 消费 -> ES**。
 
 接下来大致实现一下这个方案
 

@@ -28,15 +28,15 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 - token 存在 **刷新机制**
 - token 权限范围有限
 
-👉
+
  **token 被拦截的概率极低**
  这属于 **行业标准设计**
 
-✔ 并不算漏洞
+ 并不算漏洞
 
 ------
 
-### 情况 2：HTTP / token 永不过期 ❌（高危）
+### 情况 2：HTTP / token 永不过期 （高危）
 
 如果是：
 
@@ -45,7 +45,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 - token 权限过大（admin）
 - token 被写进日志 / 前端代码
 
-👉
+
  **这就是严重安全问题**
 
 ------
@@ -60,7 +60,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 同一局域网 / 公共 WiFi
 ```
 
-👉 抓包就能看到 token
+ 抓包就能看到 token
 
 ------
 
@@ -75,18 +75,18 @@ localStorage.setItem("token", "xxx");
 - XSS 漏洞
 - 浏览器插件恶意代码
 
-👉 token 会被直接读走
+ token 会被直接读走
 
 ------
 
-### 3. 日志 / 控制台泄露（实习生最常见 😅）
+### 3. 日志 / 控制台泄露（实习生最常见 ）
 
 ```
 log.info("token = {}", token);
 console.log(token);
 ```
 
-👉 日志一泄露，全员共享 token
+ 日志一泄露，全员共享 token
 
 ------
 
@@ -113,7 +113,7 @@ console.log(token);
 - access token：短期
 - refresh token：只在特定接口用
 
-👉 即使 access token 泄露，也不能长期使用
+ 即使 access token 泄露，也不能长期使用
 
 ------
 
@@ -143,7 +143,7 @@ console.log(token);
 
 ## 七、你实习时“直接拿前端 token 测接口”，合理吗？
 
-### ✅ 合理，而且**非常常见**
+###  合理，而且**非常常见**
 
 原因很现实：
 
@@ -151,7 +151,7 @@ console.log(token);
 - 前端已经联调完成
 - token 只是「通行证」
 
-👉 **测试 ≠ 安全设计**
+ **测试 ≠ 安全设计**
 
 ------
 
@@ -173,7 +173,7 @@ console.log(token);
 - token 是否绑定设备/IP？
 - 管理员 token 是否更短？
 
-👉
+
  哪怕你只是测试人员，**能想到这些，已经超过很多应届生**
 
 ------
@@ -187,10 +187,10 @@ console.log(token);
 
 > **在使用 HTTPS 的情况下：**
 >
-> - ❌ 拦截者**几乎不可能解密出 token 内容**
-> - ❌ 更重要的是：**他连“完整可用的 token 字符串”都拿不到**
+> -  拦截者**几乎不可能解密出 token 内容**
+> -  更重要的是：**他连“完整可用的 token 字符串”都拿不到**
 >
-> 👉 所以不是“token 拿到了但不能用”，而是 **“根本拿不到 token”**
+>  所以不是“token 拿到了但不能用”，而是 **“根本拿不到 token”**
 
 这正是 HTTPS 存在的核心意义之一。
 
@@ -202,7 +202,7 @@ console.log(token);
 
 ------
 
-### 🔴 HTTP（明文）
+###  HTTP（明文）
 
 ```
 GET /api/user
@@ -216,11 +216,11 @@ Authorization: Bearer eyJhbGciOi...
 - token 字符串
 - 响应体
 
-👉 **token = 明文暴露**
+ **token = 明文暴露**
 
 ------
 
-### 🟢 HTTPS（TLS 加密）
+###  HTTPS（TLS 加密）
 
 在网络层面看到的是：
 
@@ -235,7 +235,7 @@ Encrypted Application Data
 - 数据大小
 - 时间
 
-❌ 看不到：
+ 看不到：
 
 - HTTP header
 - Authorization
@@ -248,11 +248,11 @@ Encrypted Application Data
 
 这是很多人**最容易误解的一点**。
 
-### 你以为是这样 👇
+### 你以为是这样 
 
-> token 被拦截 → 但内容是加密的 → 解不开
+> token 被拦截 -> 但内容是加密的 -> 解不开
 
-### 实际是这样 👇
+### 实际是这样 
 
 > token 根本没被拦截
 >  **拦截到的是 TLS 加密后的二进制流**
@@ -261,8 +261,8 @@ Encrypted Application Data
 
 ### 类比一下（非常贴切）
 
-- ❌ 不是你拿到了一封“加密的信”
-- ✅ 而是你只看到一个**上锁的保险箱在运输**
+-  不是你拿到了一封“加密的信”
+-  而是你只看到一个**上锁的保险箱在运输**
 
 你：
 
@@ -282,9 +282,9 @@ TLS 过程简化理解：
 
 1. 客户端验证服务器证书
 2. 使用非对称加密协商出一个**对称密钥**
-3. 后续所有 HTTP 数据 → 用对称密钥加密
+3. 后续所有 HTTP 数据 -> 用对称密钥加密
 
-👉 抓包者：
+ 抓包者：
 
 - 没服务器私钥
 - 拿不到会话密钥
@@ -292,7 +292,7 @@ TLS 过程简化理解：
 
 ------
 
-## 五、那是不是“绝对安全”？⚠️ 不是
+## 五、那是不是“绝对安全”？注意： 不是
 
 HTTPS 解决的是：
 
@@ -314,7 +314,7 @@ localStorage.getItem("token");
 - 恶意插件
 - 被控浏览器
 
-👉 token 是“明文”在内存里的
+ token 是“明文”在内存里的
 
 ------
 
@@ -325,14 +325,14 @@ localStorage.getItem("token");
 - 从前端 DevTools 拿 token
 - 用 Postman 调接口
 
-👉 这不是拦截，是**合法复制**
+ 这不是拦截，是**合法复制**
 
 ------
 
 ### 3. HTTPS 被“终止”的场景（企业环境）
 
 ```
-浏览器 → 公司代理（解密） → 服务器
+浏览器 -> 公司代理（解密） -> 服务器
 ```
 
 企业代理拥有：
@@ -340,17 +340,17 @@ localStorage.getItem("token");
 - 自签根证书
 - 中间人能力
 
-👉 在**被管理的环境中**，HTTPS 可被解密
+ 在**被管理的环境中**，HTTPS 可被解密
 
 ------
 
-## 六、所以你现在的理解，精确修正一句话是👇
+## 六、所以你现在的理解，精确修正一句话是
 
-❌ 原说法：
+ 原说法：
 
 > 拦截者解密不了 token 内容
 
-✅ 精准说法：
+ 精准说法：
 
 > **在 HTTPS 下，拦截者连 token 本身都拿不到，更谈不上解密。**
 
@@ -370,7 +370,7 @@ localStorage.getItem("token");
 - token 不被日志打印
 - token 不被内部人员复制
 
-👉 **token 是“一旦泄露就可用”的凭证**
+ **token 是“一旦泄露就可用”的凭证**
 
 所以必须：
 

@@ -147,7 +147,7 @@ sudo su -
 **Linux 的权限判定顺序是**：
 
 ```bash
-user → group → other
+user -> group -> other
 ```
 
 当某个用户尝试访问文件或目录时，Linux 内核会按照以下顺序进行判断：

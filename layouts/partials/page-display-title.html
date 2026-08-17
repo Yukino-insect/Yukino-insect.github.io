@@ -1,0 +1,13 @@
+{{- $page := . -}}
+{{- $title := $page.Title -}}
+{{- if not $title -}}
+  {{- with (findRE "(?m)^#\\s+[^\\r\\n]+" $page.RawContent 1) -}}
+    {{- $title = replaceRE "^#\\s+" "" (index . 0) -}}
+  {{- end -}}
+{{- end -}}
+{{- if not $title -}}
+  {{- with $page.File -}}
+    {{- $title = replace (replace .BaseFileName "-" " ") "_" " " -}}
+  {{- end -}}
+{{- end -}}
+{{- $title -}}

@@ -4,8 +4,6 @@ draft = true
 title = 'Elasticsearch集群'
 +++
 
-## Settings
-
 在学习 ES 集群方面的知识前。我们首先来学习一下 `setting` 配置
 
 ```json

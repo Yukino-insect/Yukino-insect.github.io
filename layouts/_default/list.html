@@ -260,13 +260,13 @@ main[role="main"] {
         <a class="post-link" href="{{ $page.RelPermalink }}">
             <div class="post-avatar">
                 {{ if lt $index (len $postAvatarImages) }}
-                <img class="js-random-post-avatar" src="{{ index $postAvatarImages $index }}" alt="{{ $page.Title }}">
+                <img class="js-random-post-avatar" src="{{ index $postAvatarImages $index }}" alt="{{ partial "page-display-title.html" $page }}">
                 {{ else }}
                 <div class="post-avatar-fallback">{{ printf "%02d" $avatarOrdinal }}</div>
                 {{ end }}
             </div>
             <div class="post-copy">
-                <div class="post-title">{{ $page.Title }}</div>
+                <div class="post-title">{{ partial "page-display-title.html" $page }}</div>
                 {{ with $page.Date }}
                 <div class="post-meta">{{ .Format "2006-01-02" }}</div>
                 {{ end }}

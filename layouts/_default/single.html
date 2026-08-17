@@ -1,4 +1,4 @@
-{{ define "title" }}{{ .Title }}{{ with .Site.Title }} | {{ . }}{{ end }}{{ end }}
+{{ define "title" }}{{ partial "page-display-title.html" . }}{{ with .Site.Title }} | {{ . }}{{ end }}{{ end }}
 {{ define "main" }}
 {{ $pageBackgroundImages := slice }}
 {{ range (.Site.Data.page_backgrounds.images | default (slice "/images/cover/cover1.jpg")) }}
@@ -81,11 +81,17 @@ body.is-background-preview .post-bg::after {
 }
 
 .post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
   position: relative;
   width: 100%;
-  max-width: 880px;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
   overflow: clip;
-  padding: 56px clamp(38px, 6vw, 64px) 62px;
+  padding: 56px var(--post-card-x-padding) 62px;
   border-radius: 14px;
   background:
     linear-gradient(
@@ -689,7 +695,7 @@ body.is-background-preview .post-bg::after {
 
 <section class="page-shell">
   <article class="post-card" id="postCard">
-    <h1 class="post-title">{{ .Title }}</h1>
+    <h1 class="post-title">{{ partial "page-display-title.html" . }}</h1>
 
     {{ with .Date }}
       <div class="post-date">{{ .Format "January 2, 2006" }}</div>

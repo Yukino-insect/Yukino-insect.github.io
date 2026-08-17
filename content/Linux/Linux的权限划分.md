@@ -1,10 +1,10 @@
 +++
 date = '2026-03-17T21:44:37+08:00'
 draft = false
-title = 'Linux的权限划分'
+title = 'Linux 的权限划分'
 +++
 
-Linux 提供了 **user**、**group**、**other** 三个纬度，用来控制操作者最资源的访问权限。
+Linux 提供了 **user**、**group**、**other** 三个维度，用来控制操作者对资源的访问权限。
 
 这与软件开发中鉴权系统非常相似。Linux 将系统中的**文件**、**目录**、**设备资源**等都抽象成了权限控制对象。通过以上权限级别控制：
 
@@ -14,36 +14,36 @@ Linux 提供了 **user**、**group**、**other** 三个纬度，用来控制操�
 
 ## rwx
 
-Linux 将对文件的和目录的操作划分成了三种基本权限：
+Linux 将对文件和目录的操作划分成了三种基本权限：
 
 - **r**：读权限
 - **w**：写权限
 - **x**：执行权限
 
-这些权限被组合成了三组，分别对应三个纬度。
+这些权限被组合成了三组，分别对应三个维度。
 
-```bash
+```text
 rwxrwxrwx
 user | group | other
 ```
 
-> 对文件来说：rwx 对应读取文件内容，修改文件内容和执行文件
+> 对文件来说：rwx 对应读取文件内容、修改文件内容和执行文件。
 >
 > 但对于目录来说：rwx 对应列出目录内容，在目录中创建、删除、重命名文件和进入目录。
 
-我们可以通过以下命令查看文件权限
+我们可以通过以下命令查看文件权限：
 
 ```bash
 ls -l filename
 ```
 
-可以使用 `chmod` 修改权限、，常见的便是修改一份可执行文件的权限。
+可以使用 `chmod` 修改权限，常见场景是给脚本或二进制文件添加执行权限。
 
 ```bash
 chmod +x filename
 ```
 
-其中 `+` 和 `-` 都是它的参数，分别代表添加和删减权限。`x` 的位置代表具体操作的权限。
+其中 `+` 和 `-` 分别表示添加和移除权限，`x` 表示执行权限。
 
 ## root
 
@@ -79,19 +79,19 @@ groups username
 cat /etc/group
 ```
 
-创建组
+创建组：
 
 ```bash
 groupadd dev
 ```
 
-删除组
+删除组：
 
 ```bash
 groupdel dev
 ```
 
-将用户加入组
+将用户加入组：
 
 ```bash
 usermod -aG dev username
@@ -100,31 +100,31 @@ usermod -aG dev username
 - `-a` 代表追加
 - `-G` 指定附加组
 
-从组中移除用户
+从组中移除用户：
 
 ```bash
 gpasswd -d username dev
 ```
 
-设置用户的主组
+设置用户的主组：
 
 ```bash
 usermod -g dev username
 ```
 
-修改文件所属组
+修改文件所属组：
 
 ```bash
 chown :dev file.txt
 ```
 
-创建用户并生成 home 目录
+创建用户并生成 home 目录：
 
 ```bash
 useradd -m appuser
 ```
 
-对权限的操作很多都是需要 root 权限的，我们如果是 root 权限，以下切换用户命令可以直接生效，如果不是，则需要输入密码
+很多权限相关操作都需要 root 权限。如果当前已经是 root 用户，下面的切换用户命令可以直接生效；如果不是，则需要输入目标用户密码。
 
 ```bash
 su - appuser
@@ -136,7 +136,7 @@ su - appuser
 sudo su -
 ```
 
-如果命令前加上 `sudo`，那么它会让命令拥有 root 权限
+如果命令前加上 `sudo`，那么该命令会以 root 权限执行。
 
 ## user / group / other 权限的判定规则
 

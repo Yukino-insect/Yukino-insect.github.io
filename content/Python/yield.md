@@ -6,8 +6,6 @@ title = 'yield'
 
 +++
 
-# yield
-
 `yield` 有两个身份：
 
 1. 在普通  generator 里，`yield` 用来 **产出一个值**。类似暂停函数并把值交出去。

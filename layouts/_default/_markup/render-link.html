@@ -1,0 +1,23 @@
+{{- $destination := .Destination -}}
+{{- $href := $destination -}}
+{{- $parsed := urls.Parse $destination -}}
+{{- $path := $parsed.Path -}}
+{{- $isRemote := or (strings.HasPrefix $destination "http://") (strings.HasPrefix $destination "https://") -}}
+{{- $isSpecial := or (strings.HasPrefix $destination "#") (or (strings.HasPrefix $destination "mailto:") (strings.HasPrefix $destination "tel:")) -}}
+{{- if and (not $isRemote) (not $isSpecial) (strings.HasSuffix (lower $path) ".md") .Page.File -}}
+  {{- $baseDir := replace .Page.File.Dir "\\" "/" -}}
+  {{- $targetPath := lower (path.Clean (path.Join $baseDir $path)) -}}
+  {{- range .Page.Site.RegularPages -}}
+    {{- $candidate := . -}}
+    {{- with $candidate.File -}}
+      {{- $pagePath := lower (replace .Path "\\" "/") -}}
+      {{- if eq $pagePath $targetPath -}}
+        {{- $href = $candidate.RelPermalink -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+  {{- with $parsed.Fragment -}}
+    {{- $href = printf "%s#%s" $href . -}}
+  {{- end -}}
+{{- end -}}
+<a href="{{ $href | safeURL }}"{{ with .Title }} title="{{ . }}"{{ end }}>{{ .Text | safeHTML }}</a>

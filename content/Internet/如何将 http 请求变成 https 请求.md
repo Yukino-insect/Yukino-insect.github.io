@@ -4,85 +4,137 @@ draft = false
 title = '如何将 http 请求变成 https 请求'
 +++
 
-把 HTTP 变成 HTTPS，本质是：**让客户端只用 TLS 通道访问**，并且 **把所有 HTTP 流量重定向到 HTTPS**。实际落地一般分三层：证书、入口（网关/反代/负载均衡）、应用（Spring Boot）。
+把 HTTP 请求变成 HTTPS 请求，本质上要做两件事：
 
-#### 1）最推荐的架构：在网关/Nginx 做 HTTPS 终止 + HTTP->HTTPS 重定向
+1. 服务端提供 HTTPS 入口，也就是启用 TLS。
+2. 把所有 HTTP 访问重定向到 HTTPS。
 
-##### 1. 申请/配置证书
+只把前端地址从 `http://` 改成 `https://` 是不够的。如果服务端没有监听 HTTPS 端口、没有配置证书，客户端会在 TLS 握手阶段失败。
 
-拿到：
+## 一、推荐架构：在 Nginx 或网关终止 TLS
 
-- 证书文件（`.crt/.pem`）
-- 私钥（`.key`）
-- （可选）中间证书链（chain）
+实际项目中，最常见的做法是：
 
-##### 2.Nginx 配置：80 强制跳 443
+```text
+浏览器
+  -> HTTPS 443
+  -> Nginx / 网关 / 负载均衡
+  -> HTTP 8080
+  -> 后端应用
+```
+
+也就是说，对外是 HTTPS，对内可以继续使用 HTTP。
+
+这样做的好处是：
+
+1. 证书统一放在入口层管理。
+2. 多个后端服务不用重复配置 TLS。
+3. HTTP 到 HTTPS 的跳转也可以统一处理。
+4. 后端应用只专注业务逻辑。
+
+## 二、准备证书
+
+要提供 HTTPS，服务端需要证书和私钥。
+
+常见文件包括：
+
+```text
+fullchain.pem   证书链
+privkey.pem     私钥
+```
+
+证书可以来自：
+
+1. 免费 CA，例如 Let's Encrypt。
+2. 云厂商证书服务。
+3. 公司内部 CA。
+4. 商业 CA。
+
+正式公网服务应该使用受浏览器信任的 CA 证书。自签名证书适合内网测试，但公网用户访问时会看到安全警告。
+
+## 三、Nginx 配置 HTTP 跳 HTTPS
+
+一个典型配置如下：
 
 ```nginx
 server {
     listen 80;
     server_name example.com;
+
     return 301 https://$host$request_uri;
 }
 
 server {
-    listen 443 ssl http2;
+    listen 443 ssl;
+    http2 on;
     server_name example.com;
 
     ssl_certificate     /etc/nginx/certs/fullchain.pem;
     ssl_certificate_key /etc/nginx/certs/privkey.pem;
 
-    # 反向代理到你的 Spring Boot
     location / {
         proxy_pass http://127.0.0.1:8080;
         proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
 }
 ```
 
-这样外部访问全是 `https://`，内部应用仍可跑 `http://localhost:8080`。
+效果是：
 
-#### 2）Spring Boot 里如何强制 HTTPS
+```text
+http://example.com/a
+  -> 301
+  -> https://example.com/a
+```
 
-如果你已经在 Nginx/网关终止 TLS，Spring Boot 需要做两件事：
+浏览器后续真正访问的是 HTTPS 地址。
 
-##### 1.正确识别 X-Forwarded-*（否则会误以为自己是 http）
+## 四、Spring Boot 如何识别原始协议
 
-Spring Boot 3 推荐：
+如果 TLS 在 Nginx 或网关终止，后端收到的请求可能是：
+
+```text
+http://127.0.0.1:8080
+```
+
+但用户真实访问的是：
+
+```text
+https://example.com
+```
+
+这时要让 Spring Boot 正确识别 `X-Forwarded-*` 请求头。
+
+Spring Boot 3 推荐配置：
 
 ```yaml
 server:
   forward-headers-strategy: framework
 ```
 
-##### 2.强制安全
+否则应用在生成重定向地址、判断是否安全请求时，可能误以为当前请求是 HTTP。
 
-让应用层也拒绝非 https：
-
-**Spring Security 配置：**
+如果使用 Spring Security 强制 HTTPS，可以写：
 
 ```java
 @Bean
 SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-    http
-      .requiresChannel(channel -> channel
-          .anyRequest().requiresSecure()
-      );
+    http.requiresChannel(channel -> channel
+            .anyRequest().requiresSecure());
     return http.build();
 }
 ```
 
-> 注意：如果你是网关终止 TLS，一定要配好 `forward-headers-strategy`，否则 `requiresSecure()` 可能判断失误。
+前提是入口层正确传递并信任 `X-Forwarded-Proto`。如果代理链没有配置好，应用层强制 HTTPS 可能造成重复跳转。
 
-##### 3）如果你要让 Spring Boot 自己直接提供 HTTPS
+## 五、让 Spring Boot 直接提供 HTTPS
 
-你需要给应用配置 keystore：
+也可以让 Spring Boot 自己监听 HTTPS 端口。这种方式适合简单服务、内网服务或没有统一网关的场景。
 
-##### 生成/导入证书到 PKCS12
-
-你已有 `fullchain.pem + privkey.pem`：
+如果已有 `fullchain.pem` 和 `privkey.pem`，可以转换成 PKCS12：
 
 ```bash
 openssl pkcs12 -export \
@@ -93,7 +145,7 @@ openssl pkcs12 -export \
   -passout pass:changeit
 ```
 
-##### Spring Boot 配置
+Spring Boot 配置：
 
 ```yaml
 server:
@@ -106,34 +158,54 @@ server:
     key-alias: tomcat
 ```
 
-然后再单独开一个 8080 的 HTTP 端口做 301 跳转（Spring Boot 里实现会稍微麻烦些，通常还是交给 Nginx/网关做更简单稳）。
+这样应用会直接提供：
 
-#### 4）安全性真正关键的加固项
+```text
+https://example.com:8443
+```
 
-- **HSTS**：告诉浏览器以后只能走 HTTPS
+如果还要把 `8080` 的 HTTP 请求跳转到 `8443`，Spring Boot 需要额外配置 HTTP Connector。实际生产中通常还是交给 Nginx 或网关处理更清晰。
 
-  - Nginx：
+## 六、HTTPS 加固项
 
-    ```nginx
-    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-    ```
+### 1. 开启 HSTS
 
-- **禁用旧 TLS/弱加密套件**（TLS1.0/1.1）
+HSTS 会告诉浏览器：以后访问这个域名时强制使用 HTTPS。
 
-- **只开放 443，对外关闭 8080**（或仅内网可访问）
+Nginx 示例：
 
-- **后端服务间用 mTLS**（如果你是微服务、内部也要强安全）
+```nginx
+add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+```
 
-#### 把 HTTP 变成 HTTPS到底在改什么？
+注意：开启 `includeSubDomains` 前，要确认所有子域名都已经支持 HTTPS。否则某些子域名可能被浏览器强制 HTTPS 后无法访问。
 
-主要改的是 **服务端是否提供 HTTPS**，以及 **客户端是否只能用 HTTPS**：
+### 2. 禁用旧协议
 
-- 服务端：需要证书 + 监听 443（或其它端口）提供 TLS
-- 客户端：请求地址改成 `https://...`，并正确校验证书
-- 入口层：把 `http://` 的 80 端口请求 301/302 重定向到 `https://...`
+不要再启用 TLS 1.0、TLS 1.1。生产环境应使用 TLS 1.2 或 TLS 1.3。
 
-> 如果服务端没开 HTTPS，客户端就算想发 `https://` 也连不上（握手失败/连接失败）。
+### 3. 不暴露后端 HTTP 端口
 
-参考：
+如果外部入口是 Nginx 的 443，后端 `8080` 应该只允许本机或内网访问。
 
-https://juejin.cn/post/7361358666212212745
+### 4. 证书自动续期
+
+证书过期会直接导致用户无法正常访问。使用 Let's Encrypt 时，通常需要配置自动续期任务。
+
+## 七、常见误区
+
+### 1. HTTP 不能自动变成 HTTPS
+
+客户端访问 `https://` 时，会先进行 TLS 握手。服务端必须支持 TLS，否则连接会失败。
+
+### 2. 重定向不是加密
+
+HTTP 到 HTTPS 的 `301` 重定向本身仍然是明文响应。真正的加密发生在浏览器访问 HTTPS 地址之后。
+
+### 3. HTTPS 不等于后端完全安全
+
+HTTPS 保护传输过程，不能替代认证、权限控制、参数校验和日志脱敏。
+
+## 八、一句话总结
+
+把 HTTP 变成 HTTPS，不是改一个 URL 字符串，而是在服务入口配置证书和 TLS，并把 80 端口的明文请求重定向到 443 端口。实际项目里最推荐在 Nginx、网关或负载均衡层统一处理。

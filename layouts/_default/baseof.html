@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="{{ .Site.LanguageCode | default "zh-cn" }}">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ block "title" . }}{{ with .Title }}{{ . }}{{ with $.Site.Title }} | {{ . }}{{ end }}{{ else }}{{ .Site.Title | default "个人博客" }}{{ end }}{{ end }}</title>
+  <meta name="description" content="{{ with .Description }}{{ . }}{{ else }}{{ if .IsPage }}{{ .Summary | plainify }}{{ else }}{{ with .Site.Params.description }}{{ . }}{{ end }}{{ end }}{{ end }}">
+  {{ hugo.Generator }}
+  {{ with .OutputFormats.Get "RSS" }}
+  <link href="{{ .RelPermalink }}" rel="alternate" type="application/rss+xml" title="{{ $.Site.Title | default "个人博客" }}">
+  <link href="{{ .RelPermalink }}" rel="feed" type="application/rss+xml" title="{{ $.Site.Title | default "个人博客" }}">
+  {{ end }}
+  {{ if .Params.canonicalUrl }}
+  <link rel="canonical" href="{{ .Params.canonicalUrl }}">
+  {{ else }}
+  <link rel="canonical" href="{{ .Permalink }}">
+  {{ end }}
+  {{ template "_internal/opengraph.html" . }}
+  {{ template "_internal/schema.html" . }}
+  {{ template "_internal/twitter_cards.html" . }}
+  {{ if hugo.IsProduction }}
+  {{ template "_internal/google_analytics.html" . }}
+  {{ end }}
+  {{ partial "head-extra.html" . }}
+  {{ block "head" . }}{{ end }}
+</head>
+<body>
+  <main role="main">
+    {{ block "main" . }}{{ end }}
+  </main>
+</body>
+</html>

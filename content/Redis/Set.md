@@ -4,62 +4,154 @@ draft = false
 title = 'Redis Set'
 +++
 
-Redis Set 是无序且元素唯一的集合结构，常用于去重、标签、关注关系、抽奖、共同好友等场景。
+Redis Set 是无序且元素唯一的集合结构，常用于去重、标签、权限、关注关系、抽奖、共同好友等场景。
 
-## 一、底层结构
+它最值得记住的能力有两个：一是成员判断快，二是集合运算方便。至于它是不是适合承载某个业务模型，要看数据规模、访问模式和是否会形成大 key。
 
-Redis Set 的底层实现主要有两种：
+## 一、基本命令
 
-1. `intset`：当元素都是整数且数量较少时使用，内存更紧凑。
-2. `hashtable`：当元素数量变多或出现非整数元素时使用，查询、插入、删除平均复杂度为 `O(1)`。
-
-因此，Set 的优势是成员判断和去重非常快。缺点也很明显：如果成员数量巨大，内存开销会随着元素数量线性增长。
-
-## 二、关注列表适合用 Set 吗
-
-如果要存储用户关注的人，Set 是一个自然选择：
-
-```text
-following:{userId} -> userId set
+```bash
+SADD tag:redis article:1 article:2 article:3
+SREM tag:redis article:2
+SISMEMBER tag:redis article:1
+SCARD tag:redis
+SMEMBERS tag:redis
 ```
 
-它可以快速判断是否关注：
+集合运算：
+
+```bash
+# 交集：共同关注、共同标签
+SINTER user:1001:following user:1002:following
+
+# 并集：多个角色的用户集合
+SUNION role:admin:users role:editor:users
+
+# 差集：我关注但你没关注的人
+SDIFF user:1001:following user:1002:following
+```
+
+随机成员：
+
+```bash
+SRANDMEMBER lottery:2025 10
+SPOP lottery:2025 1
+```
+
+`SRANDMEMBER` 只随机返回成员，不会删除；`SPOP` 会随机弹出并删除成员，适合抽奖后不允许重复中奖的场景。
+
+## 二、底层结构
+
+Redis Set 的底层编码会根据元素类型和数量变化。
+
+在较早和常见的实现中，Set 主要有两类编码：
+
+1. `intset`：元素都是整数且数量较少时使用，内存更紧凑。
+2. `hashtable`：元素数量变多或出现普通字符串时使用，成员查询、插入、删除平均复杂度为 `O(1)`。
+
+在 Redis 7.2 及之后的版本中，小 Set 还可以使用 listpack 相关编码来进一步节省内存，配置项包括 `set-max-listpack-entries` 和 `set-max-listpack-value`。
+
+不管内部编码如何变化，对使用者来说，Set 的核心语义都是：无序、唯一、支持集合运算。
+
+## 三、适合的业务场景
+
+### 1. 去重
+
+例如记录某篇文章被哪些用户阅读过：
+
+```bash
+SADD article:9527:read_users user:1001
+SADD article:9527:read_users user:1002
+SCARD article:9527:read_users
+```
+
+如果只需要估算 UV，而不要求精确值，可以考虑 HyperLogLog；如果需要精确用户列表，Set 更合适。
+
+### 2. 标签系统
+
+可以用一个 Set 表示某个标签下的对象：
+
+```bash
+SADD tag:redis article:1 article:2
+SADD tag:cache article:2 article:3
+SINTER tag:redis tag:cache
+```
+
+这类模型适合做简单筛选。若标签维度很多、查询条件复杂，应该考虑搜索引擎或倒排索引系统。
+
+### 3. 关注关系
+
+```text
+following:{userId} -> 该用户关注的人
+followers:{userId} -> 关注该用户的人
+```
+
+判断是否关注：
 
 ```bash
 SISMEMBER following:1001 2002
 ```
 
-也可以快速求共同关注：
+求共同关注：
 
 ```bash
 SINTER following:1001 following:1002
 ```
 
-但如果一个集合有上亿个成员，单个大 Key 会带来明显问题：
+Set 很适合中小规模关系链，但不能把“能做”理解成“无限做”。如果某个用户有上千万甚至上亿粉丝，单个 Set 就会变成典型大 key。
 
-1. 内存占用很高。
-2. 扩容和 rehash 成本高。
-3. 大集合删除、迁移、持久化可能造成阻塞。
-4. 集群模式下单个 Key 只能落在一个 slot，难以水平拆分。
+## 四、大 Set 的问题
 
-所以超大规模关注关系通常不会把所有粉丝都塞进一个 Set，而是会分片存储，或者使用数据库、图存储、消息流和缓存组合。
+大 Set 常见问题包括：
 
-## 三、能否使用 Bitmap
+1. 内存占用随成员数量线性增长。
+2. rehash、迁移、删除、持久化可能带来明显开销。
+3. `SMEMBERS`、`SINTER` 等命令在大集合上可能阻塞主线程。
+4. Cluster 模式下，一个 key 只能落在一个 slot，单个大 key 难以水平拆分。
+5. 热点 Set 容易集中打到单个 Redis 节点。
 
-Bitmap 适合用户 ID 连续、范围可控、只需要表示是否存在的场景。例如签到、在线状态、用户是否完成某动作。
+因此，生产环境应避免直接对大 Set 使用 `SMEMBERS`、`SUNION`、`SINTER` 这类可能返回大量数据的命令。需要遍历时优先使用 `SSCAN`。
 
-如果用户 ID 非常稀疏，Bitmap 会浪费大量空间。假设最大用户 ID 很大，但实际用户数量不多，Bitmap 仍要按最大 ID 位置分配空间。
+```bash
+SSCAN followers:1001 0 COUNT 100
+```
 
-关注关系一般是二维关系：用户 A 是否关注用户 B。直接用 Bitmap 表示所有关系，会面临空间巨大和稀疏问题。除非业务 ID 做过压缩映射，并且关系模型非常适合位图，否则不应轻易使用 Bitmap 替代 Set。
+`SSCAN` 是渐进式遍历，不能保证一次返回固定数量，也不能完全避免遍历期间的数据变化影响结果，但它比一次性拉完整集合更适合线上场景。
 
-## 四、实践建议
+## 五、Set 与 Bitmap 的取舍
 
-中小规模集合可以直接使用 Set。大规模关系链更推荐：
+Bitmap 适合表示“某个整数偏移量是否存在”，例如签到、活跃状态、是否完成任务。
 
-1. 按用户或业务维度分片。
-2. 控制单个 Key 的成员数量。
-3. 热点用户使用专门方案处理。
-4. 精确关系保存在数据库，Redis 只缓存热点查询。
-5. 对计数类需求使用单独计数字段，不要每次都遍历集合。
+Set 适合表示“成员集合”，尤其是成员不是连续整数，或者需要取出成员列表、做集合运算的时候。
 
-总结来说，Redis Set 适合快速成员判断和集合运算，但不适合无脑承载超大关系链。规模上来以后，数据模型比分别选择 Set 或 Bitmap 更重要。
+对比：
+
+| 维度 | Set | Bitmap |
+| --- | --- | --- |
+| 数据语义 | 成员集合 | 二值状态 |
+| 成员类型 | 字符串 | 整数 offset |
+| 是否能列出成员 | 可以 | 不适合 |
+| 稀疏数据 | 相对合适 | 可能浪费空间 |
+| 成员判断 | 快 | 很快 |
+| 集合运算 | 支持 | 支持位运算 |
+
+关注关系通常是二维关系：用户 A 是否关注用户 B。直接用 Bitmap 表示所有关系，往往会遇到空间巨大、ID 稀疏、映射维护复杂等问题。除非业务 ID 已经过压缩映射，并且关系模型非常适合位图，否则不要轻易用 Bitmap 替代 Set。
+
+## 六、实践建议
+
+使用 Set 时可以按以下规则判断：
+
+1. 中小规模集合可以直接使用 Set。
+2. 成员判断、去重、简单集合运算优先考虑 Set。
+3. 大规模关系链要考虑分片、冷热分离和数据库兜底。
+4. 热点用户、热点标签不要只靠单个 Redis key 承载。
+5. 精确关系保存在数据库中，Redis 缓存热点查询结果。
+6. 计数类需求可以单独维护计数字段，不要每次都遍历集合计算。
+7. 删除大 Set 时避免直接 `DEL`，可以使用 `UNLINK` 异步释放内存。
+
+总结来说，Redis Set 是很好用的集合工具，但它不是关系数据库，也不是图数据库。规模小的时候命令很漂亮；规模上来以后，数据模型才是真正的主角。
+
+## 参考资料
+
+- Redis Set 官方文档：<https://redis.io/docs/latest/develop/data-types/sets/>
+- Redis 内存优化：<https://redis.io/docs/latest/operate/oss_and_stack/management/optimization/memory-optimization/>

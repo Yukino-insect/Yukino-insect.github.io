@@ -1,170 +1,256 @@
 +++
 date = '2025-12-14T18:11:52+08:00'
 draft = false
-title = 'BitMap和BloomFilter'
+title = 'Redis Bitmap 和 Bloom Filter'
 +++
 
-## BitMap
+Bitmap 和 Bloom Filter 都适合处理“是否存在”这类问题，但它们解决的不是同一种场景。
 
-在讲 `BitMap` 之前，我们先来了解一下 Redis 的 `String` 数据结构。
+Bitmap 是精确的位图，适合用整数 offset 表示二值状态。Bloom Filter 是概率型数据结构，适合用较小空间判断一个元素是否可能存在，代价是存在误判。
 
-```c
-struct sdshdr {
-    // buf数组中已使用字节的数量
-    int len;
-    // buf数组中未使用字节的数量
-    int free;
-    // 字节数组，用于保存字符串
-    char buf[];
-};
+## 一、Bitmap 是什么
+
+Redis 的 Bitmap 不是独立数据类型，而是基于 String 的位操作。Redis String 本质上是二进制安全的字节序列，因此可以把每一位当成一个状态位来使用。
+
+常用命令：
+
+```bash
+SETBIT user:1001:signin:2025 0 1
+SETBIT user:1001:signin:2025 1 1
+GETBIT user:1001:signin:2025 1
+BITCOUNT user:1001:signin:2025
 ```
 
-我们可以看到，Redis 的 String 数据类型本质上就是一个字节数组。String 类型的值不单单可以做字符串，它还可以做整数或者浮点数。当然，今天的主角 BitMap 的底层也是 String。
+`SETBIT key offset value` 中的 offset 是从 0 开始的位偏移量。`BITCOUNT` 默认统计值为 1 的 bit 数量。
 
-我们将 String 的这种底层结构称之为 **SDS（简单动态字符串）**。
+例如用 Bitmap 记录用户一年签到：
 
-SDS 被广泛应用在 Redis 的各个地方，包括：
+```bash
+# 第 1 天签到
+SETBIT signin:2025:user:1001 0 1
 
-- 作为字符串对象的底层实现。
-- 作为 Redis 客户端和服务器通信时的输入输出缓存区。存储待发送的命令或者带返回的结果。
-- 在给 AOF 文件追加命令时，会先把命令追加到 SDS中，然后再把 SDS 写入 AOF 文件。
+# 第 32 天签到
+SETBIT signin:2025:user:1001 31 1
 
-BitMap 存储数据的最小单位是 bit。因此，和使用字节存储的传统数据结构相比它再处理大量二值状态数据时有极高的空间效率。Redis 中的 BitMap 数据结构基于 SDS 存储。它的相关方法就是通过操作其中的字节数组来实现的。
+# 统计全年签到天数
+BITCOUNT signin:2025:user:1001
+```
 
-Redis 提供了 `SETBIT`、`GETBIT`、`BITCOUNT`、`BITOP`几个命令。其中 `BITOP` 可以对一个或多个 BitMap 进行位运算，并将结果保存到新的键中，支持 AND、OR、NOT、XOR 四种操作。这个命令的用法是将多个 BitMap 中相同偏移量的位值进行运算。
+一年 365 天只需要 365 bit，约 46 字节。对于大量二值状态来说，这种空间效率非常高。
 
-Java 也提供了 `BitMap` 类，但是底层是通过 `long` 数组实现的。这里简单看一个使用 `byte[]` 数组实现的 BitMap
+## 二、Bitmap 的位运算
+
+Bitmap 支持多个 key 之间做位运算：
+
+```bash
+BITOP AND active:both active:2025-09-01 active:2025-09-02
+BITOP OR active:any active:2025-09-01 active:2025-09-02
+BITOP XOR active:diff active:2025-09-01 active:2025-09-02
+BITOP NOT active:not active:2025-09-01
+```
+
+常见用途：
+
+1. 统计连续多天活跃用户。
+2. 统计任意一天活跃用户。
+3. 对比两天状态差异。
+4. 做大量布尔标记的批量计算。
+
+## 三、Bitmap 的适用条件
+
+Bitmap 的优势成立有一个重要前提：offset 范围可控，并且数据不要过于稀疏。
+
+适合：
+
+1. 用户 ID 连续或经过压缩映射。
+2. 状态只有 0 和 1。
+3. 只需要判断是否存在或统计数量。
+4. 不需要直接取出完整成员列表。
+
+不适合：
+
+1. 用户 ID 非常稀疏，例如最大 ID 已经到几十亿，但实际只有少量用户。
+2. 状态不止两种。
+3. 需要频繁列出所有命中的成员。
+4. 需要存储复杂对象。
+
+如果只设置 offset 为 `20`、`30` 和 `88888888` 的三个位置，Redis 仍然需要为最大 offset 附近分配空间。此时 Bitmap 可能比 Set 更浪费。
+
+对于稀疏整数集合，可以了解 Roaring Bitmap。它是一种可压缩位图结构，适合表示大量整数集合并做高效集合运算。不过 Redis 原生命令并不直接等价提供 Roaring Bitmap 的完整能力，通常需要客户端库或专门模块支持。
+
+## 四、Java 中的简单位图
+
+Java 标准库提供了 `BitSet`，可以直接实现类似能力：
 
 ```java
-public class Bitmap {
+import java.util.BitSet;
 
-    private byte[] bitmap;
+public class BitmapDemo {
+    public static void main(String[] args) {
+        BitSet bitmap = new BitSet(1000);
 
-    // 构造函数，初始化位图的大小
-    public Bitmap(int size) {
-        bitmap = new byte[size / 8 + 1];
+        bitmap.set(10);
+        bitmap.set(200);
+
+        System.out.println(bitmap.get(10));  // true
+        System.out.println(bitmap.get(200)); // true
+        System.out.println(bitmap.get(300)); // false
+        System.out.println(bitmap.cardinality()); // 2
+    }
+}
+```
+
+如果自己用 `byte[]` 实现，也可以更直观地理解位运算：
+
+```java
+public class SimpleBitmap {
+    private final byte[] bits;
+
+    public SimpleBitmap(int size) {
+        this.bits = new byte[size / 8 + 1];
     }
 
-    // 设置某个位置为 1，表示存在
     public void add(int value) {
         int byteIndex = value / 8;
         int bitIndex = value % 8;
-        bitmap[byteIndex] |= (1 << bitIndex); // 将该位设置为1
+        bits[byteIndex] |= (1 << bitIndex);
     }
 
     public boolean contains(int value) {
         int byteIndex = value / 8;
         int bitIndex = value % 8;
-        return (bitmap[byteIndex] & (1 << bitIndex)) != 0;
-    }
-
-    public static void main(String[] args) {
-        Bitmap bitmap = new Bitmap(1000); // 创建一个大小为1000的位图
-
-        bitmap.add(10); // 将值10加入位图
-        bitmap.add(200); // 将值200加入位图
-
-        System.out.println(bitmap.contains(10)); // 输出 true
-        System.out.println(bitmap.contains(200)); // 输出 true
-        System.out.println(bitmap.contains(300)); // 输出 false
+        return (bits[byteIndex] & (1 << bitIndex)) != 0;
     }
 }
 ```
 
-由此可见，BitMap 能极大的节省内存空间，并且 BitMap 的位置映射都是精确匹配的，查询时可以快速响应。通过一些位运算可以很容易的操作多个 BitMap。
+## 五、Bloom Filter 是什么
 
-但是也正因它的数据结构特点，导致它仅适用于表示两种状态，即 0 和 1。对于需要表示更多状态的情况，Bitmap 就不适用了。**只有当数据比较密集时才有优势，如果我们只设置（20，30，888888888）三个偏移量的位值，则需要创建一个 99999999 长度的 BitMap ，但是实际上只存了3个数据，这时候就有很大的空间浪费，碰到这种问题的话，可以通过引入另一个 `Roaring BitMap` 来解决。**
+Bloom Filter，中文常译为布隆过滤器，是一种空间效率很高的概率型数据结构。它用于判断一个元素是否在集合中。
 
-> **Roaring Bitmap** 是一种 **高性能、可压缩的位图数据结构**，专门用来高效表示和操作**大量整数集合**。
+它的判断结果有两个特点：
 
-它的应用场景有：
+1. 返回“不存在”时，一定不存在。
+2. 返回“存在”时，只能说明可能存在，因为有误判概率。
 
-- 用户签到状态（连续签到天数）
-- 用户的在线状态（统计活跃用户）
-- 问卷答题
+Bloom Filter 的基本过程是：
 
-## BloomFilter
+1. 准备一个很长的 bit 数组。
+2. 使用多个哈希函数计算元素的位置。
+3. 添加元素时，把这些位置都置为 1。
+4. 查询元素时，重新计算这些位置。
+5. 如果任意一个位置是 0，元素一定不存在；如果全部都是 1，元素可能存在。
 
-上文中介绍了 BitMap 数据结构，在阅读的过程中有没有发现 BitMap 只能操作整数索引。如果我们想要使用 BitMap 来作一个网站的黑名单，如何将网络 ip 映射到 BitMap 的上呢。
+误判来自哈希碰撞。多个不同元素可能把相同位置置为 1，导致一个从未加入过的元素也被判断为“可能存在”。
 
-这是我们就可以使用哈希函数，使用哈希函数将 ip 字符串映射成 BitMap 中的下标。这就是**布隆过滤器**。
+## 六、Redis 中使用 Bloom Filter
 
-Redis 原生并没有提供布隆过滤器，但是可以使用 Redis 官方提供的 **RedisBloom 模块**。
+Redis Open Source 的核心数据结构不直接提供 Bloom Filter 命令。通常使用 Redis Stack 中的 RedisBloom 模块。
 
-使用以下命令将模块加载入原生 Redis
+常用命令：
 
 ```bash
-redis-server --loadmodule redisbloom.so
+BF.RESERVE bf:product 0.001 1000000
+BF.ADD bf:product product:1001
+BF.EXISTS bf:product product:1001
+
+BF.MADD bf:product product:1002 product:1003
+BF.MEXISTS bf:product product:1002 product:9999
+BF.INFO bf:product
 ```
 
-如果使用单一哈希函数做映射的话，可能会出现哈希碰撞的情况，导致误判。布隆过滤器对这个问题做了优化，它会使用多个不同的哈希函数将一个值映射到 BitMap 的多个位置上，在做判断的时候，也会用这一组哈希函数做映射，判断所有位置上是否都是 1。这样哈希碰撞的情况变得比较可控。
+含义：
 
-布隆过滤器提供了这几个命令：`BF.RESERVE`、`BF.INFO`、`BF.ADD`、`BF.MADD`、`BF.EXISTS` 和 `BF.MEXISTS`
+1. `BF.RESERVE`：创建过滤器，指定误判率和容量。
+2. `BF.ADD` / `BF.MADD`：添加一个或多个元素。
+3. `BF.EXISTS` / `BF.MEXISTS`：判断一个或多个元素是否可能存在。
+4. `BF.INFO`：查看过滤器信息。
 
-布隆过滤器的空间占用也是极小，它本身不存储完整的数据，和 BitMap一样底层也是通过 bit 位来表示数据是否存在。
+布隆过滤器一般不能像 Set 一样安全地直接删除元素，因为某些 bit 可能被多个元素共享。需要删除能力时，可以考虑 Counting Bloom Filter 或其他结构，但复杂度和空间成本也会增加。
 
-但是布隆过滤器存在误判的情况，即当一个元素实际上不在集合中时，有可能被判断为在集合中。这是因为多个元素可能通过哈希函数映射到相同的位置，导致误判。但是，当布隆过滤器判断一个元素不在集合中时，则是 100% 正确的。并且，一般情况下，不能直接从布隆过滤器中删除元素。这是因为一个位置可能被多个元素映射到，如果直接将该位置的值置为 0，可能会影响其他元素的判断。
+## 七、Bloom Filter 的应用场景
 
-应用场景：
+### 1. 缓存穿透防护
 
-- 解决 Redis 缓存穿透问题：秒杀商品详情通常会被缓存到 Redis 中。如果有大量恶意请求查询不存在的商品，通过布隆过滤器可以快速判断这些商品不存在，从而避免了对数据库的查询，减轻了数据库的压力。
-- 邮箱黑名单过滤：在邮件系统中，可以使用布隆过滤器来过滤垃圾邮件和恶意邮件。将已知的垃圾邮件发送者的地址或特征存储在布隆过滤器中，新邮件来时判断发送者是否在黑名单中。
-- 对爬虫网址进行过滤：在爬虫程序中，为了避免重复抓取相同的网址，可以使用布隆过滤器来记录已经抓取过的网址。新网址出现时，先判断是否已抓取过。
+查询商品详情前，先判断商品 ID 是否可能存在：
 
-Java 原生没有提供布隆过滤器，但是我们可以使用 BitMap 来自己实现一个简易的布隆过滤器，来看一下大致原理：
+```text
+请求 product:1001
+  -> Bloom Filter 判断不存在：直接返回空
+  -> Bloom Filter 判断可能存在：继续查缓存或数据库
+```
+
+这可以挡住大量查询不存在数据的请求，减少数据库压力。
+
+### 2. URL 去重
+
+爬虫抓取网页时，可以把已抓取 URL 放入布隆过滤器。新 URL 到来时先判断是否可能抓取过，从而减少重复抓取。
+
+### 3. 黑名单初筛
+
+例如邮箱、IP、设备指纹等黑名单场景，可以先用布隆过滤器做快速初筛。由于存在误判，命中后通常还要再查一次精确存储。
+
+## 八、Bitmap 与 Bloom Filter 的区别
+
+| 维度 | Bitmap | Bloom Filter |
+| --- | --- | --- |
+| 是否精确 | 精确 | 有误判 |
+| 判断不存在 | 精确 | 精确 |
+| 判断存在 | 精确 | 可能存在 |
+| 输入类型 | 整数 offset | 任意可哈希元素 |
+| 删除元素 | 可以把 bit 置 0，但要看业务语义 | 通常不支持安全删除 |
+| 空间效率 | 取决于最大 offset 和稀疏程度 | 通常很高 |
+| 典型场景 | 签到、活跃、二值状态 | 缓存穿透、去重、黑名单初筛 |
+
+选择原则很简单：
+
+1. 如果数据天然能映射成紧凑整数 offset，并且要求精确，优先 Bitmap。
+2. 如果数据是字符串、URL、商品 ID 等任意元素，并且可以接受误判，优先 Bloom Filter。
+3. 如果不能接受误判，又需要完整成员集合，使用 Set 或数据库索引。
+
+## 九、一个简易 Bloom Filter 示例
+
+下面代码只用于理解原理，生产环境不要直接使用这种简单哈希方式：
 
 ```java
-public class BloomFilter {
+import java.util.BitSet;
 
-    private BitSet bitSet;
-    private int size; // 数组位的大小
-    private int hashCount; // 哈希函数的个数
+public class SimpleBloomFilter {
+    private final BitSet bitSet;
+    private final int size;
+    private final int hashCount;
 
-    public BloomFilter(int size, int hashCount) {
+    public SimpleBloomFilter(int size, int hashCount) {
         this.size = size;
         this.hashCount = hashCount;
-        bitSet = new BitSet(size);
-    }
-
-    //使用不同的hash函数对元素进行映射
-    private int hash(String value, int i) {
-        int hash = value.hashCode() + i;
-        return Math.abs(hash % size);
+        this.bitSet = new BitSet(size);
     }
 
     public void add(String value) {
         for (int i = 0; i < hashCount; i++) {
-            int hashValue = hash(value, i);
-            bitSet.set(hashValue);
+            bitSet.set(hash(value, i));
         }
     }
 
-    public boolean contains(String value) {
+    public boolean mightContain(String value) {
         for (int i = 0; i < hashCount; i++) {
-            int hashValue = hash(value, i);
-            if (!bitSet.get(hashValue)) {
+            if (!bitSet.get(hash(value, i))) {
                 return false;
             }
         }
         return true;
     }
 
-    public static void main(String[] args) {
-        BloomFilter bloomFilter = new BloomFilter(1000, 5); // 位数组大小1000，使用5个哈希函数
-
-        bloomFilter.add("apple");
-        bloomFilter.add("banana");
-        bloomFilter.add("cherry");
-
-        System.out.println(bloomFilter.contains("apple"));  // 输出 true
-        System.out.println(bloomFilter.contains("banana")); // 输出 true
-        System.out.println(bloomFilter.contains("grape"));  // 输出 false（有可能误判）
+    private int hash(String value, int seed) {
+        int h = value.hashCode() ^ (seed * 0x9e3779b9);
+        return (h & Integer.MAX_VALUE) % size;
     }
 }
 ```
 
-参考：
+总结一下：Bitmap 追求精确，但要求 offset 模型合适；Bloom Filter 牺牲少量准确性，换取非常低的空间占用。把它们混为一谈，就像把尺子和筛子当成同一种工具，结果自然不会优雅。
 
-https://www.cnblogs.com/chengxy-nds/p/18488414
+## 参考资料
 
-https://cloud.tencent.com/developer/article/2343210
+- Redis Bitmap 官方文档：<https://redis.io/docs/latest/develop/data-types/bitmaps/>
+- Redis Bloom Filter 官方文档：<https://redis.io/docs/latest/develop/data-types/probabilistic/bloom-filter/>

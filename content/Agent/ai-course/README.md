@@ -47,7 +47,7 @@ title = "RAG 与 Agentic AI 工程课程"
 
 ### 4. AI 知识问答篇
 
-这一章拆开一次真实问答：上下文记忆、查询重写、意图树路由、多通道检索、RRF 融合、Rerank、Prompt 拼装、SSE 输出和取消任务。
+这一章拆开一次真实问答：上下文记忆、查询重写、意图树路由、多通道检索、RRF 融合、Rerank、Prompt 拼装、智能体 Prompt 管理、SSE 输出和取消任务。
 
 - [知识问答总览](04-ai-qa/README.md)
 - [一次问答的八个阶段与记忆体系](04-ai-qa/01-chat-phases-and-memory.md)
@@ -55,6 +55,7 @@ title = "RAG 与 Agentic AI 工程课程"
 - [多通道并行检索与结果裁剪](04-ai-qa/03-multi-channel-retrieval.md)
 - [知识库答不了时如何转 MCP 与拼 Prompt](04-ai-qa/04-mcp-parameter-and-prompt.md)
 - [流式生成、停止任务与并发坑位](04-ai-qa/05-streaming-cancel-and-concurrency.md)
+- [智能体管理与运行时 Prompt 治理](04-ai-qa/06-agent-prompt-management.md)
 
 ### 5. RAG 评测
 

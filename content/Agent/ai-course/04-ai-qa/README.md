@@ -14,6 +14,7 @@ title = "AI 知识问答篇"
 - 能解释记忆、重写、意图路由和检索范围的关系。
 - 能说明多通道检索、RRF 和 Rerank 的分工。
 - 能处理 MCP 转接、Prompt 拼装、流式输出和取消任务。
+- 能解释智能体管理如何影响运行时 Prompt。
 
 ## 章节
 
@@ -22,3 +23,4 @@ title = "AI 知识问答篇"
 - [多通道并行检索与结果裁剪](03-multi-channel-retrieval.md)
 - [知识库答不了时如何转 MCP 与拼 Prompt](04-mcp-parameter-and-prompt.md)
 - [流式生成、停止任务与并发坑位](05-streaming-cancel-and-concurrency.md)
+- [智能体管理与运行时 Prompt 治理](06-agent-prompt-management.md)

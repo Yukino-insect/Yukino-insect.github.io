@@ -648,7 +648,7 @@ main[role="main"] {
             {{ range $.Site.RegularPages }}
               {{ $pagePath := "" }}
               {{ with .File }}
-                {{ $pagePath = lower (replace .Path "\\" "/") }}
+                {{ $pagePath = lower (strings.TrimPrefix "content/" (replace .Path "\\" "/")) }}
               {{ end }}
               {{ $includePage := false }}
               {{ range $module.paths }}

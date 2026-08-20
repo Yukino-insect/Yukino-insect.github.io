@@ -325,6 +325,25 @@ function renderState(state: LoadState<string[]>) {
 
 这比到处写 `data?: T`、`error?: string` 更清晰，因为不同状态下能访问什么字段，是由类型明确表达的。
 
+> 在 TypeScript 中，在联合类型（Union Type）的最开头使用竖线 | 是一种可选的语法习惯，它的作用主要是为了提升代码的可读性和格式化排版的便利性。
+>
+> 具体原因如下：
+>
+> 多行格式化排版：当联合类型的成员较多、需要分多行书写时，如果在第一行也加上 |，可以让所有分支在视觉上完全对齐，整体结构更清晰美观。
+>
+> 便于修改和维护：在调整代码顺序（如用快捷键向上/向下移动某一行）或增删类型成员时，每行都保持统一的 | { ... } 格式，不需要额外处理第一行的竖线。
+>
+> 这种写法在 TypeScript 语法规范中是完全合法且等价的。写成以下形式效果完全相同：
+>
+> ```ts
+> type PostLoadState = { status: 'idle' }
+>   | { status: 'loading' }
+>   | { status: 'success'; data: Post[] }
+>   | { status: 'error'; message: string }
+> ```
+
+
+
 ## 十、unknown 与 any
 
 `any` 会关闭类型检查：

@@ -43,13 +43,12 @@ groups:
     subtitle: 语言、虚拟机、框架
     lead: Java 基础、JVM、并发、Spring 生态和持久层框架放在一起看，脉络会清楚得多。
     sections:
-      - javase
-      - javaee
+      - java
       - jvm
       - juc
       - spring
-      - springboot
       - mybatis
+      - thirdpartylibraries
     lanes:
       - title: Java 基础
         slug: language
@@ -73,7 +72,7 @@ groups:
               - juc
       - title: Spring 生态
         slug: spring-ecosystem
-        summary: 从 IoC、AOP、MVC 到 Boot、Security、Gateway 与持久层。
+        summary: 从 IoC、AOP、MVC 到 Boot、Security、Gateway、持久层和常用三方库。
         modules:
           - title: Spring Framework
             summary: 容器、Web、事务、安全和扩展点。
@@ -83,15 +82,20 @@ groups:
             summary: SQL 映射、分页、事务、插件和 MyBatis-Plus。
             sections:
               - mybatis
+          - title: Java 常用三方库
+            summary: Shiro、Jackson、Flowable、XXL-JOB、POI、验证码等工程组件。
+            sections:
+              - thirdpartylibraries
 
-  - slug: data-search
-    title: 数据库与检索
-    subtitle: MySQL、Redis、ES
+  - slug: data-store-search
+    title: 数据存储与检索
+    subtitle: MySQL、Redis、ES、OSS
     lead: 把持久化、缓存、索引和数据同步放在同一个入口里，才像一条完整的数据链路。
     sections:
       - mysql
       - redis
       - elasticsearch
+      - oss
     lanes:
       - title: 关系型数据库
         slug: relational-database
@@ -109,14 +113,18 @@ groups:
             summary: 缓存并不是把数据塞进去就完事，它也有自己的秩序。
             sections:
               - redis
-      - title: 搜索与同步
+      - title: 搜索、同步与文件
         slug: search-sync
-        summary: Elasticsearch 查询、索引、相似搜索和数据同步。
+        summary: Elasticsearch 查询、数据同步、文件服务和对象存储。
         modules:
           - title: Elasticsearch
             summary: 检索、聚合、同义词、同步方案和并发问题。
             sections:
               - elasticsearch
+          - title: OSS 与文件存储
+            summary: MinIO、对象存储、文件访问路径和上传下载链路。
+            sections:
+              - oss
 
   - slug: distributed-systems
     title: 分布式架构
@@ -191,27 +199,82 @@ groups:
   - slug: random-thoughts
     title: 随笔杂谈
     subtitle: 项目、方案、零散问题
-    lead: 把不适合归进固定技术栈、但仍然值得留下的问题放在这里。零散并不等于无序，只是它们暂时还没有被命名成体系。
+    lead: 零散并不等于无序，只是它们暂时还没有被命名成体系。
     sections:
       - randomthoughts
-      - frontend
+      - systemarchitecture
+      - middleware
     lanes:
-      - title: 随笔索引
-        slug: notes
+      - title: 零散问题
+        slug: fragmented-questions
         summary: 日常项目经验、方案设计、工程问题和一些临时想法。
         modules:
-          - title: RandomThoughts
-            summary: 零散问题的集中索引。
+          - title: 胡思乱想
+            summary: 随便想点什么。
             sections:
               - randomthoughts
-      - title: 专题讲解
-        slug: topics
-        summary: 把某些临时但成体系的学习内容单独整理出来，方便按专题阅读。
-        modules:
-          - title: Frontend
-            summary: JS/TS、Node/npm、HTML/CSS、Vue 3、uni-app 和前端工程实践。
+          - title: 系统架构
+            summary: 生活中常见的系统，它的架构是什么样的
             sections:
-              - frontend
+              - systemarchitecture
+      - title: 中间件
+        slug: middleware
+        summary: 常用中间件、网关代理、同步组件和文件服务。
+        modules:
+          - title: 通用中间件
+            summary: Canal、Nginx、FTP 等基础设施组件。
+            sections:
+              - middleware
+
+  - slug: frontend
+    title: 前端知识
+    subtitle: JS/TS、HTML/CSS、Vue
+    lead: 前端并不只是页面样式，它还包括语言、构建、状态、接口、跨端和工程协作。把这些内容独立出来，学习路径会清楚很多。
+    sections:
+      - jsandts
+      - htmlandcss
+      - vue
+    lanes:
+      - title: JS/TS 与构建工具
+        slug: language-build
+        summary: JavaScript、TypeScript、Node.js、npm 和现代前端工具链。
+        modules:
+          - title: JS/TS 语言基础
+            summary: 变量、函数、对象、异步、模块化、类型系统和泛型。
+            sections:
+              - jsandts
+      - title: HTML 和 CSS
+        slug: html-css
+        summary: 页面结构、布局、样式系统、移动端适配和跨端样式基础。
+        modules:
+          - title: 页面结构与样式
+            summary: HTML 结构、盒模型、Flex、Grid、滚动容器、图片和 CSS 变量。
+            sections:
+              - htmlandcss
+      - title: Vue 与 uni-app
+        slug: vue-uniapp
+        summary: Vue 3、组合式 API、Pinia、uni-app 和真实项目工程实践。
+        modules:
+          - title: Vue 工程实践
+            summary: 组件、响应式、页面配置、接口封装、状态管理和构建校验。
+            sections:
+              - vue
+
+  - slug: mq
+    title: 消息队列
+    subtitle: MQ、RocketMQ、事件驱动
+    lead: 消息队列适合放削峰、异步解耦、延迟处理、重试和事件驱动相关内容，单独成类会比塞在随笔里清楚得多。
+    sections:
+      - mq
+    lanes:
+      - title: RocketMQ
+        slug: rocketmq
+        summary: RocketMQ 消息模型、生产消费、重试、死信队列和 Spring 集成。
+        modules:
+          - title: RocketMQ
+            summary: 生产者、消费者、消息类型、重试、死信队列和 Spring 集成。
+            sections:
+              - mq
 
   - slug: python
     title: Python

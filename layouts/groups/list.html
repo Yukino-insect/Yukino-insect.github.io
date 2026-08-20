@@ -795,8 +795,13 @@ main[role="main"] {
               </div>
             </div>
           {{ else if gt (len $modulePages) 0 }}
+            {{ $sortMode := $module.sort | default "date-desc" }}
+            {{ $orderedModulePages := $modulePages.ByDate.Reverse }}
+            {{ if eq $sortMode "file" }}
+              {{ $orderedModulePages = sort $modulePages "File.Path" "asc" }}
+            {{ end }}
             <div class="article-list">
-              {{ range $modulePages.ByDate.Reverse }}
+              {{ range $orderedModulePages }}
                 <a class="article-link" href="{{ .RelPermalink }}">
                   <span class="article-title">{{ partial "page-display-title.html" . }}</span>
                 </a>

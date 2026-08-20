@@ -54,22 +54,7 @@ function getUserName(user: User) {
 
 不要一开始就钻递归类型和复杂类型体操。那些能力有用，但不是入门阶段的主菜。能把真实业务数据建模清楚，比写出让同事沉默的类型谜题更有价值。
 
-## 三、本目录文章顺序
-
-建议按这个顺序读：
-
-- `01-TypeScript类型系统基础.md`：基础类型、类型推断、对象类型、字面量类型、联合类型、收窄、`any`、`unknown`、`never`。
-- `02-泛型工具类型与工程建模.md`：泛型、工具类型和工程建模的总览。
-- `03-interface与type结构化类型.md`：`interface`、`type`、结构化类型、声明合并和多余属性检查。
-- `04-联合类型类型收窄与never.md`：判别联合、类型守卫、穷尽检查和业务状态建模。
-- `05-泛型约束keyof与typeof.md`：泛型约束、`keyof`、`typeof`、索引访问类型和 `as const`。
-- `06-工具类型映射类型与条件类型.md`：`Partial`、`Pick`、`Omit`、`Record`、映射类型、条件类型和 `infer`。
-- `07-接口响应表单组件Props建模.md`：接口、分页、表单、展示模型、Vue Props 和请求状态建模。
-- `08-tsconfig模块解析与运行时边界.md`：`tsconfig`、严格模式、模块解析、路径别名和类型擦除。
-
-这组文章的目标不是把 TypeScript 规范背下来，而是让你能读懂并维护现代前端工程。
-
-## 四、类型和运行时的边界
+## 三、类型和运行时的边界
 
 TypeScript 类型只在编译期存在，运行后会被擦除。
 
@@ -95,7 +80,7 @@ function isUser(value: unknown): value is User {
 
 类型是开发期契约，运行时校验是现实世界的门卫。两者各司其职，别让其中一个假装自己能包办全部工作。
 
-## 五、前端常见建模对象
+## 四、前端常见建模对象
 
 前端项目中最常建模的对象包括：
 
@@ -113,7 +98,7 @@ function isUser(value: unknown): value is User {
 
 这些类型不只是为了 IDE 提示，它们也是团队协作的边界。
 
-## 六、后端学生的迁移理解
+## 五、后端学生的迁移理解
 
 可以这样类比：
 
@@ -150,7 +135,7 @@ const member: Member = user
 
 这段代码成立，因为 `User` 和 `Member` 的结构兼容。理解结构化类型，是理解 TypeScript 的一条主线。
 
-## 七、精通 TypeScript 的标志
+## 六、精通 TypeScript 的标志
 
 初级使用者会写：
 
@@ -186,7 +171,7 @@ type PostListState = LoadState<PageResult<PostCard>>
 
 精通不是写出谁都看不懂的类型，而是用类型减少沟通成本、减少错误、提升重构信心。
 
-## 八、练习路线
+## 七、练习路线
 
 按顺序练习：
 

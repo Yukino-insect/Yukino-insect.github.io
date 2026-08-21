@@ -4,278 +4,435 @@ draft = false
 title = 'MyBatis-Plus'
 +++
 
-在实习过程中，使用 MyBatis-Plus 遇到很多小问题，在这里记录一下。
+MyBatis-Plus 是 MyBatis 的增强工具。它不替代 MyBatis，而是在 MyBatis 之上提供通用 CRUD、条件构造器、分页插件、逻辑删除、自动填充、乐观锁等能力。
 
-我们在处理 SQL 时可能会需要使用一些标签，通过 `<if></if>` 等的一些标签来实现动态的逻辑，其实 MyBatis-Plus 提供了一种更加优雅的方式。使用 Wrappers
+它适合解决重复性很高的单表操作和常规列表查询；遇到复杂 JOIN、窗口函数、数据库特性明显的 SQL 时，仍然应该回到 XML 或手写 SQL。工具有边界，假装没有边界，只会让边界在生产环境里亲自提醒你。
 
-## 动态 SQL
+## 依赖与配置
 
-好，这一段**正是 MyBatis-Plus 里“Wrapper 动态 SQL”的精髓**，但如果没人把**每一层发生了什么**拆开讲，其实非常容易“会用但不懂”。
+Spring Boot 项目中常见依赖如下：
 
-我按 **4 个层次**来讲清楚：
-
-1. 这行 `@Select` 到底在干嘛
-2. `Wrapper` / `ew` 是什么机制
-3. `LambdaQueryWrapper` 是如何“动态拼 SQL”的
-4. 为什么它 **比注解里的 `<if>` 更推荐**
-
-------
-
-## 一、先看这行核心 SQL（非常关键）
-
-```
-@Select("select * from user ${ew.customSqlSegment}")
-List<User> selectByWrapper(@Param(Constants.WRAPPER) Wrapper<User> wrapper);
+```xml
+<dependency>
+    <groupId>com.baomidou</groupId>
+    <artifactId>mybatis-plus-boot-starter</artifactId>
+    <version>3.5.12</version>
+</dependency>
+<dependency>
+    <groupId>com.mysql</groupId>
+    <artifactId>mysql-connector-j</artifactId>
+    <version>9.1.0</version>
+</dependency>
 ```
 
-### 你必须先明确一件事：
+配置示例：
 
-> **这条 SQL 本身是“静态注册”的，但 SQL 的 WHERE 部分是“运行时生成”的**
+```yaml
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://127.0.0.1:3306/demo
+    username: root
+    password: 123456
 
-------
-
-### 1. `${ew.customSqlSegment}` 是什么？
-
-这是 **MyBatis-Plus 约定的占位符**：
-
-- `ew`：`Wrapper` 的别名（**固定名字**）
-- `customSqlSegment`：MP 在 Wrapper 里**动态生成的 SQL 片段**
-
- 本质是：
-
-```
--- 运行前
-select * from user ${ew.customSqlSegment}
-
--- 运行时（举例）
-select * from user WHERE name = ? AND age >= ?
-```
-
-注意： 注意：
-
-- 这是 **SQL 片段拼接**
-- 不是 MyBatis 的 `<if>` 动态标签
-- 是 **MP 自己拼好的结果**
-
-------
-
-### 2. 为什么是 `${}` 而不是 `#{}`？
-
-这是很多人第一次看到会疑惑的点。
-
-- `#{}` -> 预编译参数，占位符 `?`
-- `${}` -> **直接 SQL 片段拼接**
-
-而 `customSqlSegment`：
-
-- 已经是 **完整 SQL 结构**
-- 包含 `WHERE / AND / ORDER BY`
-- 里面的值 **已经被参数化处理过**
-
- **MP 内部保证安全性**
- 你不用自己拼字符串（这是关键优势）
-
-------
-
-## 二、`@Param(Constants.WRAPPER)` 到底在干嘛？
-
-```
-@Param(Constants.WRAPPER)
-Wrapper<User> wrapper
+mybatis-plus:
+  mapper-locations: classpath*:mapper/**/*.xml
+  type-aliases-package: com.example.domain
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      id-type: assign_id
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
 ```
 
-### `Constants.WRAPPER` 是什么？
+`mybatis-plus-boot-starter` 会自动集成 MyBatis、MyBatis-Spring、MyBatis-Plus 扩展能力。你仍然可以写 XML，也仍然可以使用原生 MyBatis 的能力。
 
-```
-public static final String WRAPPER = "ew";
-```
+## 实体映射
 
-也就是说：
+MyBatis-Plus 通过注解描述表和字段的映射关系：
 
-```
-@Param("ew")
-Wrapper<User> wrapper
-```
+```java
+@TableName("sys_user")
+public class User {
 
-这一步的意义只有一个：
+    @TableId(value = "id", type = IdType.ASSIGN_ID)
+    private Long id;
 
-> **把 Wrapper 参数，绑定成 SQL 里能识别的 `ew`**
+    @TableField("user_name")
+    private String userName;
 
-否则 `${ew.customSqlSegment}` 根本找不到对象。
+    private Integer age;
 
-------
+    @TableLogic
+    private Integer deleted;
 
-## 三、`LambdaQueryWrapper` 是如何“动态生成 SQL”的？
+    @TableField(fill = FieldFill.INSERT)
+    private LocalDateTime createdAt;
 
-现在来看你调用的这段代码：
+    @TableField(fill = FieldFill.INSERT_UPDATE)
+    private LocalDateTime updatedAt;
 
-```
-LambdaQueryWrapper<User> qw = new LambdaQueryWrapper<>();
-
-qw.eq(name != null, User::getName, name)
-  .ge(age != null, User::getAge, age);
-
-mapper.selectByWrapper(qw);
-```
-
-### 1. 每一行 `eq / ge` 实际在干什么？
-
-以这一行为例：
-
-```
-qw.eq(name != null, User::getName, name);
-```
-
-MP 内部做的是：
-
-```
-if (condition) {
-    conditions.add("name = ?");
-    params.add(name);
+    @TableField(exist = false)
+    private String displayName;
 }
 ```
 
-如果 `name == null`：
+常用注解：
 
-- **这一行什么都不会发生**
-- SQL 里根本不会出现 `name = ?`
+| 注解 | 作用 |
+| --- | --- |
+| `@TableName` | 指定数据库表名 |
+| `@TableId` | 指定主键列和主键策略 |
+| `@TableField` | 指定字段映射、自动填充、是否存在 |
+| `@TableLogic` | 标记逻辑删除字段 |
+| `@Version` | 标记乐观锁版本字段 |
 
-注意： **这就是 MP Wrapper 动态性的核心：**
+如果表字段遵循下划线命名，Java 属性遵循驼峰命名，开启 `map-underscore-to-camel-case` 后通常不需要给每个字段都写 `@TableField`。
 
-> 条件在 Java 层判断，而不是 SQL 层判断
+## BaseMapper
 
-------
+Mapper 继承 `BaseMapper<T>` 后，可以直接获得常见 CRUD 方法：
 
-### 2. SQL 是什么时候真正生成的？
-
-不是在你 `eq()` 的时候
- 而是在 **Mapper 方法被调用时**：
-
-```
-mapper.selectByWrapper(qw);
-```
-
-执行流程是：
-
-1. MyBatis 拿到 `MappedStatement`
-2. MP 读取 `Wrapper`
-3. 调用 `wrapper.getCustomSqlSegment()`
-4. 拼出最终 SQL
-5. 绑定参数
-6. 执行
-
- **SQL 的最终形态，是在“执行时”才确定的**
-
-------
-
-## 四、为什么 MP 明确“更推荐 Wrapper，而不是 `<if>`”？
-
-这是你这个问题真正的重点。
-
-------
-
-### 1. 对比一眼就懂
-
-####  注解 + `<if>`（不推荐）
-
-```
-@Select({
-  "<script>",
-  "select * from user",
-  "<where>",
-    "<if test='name != null'>",
-      "and name = #{name}",
-    "</if>",
-    "<if test='age != null'>",
-      "and age &gt;= #{age}",
-    "</if>",
-  "</where>",
-  "</script>"
-})
+```java
+@Mapper
+public interface UserMapper extends BaseMapper<User> {
+}
 ```
 
-问题：
+常用方法：
 
-- SQL 和业务条件 **强耦合**
-- XML/注解可读性极差
-- 条件多了以后像“屎山”
+| 方法 | 说明 |
+| --- | --- |
+| `insert(entity)` | 插入一条记录 |
+| `deleteById(id)` | 按主键删除 |
+| `delete(wrapper)` | 按条件删除 |
+| `updateById(entity)` | 按主键更新 |
+| `update(entity, wrapper)` | 按条件更新 |
+| `selectById(id)` | 按主键查询 |
+| `selectList(wrapper)` | 按条件查询列表 |
+| `selectPage(page, wrapper)` | 分页查询 |
 
-------
+`BaseMapper` 适合单表常规操作。复杂 SQL 不必强行塞进 Wrapper，可以直接在 Mapper XML 中写自定义方法。
 
-####  Wrapper（MP 推荐）
+## Service 层
 
+MyBatis-Plus 也提供了 `IService` 和 `ServiceImpl`：
+
+```java
+public interface UserService extends IService<User> {
+}
 ```
-qw.eq(name != null, User::getName, name)
-  .ge(age != null, User::getAge, age);
+
+```java
+@Service
+public class UserServiceImpl
+        extends ServiceImpl<UserMapper, User>
+        implements UserService {
+}
 ```
 
-优点非常明显：
+这样可以直接使用 `save`、`removeById`、`list`、`page`、`saveBatch` 等方法。
 
-| 维度          | Wrapper     |
-| ------------- | ----------- |
-| 可读性        |        |
-| 动态性        |        |
-| Java IDE 支持 |            |
-| 重构安全      | （Lambda） |
-| SQL 可控性    |            |
-| 维护成本      | 极低        |
+是否使用 `IService` 取决于团队习惯。它能减少样板代码，但也可能让 Service 方法过于“万能”。如果业务边界明确，自己定义 Service 接口会更清晰。
 
-------
+## Wrapper 条件构造器
 
-### 2. Wrapper 把“动态逻辑”放在了**正确的层**
+Wrapper 是 MyBatis-Plus 最常用也最容易误用的能力。
 
-这是设计上的关键点：
+```java
+LambdaQueryWrapper<User> wrapper = Wrappers.lambdaQuery(User.class)
+        .eq(name != null && !name.isBlank(), User::getUserName, name)
+        .ge(minAge != null, User::getAge, minAge)
+        .orderByDesc(User::getCreatedAt);
 
-| 逻辑类型   | 应该在哪 |
-| ---------- | -------- |
-| 是否拼条件 | Java     |
-| SQL 结构   | Mapper   |
-| 参数安全   | MP 内部  |
+List<User> users = userMapper.selectList(wrapper);
+```
 
- `<if>` 把 **业务判断写进 SQL**
-  Wrapper 把 **业务判断留在 Java**
+这里每个条件方法的第一个参数是 `condition`：
 
-**这是分层设计的正确姿势**
+```java
+.eq(condition, column, value)
+```
 
-------
+只有 `condition == true` 时，MP 才会把该条件加入 SQL。这个写法比在外层堆很多 `if` 更紧凑，也能避免把无效条件拼进 SQL。
 
-## 五、一个你一定要记住的工程级结论
+## Lambda Wrapper
 
-> **`${ew.customSqlSegment}` 不是“黑魔法”**
->  它只是：
->
-> - Mapper 保持 SQL 骨架
-> - Wrapper 负责动态条件
-> - MyBatis-Plus 做中间人
+优先使用 `LambdaQueryWrapper` 和 `LambdaUpdateWrapper`：
 
-------
+```java
+LambdaUpdateWrapper<User> wrapper = Wrappers.lambdaUpdate(User.class)
+        .set(User::getUserName, "Alice")
+        .eq(User::getId, 1L);
 
-## 六、什么时候用这种写法？什么时候不用？
+userMapper.update(null, wrapper);
+```
 
-###  非常适合：
+Lambda 写法通过方法引用定位字段：
 
-- 条件可选
-- 查询组合多
-- CRUD / 列表 / 统计
-- 后期需求一定会变的接口
+```java
+User::getUserName
+```
 
-###  不适合：
+它比字符串字段更适合重构。字段改名后，编译器会提醒你，而不是等到运行时 SQL 报错。
 
-- SQL 结构本身就非常复杂
-- 多表 JOIN + 子查询 + 窗口函数
-- 强数据库特性（Oracle / MySQL 差异）
+## 自定义 SQL 中使用 Wrapper
 
-这种情况：
-  XML / 注解 + 明确 SQL 反而更好
+有时 SQL 主体需要自己写，但条件希望交给 Wrapper：
+
+```java
+@Select("""
+        select id, user_name, age
+        from sys_user
+        ${ew.customSqlSegment}
+        """)
+List<User> selectByWrapper(@Param(Constants.WRAPPER) Wrapper<User> wrapper);
+```
+
+`Constants.WRAPPER` 的值是 `ew`，所以等价于：
+
+```java
+@Param("ew") Wrapper<User> wrapper
+```
+
+`ew.customSqlSegment` 是 MP 根据 Wrapper 生成的 SQL 片段，可能包含 `where`、`and`、`order by` 等结构。
+
+注意这里必须使用 `${}`，因为它拼的是 SQL 片段，不是单个参数：
+
+```sql
+select * from sys_user ${ew.customSqlSegment}
+```
+
+这并不等于鼓励手写字符串拼接。Wrapper 内部会对值进行参数化处理，但 SQL 片段的结构仍要由开发者控制，不能把用户输入直接拼成列名、排序字段或表名。
+
+## 分页插件
+
+MyBatis-Plus 3.4 以后推荐使用 `MybatisPlusInterceptor`：
+
+```java
+@Configuration
+public class MyBatisPlusConfig {
+
+    @Bean
+    public MybatisPlusInterceptor mybatisPlusInterceptor() {
+        MybatisPlusInterceptor interceptor = new MybatisPlusInterceptor();
+        PaginationInnerInterceptor pagination =
+                new PaginationInnerInterceptor(DbType.MYSQL);
+        pagination.setMaxLimit(500L);
+        interceptor.addInnerInterceptor(pagination);
+        return interceptor;
+    }
+}
+```
+
+分页查询：
+
+```java
+Page<User> page = Page.of(current, size);
+LambdaQueryWrapper<User> wrapper = Wrappers.lambdaQuery(User.class)
+        .eq(status != null, User::getStatus, status)
+        .orderByDesc(User::getCreatedAt);
+
+IPage<User> result = userMapper.selectPage(page, wrapper);
+```
+
+分页参数说明：
+
+| 字段 | 说明 |
+| --- | --- |
+| `current` | 当前页，从 1 开始 |
+| `size` | 每页数量 |
+| `records` | 当前页数据 |
+| `total` | 总记录数 |
+| `pages` | 总页数 |
+
+生产环境建议设置 `maxLimit`，避免调用方传入过大的 `size`。
+
+## JOIN 分页的 count 问题
+
+MyBatis-Plus 分页插件会尝试优化 count SQL。普通单表查询通常没问题，但复杂 JOIN 可能出错。
+
+例如原 SQL：
+
+```sql
+select a.id, a.name, b.tag_name
+from product a
+left join product_tag b on a.id = b.product_id
+where b.tag_name = #{tagName}
+```
+
+分页插件可能认为某些 JOIN 对 count 没影响，于是改写成只统计主表。只要 `where`、`group by`、`distinct` 或一对多 JOIN 影响结果行数，自动优化就可能导致 `total` 不准。
+
+局部关闭优化：
+
+```java
+Page<ProductVO> page = Page.of(current, size);
+page.setOptimizeCountSql(false);
+page.setOptimizeJoinOfCountSql(false);
+```
+
+更可控的做法是关闭自动 count，自己写 count SQL：
+
+```java
+Page<ProductVO> page = Page.of(current, size);
+page.setSearchCount(false);
+
+List<ProductVO> records = productMapper.selectProductPage(page, query);
+Long total = productMapper.countProductPage(query);
+
+page.setRecords(records);
+page.setTotal(total);
+```
+
+复杂 JOIN 场景里，手写 count 往往比“相信插件理解业务语义”更稳。插件没有读心术，这一点倒是比人类诚实。
 
 ## 逻辑删除
 
-使用 MyBatis-Plus 的逻辑删除功能需要注意。
+逻辑删除不是物理删除，而是把记录标记为已删除：
 
-它会在你使用 Wrapper 条件构造器的时候自动为你拼接 `deleted = 0`。虽然很方便，但有些地方也不方便。比如恢复原来已经被逻辑删除的数据的时候，直接执行 `INSERT` 又可能会直接抛异常。因此我们需要做额外的判断，这个判断是不能用 Wrapper 构造器判断的。因为它构造的每一条 SQL 都会有 `deleted = 0` 这个条件。因此需要手写 SQL，在 XML 文件，或者 `@Select` 注解中的 SQL 在执行时是不会被自动加上 `deleted = 0` 这种的条件判断的。
+```sql
+alter table sys_user add column deleted tinyint default 0 not null;
+```
 
-这个问题已解决，那就是使用非业务主键，我们可以给每一调数据设置一个无意义的主键，这样在插入数据的时候就不会造成主键冲突，但是唯一索引还是会冲突。
+实体字段：
 
-### 条件构造器
+```java
+@TableLogic
+private Integer deleted;
+```
 
-使用 MP 的条件构造器时，一定要加 condition 条件。因为在拼接 sql 时，条件过滤器是根据 condition 的真值判断是否拼接的，如果不加条件，WHERE 中出现 WHERE id=null 这种场景的话，会导致什么数据都查不出来
+配置：
+
+```yaml
+mybatis-plus:
+  global-config:
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+```
+
+使用 Wrapper 或 `BaseMapper` 查询时，MP 会自动追加：
+
+```sql
+deleted = 0
+```
+
+删除时则会改写为：
+
+```sql
+update sys_user set deleted = 1 where id = ?
+```
+
+需要注意：
+
+- 手写 XML SQL 不一定自动追加逻辑删除条件，应自行检查。
+- 恢复已删除数据时，Wrapper 默认会过滤 `deleted = 1` 的记录。
+- 唯一索引需要考虑逻辑删除字段，否则删除后再次插入同业务键可能冲突。
+
+常见唯一索引设计：
+
+```sql
+create unique index uk_user_name_deleted on sys_user(user_name, deleted);
+```
+
+如果同一个 `user_name` 允许删除后重新创建，还需要结合业务约束、历史保留策略或非业务主键设计，不要只靠逻辑删除字段侥幸通过。
+
+## 自动填充
+
+创建时间、更新时间、创建人、更新人可以用自动填充处理：
+
+```java
+@Component
+public class AuditMetaObjectHandler implements MetaObjectHandler {
+
+    @Override
+    public void insertFill(MetaObject metaObject) {
+        LocalDateTime now = LocalDateTime.now();
+        strictInsertFill(metaObject, "createdAt", LocalDateTime.class, now);
+        strictInsertFill(metaObject, "updatedAt", LocalDateTime.class, now);
+    }
+
+    @Override
+    public void updateFill(MetaObject metaObject) {
+        strictUpdateFill(metaObject, "updatedAt", LocalDateTime.class, LocalDateTime.now());
+    }
+}
+```
+
+实体字段：
+
+```java
+@TableField(fill = FieldFill.INSERT)
+private LocalDateTime createdAt;
+
+@TableField(fill = FieldFill.INSERT_UPDATE)
+private LocalDateTime updatedAt;
+```
+
+自动填充只在 MP 参与的 insert、update 流程中生效。手写 SQL 不会自动经过这些字段填充逻辑。
+
+## 乐观锁
+
+乐观锁用于防止并发更新覆盖：
+
+```java
+@Version
+private Integer version;
+```
+
+配置插件：
+
+```java
+@Bean
+public MybatisPlusInterceptor mybatisPlusInterceptor() {
+    MybatisPlusInterceptor interceptor = new MybatisPlusInterceptor();
+    interceptor.addInnerInterceptor(new OptimisticLockerInnerInterceptor());
+    interceptor.addInnerInterceptor(new PaginationInnerInterceptor(DbType.MYSQL));
+    return interceptor;
+}
+```
+
+更新时 MP 会附加版本条件：
+
+```sql
+update sys_user
+set user_name = ?, version = version + 1
+where id = ? and version = ?
+```
+
+如果返回更新行数为 0，说明数据已被其他事务修改，应提示用户重试或重新加载数据。
+
+## 安全注意事项
+
+Wrapper 能减少字符串拼接，但不代表所有写法都安全。
+
+谨慎使用这些方法：
+
+- `last("limit 1")`
+- `apply("date_format(create_time,'%Y-%m') = {0}", month)`
+- `inSql(User::getId, "select user_id from ...")`
+- `orderBy(true, true, rawColumn)`
+
+凡是接收 SQL 片段的方法，都应避免直接使用用户输入。排序字段、查询列名、动态表名要做白名单映射：
+
+```java
+Map<String, SFunction<User, ?>> sortMapping = Map.of(
+        "createdAt", User::getCreatedAt,
+        "age", User::getAge
+);
+```
+
+## 使用建议
+
+- 单表 CRUD、简单列表查询优先用 `BaseMapper` 和 Lambda Wrapper。
+- 复杂 JOIN、复杂聚合、报表 SQL 优先写 XML。
+- Wrapper 条件尽量补全 `condition` 参数，避免拼出无意义条件。
+- 分页接口必须限制 `size` 上限。
+- 逻辑删除表的唯一索引要提前设计。
+- 插件顺序要明确，分页、多租户、数据权限、乐观锁同时存在时尤其要测试。
+
+MyBatis-Plus 的价值是“减少重复”，不是“消灭 SQL”。真正稳定的用法，是让它处理适合自动化的部分，把复杂业务 SQL 留在能被人直接审查的位置。

@@ -65,6 +65,6 @@ load average: 0.00, 0.00, 0.00
 
 使用 `htop` 可以获得交互体验更好的实时监控面板，界面如下：
 
-![top命令显示](/images/posts/Linux/top命令显示.png)
+![top命令显示](../../static/images/posts/Linux/top命令显示.png)
 
 上面的 `0[...]`、`1[...]` 这类条目表示每个 CPU 核心的使用情况。

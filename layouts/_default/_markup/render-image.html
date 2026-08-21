@@ -1,0 +1,23 @@
+{{- $destination := .Destination -}}
+{{- $src := $destination -}}
+{{- $parsed := urls.Parse $destination -}}
+{{- $path := replace $parsed.Path "\\" "/" -}}
+{{- $lowerPath := lower $path -}}
+{{- $isRemote := or (strings.HasPrefix $destination "http://") (strings.HasPrefix $destination "https://") -}}
+{{- $isStaticImagePath := and (not $isRemote) (or (strings.HasPrefix $lowerPath "static/images/") (strings.Contains $lowerPath "/static/images/")) -}}
+
+{{- if $isStaticImagePath -}}
+  {{- if strings.HasPrefix $lowerPath "static/images/" -}}
+    {{- $src = printf "/%s" (replaceRE `(?i)^static/` "" $path) -}}
+  {{- else -}}
+    {{- $src = replaceRE `(?i)^.*?/static/` "/" $path -}}
+  {{- end -}}
+  {{- with $parsed.RawQuery -}}
+    {{- $src = printf "%s?%s" $src . -}}
+  {{- end -}}
+  {{- with $parsed.Fragment -}}
+    {{- $src = printf "%s#%s" $src . -}}
+  {{- end -}}
+{{- end -}}
+
+<img src="{{ $src | safeURL }}" alt="{{ .Text }}"{{ with .Title }} title="{{ . }}"{{ end }}>

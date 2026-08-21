@@ -4,432 +4,244 @@ draft = false
 title = 'ID 生成方案'
 +++
 
-单机生成唯一 id，实现简单，生成 id 的性能高。但是当需要在多台机器上生成唯一 id，单机生成 id 的算法可能就不能保证 id 的唯一性。这时就需要其他的算法，以满足对 id 的需求。
+单机生成唯一 ID 很简单，AtomicLong、数据库自增、UUID 都能做到。问题出现在分布式环境：多个节点同时生成 ID，既要唯一，又要高性能，还最好对数据库索引友好。
 
-分布式 id 生成算法一般需要满足多节点并发生成算法时，id **不会重复**。要有**高可用性**，不能只依赖多节点，否则如果生成 id 的服务挂掉了，整个分布式系统就瘫痪了。**生成 Id 的速度要快**，不能让其成为系统的瓶颈。一般来说，希望 **id 大体上是递增的**，因为，有序的 id 可以提高 MySQL 的索引效率。
+一个工程上可用的 ID 方案，通常要考虑这些指标：
 
-现在介绍一下常见的 id 生成算法的使用
+- 全局唯一。
+- 高可用，不因为单点故障拖垮主流程。
+- 性能足够高，不能成为写入瓶颈。
+- 趋势递增，减少 B+Tree 索引页分裂。
+- 长度可接受，便于存储、传输和排查。
+- 不泄露过多业务信息。
 
-### UUID
+没有一种方案在所有指标上都完美。选型时先问业务需要什么，而不是先背名词。名词不会替你扛故障。
 
-它会随机生成一个 128 位字符串，通常表示为 32 个十六进制字符 + 4 个 `-`，一共 36 个字符。理论上保证全局唯一。
+## UUID
 
-它有多个版本。主流是使用 v1、v3、v4 和 v5
-
-**v1**：基于时间戳 + MAC，唯一性好，但可能泄露信息
-
-**v3/v5**：基于 namespace + hash，确定性 UUID（相同输入必然相同输出）
-
-**v4**：基于随机数，最常用，Java 默认实现
+UUID 是 128 位标识，常见字符串形式是 36 个字符：
 
 ```java
-String uuid = UUID.randomUUID().toString();
-System.out.println(uuid); 
-// e.g. "550e8400-e29b-41d4-a716-446655440000"
+String id = UUID.randomUUID().toString();
 ```
 
-它生成的 id 长度长且无序，这样会致使数据库索引性能变差
+优点：
 
-### Redis 自增
+- 本地生成，不依赖中心服务。
+- 全局唯一概率极高。
+- 使用简单。
 
-利用 Redis 的原子自增操作，保证分布式唯一
+缺点：
+
+- 字符串较长，占用空间大。
+- 随机无序，对数据库聚簇索引不友好。
+- 可读性差，不适合直接作为订单号展示。
+
+UUID 适合日志追踪、外部请求 ID、幂等号等场景。作为 MySQL 主键也不是不能用，但高写入表要谨慎，尤其是 InnoDB 聚簇索引。
+
+## 数据库自增
+
+数据库自增 ID 是最传统的方案。
+
+优点：
+
+- 简单。
+- 趋势递增。
+- 数据库保证唯一。
+
+缺点：
+
+- 强依赖单库。
+- 分库分表后不方便。
+- 容易暴露业务规模。
+- 高并发下可能成为瓶颈。
+
+如果是单体应用、数据量不大、没有分库分表，自增主键依然是很稳的选择。别为了“分布式”三个字把系统改复杂，系统不会因此变得高贵。
+
+## Redis 自增
+
+Redis 的 `INCR` 是原子操作，可以生成全局递增 ID：
 
 ```bash
-INCR order_id
+INCR order:id
 ```
+
+优点：
+
+- 性能高。
+- 实现简单。
+- ID 递增。
+
+缺点：
+
+- 依赖 Redis 高可用。
+- Redis 数据持久化和故障恢复要处理好。
+- 多业务要设计好 key，避免混用。
+
+Redis 自增适合对 ID 连续性要求不高、已有 Redis 高可用架构的系统。为了降低单 key 热点，也可以按业务和日期分段：
+
+```text
+order:id:20261002 -> 1, 2, 3...
+```
+
+最终订单号可以拼成：
+
+```text
+20261002 + sequence
+```
+
+## Snowflake
+
+Snowflake 是经典的 64 位趋势递增 ID。常见结构：
+
+```text
+0 | timestamp(41) | workerId(10) | sequence(12)
+```
+
+含义：
+
+- 最高位固定为 0，保证正数。
+- 时间戳部分保证趋势递增。
+- 机器号保证不同节点不冲突。
+- 序列号保证同一毫秒内可生成多个 ID。
+
+优点：
+
+- 本地生成，性能高。
+- 64 位整数，存储友好。
+- 趋势递增，适合作为数据库主键。
+
+缺点：
+
+- 依赖机器时钟。
+- workerId 分配不能冲突。
+- 时钟回拨处理不好会重复。
+
+简单生成逻辑：
 
 ```java
-Jedis jedis = new Jedis("localhost", 6379);
-long id = jedis.incr("order_id");
-System.out.println(id); // 1, 2, 3...
-```
+public synchronized long nextId() {
+    long timestamp = System.currentTimeMillis();
 
-它的实现简单，但是严重依赖 Redis 的高可用
-
-### Snowflake 雪花算法
-
-它是一个 64 位 long 数，拼接时间戳、机器号、序列号，保证趋势递增
-
-```bash
-# 结构
-0 | timestamp(41) | machineId(10) | sequence(12)
-```
-
-第一部分是符号位，一般来说是 0，因为 id 是正数。第二部分是时间戳，第三部分是机器号，第四部分是序列号
-
-简单实现
-
-```java
-/**
- * 雪花算法（Snowflake）实现类
- *
- * 生成 64 位全局唯一 ID，结构如下：
- * 0 | 时间戳（41位） | 数据中心ID（5位） | 机器ID（5位） | 序列号（12位）
- *
- * 特点：
- * 1. 高性能（本地生成，无需依赖数据库）
- * 2. 按时间大体有序
- * 3. 保证分布式环境下的唯一性
- *
- * 存在的问题：
- * - 时钟回拨会导致生成重复ID
- * - 同一毫秒内超过4096个请求会阻塞等待下一毫秒
- */
-public class SnowflakeIdWorker {
-    /** 机器ID（0~31） */
-    private long workerId;
-
-    /** 数据中心ID（0~31） */
-    private long datacenterId;
-
-    /** 当前毫秒内的序列号（0~4095） */
-    private long sequence = 0L;
-
-    /** 起始时间戳（可自定义，用于缩小时间戳占用空间，Twitter默认2010-11-04） */
-    private long twepoch = 1288834974657L;
-
-    /** 机器ID所占位数 */
-    private long workerIdBits = 5L;
-
-    /** 数据中心ID所占位数 */
-    private long datacenterIdBits = 5L;
-
-    /** 序列号占用位数 */
-    private long sequenceBits = 12L;
-
-    /** 最大机器ID值（31） */
-    private long maxWorkerId = -1L ^ (-1L << workerIdBits);
-
-    /** 最大数据中心ID值（31） */
-    private long maxDatacenterId = -1L ^ (-1L << datacenterIdBits);
-
-    /** 机器ID向左偏移量（12位） */
-    private long workerIdShift = sequenceBits;
-
-    /** 数据中心ID向左偏移量（12+5=17位） */
-    private long datacenterIdShift = sequenceBits + workerIdBits;
-
-    /** 时间戳向左偏移量（12+5+5=22位） */
-    private long timestampLeftShift = sequenceBits + workerIdBits + datacenterIdBits;
-
-    /** 序列号掩码（4095），用于与运算取余 */
-    private long sequenceMask = -1L ^ (-1L << sequenceBits);
-
-    /** 上次生成ID的时间戳 */
-    private long lastTimestamp = -1L;
-
-    /**
-     * 构造函数
-     * @param workerId     机器ID（0~31）
-     * @param datacenterId 数据中心ID（0~31）
-     */
-    public SnowflakeIdWorker(long workerId, long datacenterId) {
-        this.workerId = workerId;
-        this.datacenterId = datacenterId;
+    if (timestamp < lastTimestamp) {
+        throw new IllegalStateException("Clock moved backwards");
     }
 
-    /**
-     * 生成下一个唯一ID（线程安全）
-     *
-     * @return 唯一的 64 位 ID
-     */
-    public synchronized long nextId() {
-        long timestamp = System.currentTimeMillis();
-
-        // 1. 如果当前时间小于上一次ID生成的时间，说明发生了时钟回拨
-        if (timestamp < lastTimestamp) {
-            throw new RuntimeException("Clock moved backwards.");
+    if (timestamp == lastTimestamp) {
+        sequence = (sequence + 1) & sequenceMask;
+        if (sequence == 0) {
+            timestamp = waitNextMillis(lastTimestamp);
         }
-
-        // 2. 如果在同一毫秒内，则对序列号自增
-        if (lastTimestamp == timestamp) {
-            sequence = (sequence + 1) & sequenceMask;
-            // 序列号溢出，阻塞到下一毫秒
-            if (sequence == 0) {
-                while ((timestamp = System.currentTimeMillis()) <= lastTimestamp) {
-                }
-            }
-        } else {
-            // 3. 时间戳改变，序列号重置为0
-            sequence = 0L;
-        }
-
-        // 记录上一次的时间戳
-        lastTimestamp = timestamp;
-
-        // 4. 组装ID
-        return ((timestamp - twepoch) << timestampLeftShift)   // 时间戳部分
-                | (datacenterId << datacenterIdShift)          // 数据中心部分
-                | (workerId << workerIdShift)                  // 机器部分
-                | sequence;                                    // 序列号部分
-    }
-}
-
-```
-
-雪花算法常见的问题就是时钟回拨，**Leaf** 提供了一种雪花算法的实现，解决了时钟回拨的问题
-
-### Leaf-snowflake
-
- 和原版 Snowflake 类似，Leaf-snowflake 也是 64 位 ID：
-
-```bash
-0 | timestamp(41位) | machineId(10位) | sequence(12位)
-```
-
-- **0**：最高位始终为 0，保证正数
-- **timestamp**：当前时间戳（毫秒），减去一个固定的开始时间（epoch）
-- **machineId**：机器号（Leaf 用 ZooKeeper 来分配，保证全局唯一）
-- **sequence**：同一毫秒内的自增序列（0~4095）
-
-##### 和原始 Snowflake 的区别
-
-1. **机器 ID 分配**
-   - 原版 Snowflake 要手动配置 workerId/datacenterId，很容易冲突
-   - Leaf-snowflake 用 **ZooKeeper 持久顺序节点** 来动态分配机器 ID，避免了人工分配冲突问题
-2. **时钟回拨问题处理**
-   - 原版 Snowflake 一旦时钟回拨，ID 就可能重复
-   - Leaf-snowflake 会检测回拨，如果回拨时间很短（比如 < 5ms），会进行等待；
-   - 如果回拨时间较长，会直接抛异常或报警，避免生成错误 ID
-3. **高可用**
-   - Leaf-snowflake 支持 **多节点部署**，机器 ID 由 ZK 管理，挂掉一个节点不会影响整体服务
-
-使用场景
-
-- 和 **Leaf-segment（号段模式）** 相比，Snowflake 更适合 **实时性要求高** 的业务：
-  - 比如日志 ID、链路追踪 ID、消息队列的消息 ID
-- 但是由于依赖系统时钟，**对时间敏感**，在运维环境中要格外注意 **NTP 时间同步**。
-
-### Leaf-segment（号段模式）
-
-它的核心思想是每次会把一大段 ID 提前申请下来，缓存到内存里，本地自增使用。当用完之后会申请下一段。这样就不需要每次生成 ID 都访问数据库，缓解了数据库的压力，同时，ID 在本地的自增效率又很快。支持分布式
-
-Leaf 使用一张 `leaf_alloc` 表来管理不同业务的 ID 号段
-
-```sql
-CREATE TABLE leaf_alloc (
-  biz_tag     VARCHAR(128) NOT NULL PRIMARY KEY COMMENT '业务 key，如订单、用户',
-  max_id      BIGINT NOT NULL COMMENT '当前最大 id',
-  step        INT NOT NULL COMMENT '号段长度，每次申请多少个 id',
-  update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-)
-```
-
-如 
-
-```bash
-biz_tag | max_id | step | update_time
---------|--------|------|-----------------
-order   | 10000  | 1000 | 2025-10-02 12:00:00
-user    | 5000   | 500  | 2025-10-02 12:00:00
-```
-
-现在以 `order` 业务为例，介绍一下 ID 生成流程，step=1000：
-
-1. **应用请求一个号段**
-   - 更新表里的 `max_id = max_id + step`
-   - 返回 `[old_max_id+1, new_max_id]` 这一段给应用
-   - 比如之前 max_id=10000，更新后=11000，返回 [10001,11000]
-2. **应用在本地缓存号段**
-   - 内存里保存当前号段范围和游标
-   - 每次请求 ID，就从内存里 `+1`
-3. **号段快用完时异步申请**
-   - 当本地号段消耗到 90%（阈值可调），提前去 DB 申请新的号段
-   - 确保切换号段时不会中断
-4. **新旧号段平滑切换**
-   - 旧号段用完后，直接切到新号段继续用
-
-id 申请下来之后，进行本地自增操作，单机 QPS 可达 5w+，远高于每次访问数据库的自增模式。只有每次申请新号段时才会访问数据库，减小了数据库的压力。容灾性也不错，即使数据库挂掉了，也可以继续使用内存中当前号段的 ID。通过数据库控制号段不重叠，保证分布式唯一。
-
-但是它**不保证 id 连续**，有时候可能有跳号，比如一个节点申请了号段，但没用完就挂了 -> 剩余 ID 会浪费。但大多数业务（订单号、用户ID）能接受。
-
-**依赖数据库**，需要一个高可用数据库来做号段分配。
-
-简单实现
-
-```java
-public class Segment {
-    private long currentId;   // 当前 ID
-    private long maxId;       // 当前号段最大值
-    private int step;         // 步长
-
-    public Segment(long currentId, long maxId, int step) {
-        this.currentId = currentId;
-        this.maxId = maxId;
-        this.step = step;
+    } else {
+        sequence = 0L;
     }
 
-    public synchronized long nextId() {
-        if (currentId < maxId) {
-            return ++currentId;
-        } else {
-            throw new RuntimeException("号段已用完，需要申请新的");
-        }
-    }
+    lastTimestamp = timestamp;
+
+    return ((timestamp - epoch) << timestampShift)
+            | (workerId << workerIdShift)
+            | sequence;
 }
 ```
 
-### 在 Spring Boot 项目中集成 Leaf
+生产环境使用 Snowflake 时，要重点处理：
 
-### 引入依赖
+- workerId 自动分配。
+- NTP 时间同步。
+- 小幅时钟回拨等待。
+- 大幅时钟回拨告警并拒绝生成。
+- 容器重启后 workerId 不重复。
 
-```xml
-<dependency>
-    <groupId>com.sankuai.inf.leaf</groupId>
-    <artifactId>leaf-server</artifactId>
-    <version>1.0.0</version>
-</dependency>
-<dependency>
-    <groupId>com.sankuai.inf.leaf</groupId>
-    <artifactId>leaf-core</artifactId>
-    <version>1.0.0</version>
-</dependency>
-```
+## Leaf-snowflake
 
-### 选择模式
+美团 Leaf 的 Snowflake 模式用 ZooKeeper 分配 workerId，减少人工配置冲突。
 
-#### 号段模式
+它相比手写 Snowflake 的优势：
 
-在数据库创建 `leaf_alloc` 表
+- workerId 由 ZooKeeper 管理。
+- 多节点部署时更容易保证机器号唯一。
+- 对时钟回拨有检测和保护。
+- 服务化后接入成本更统一。
+
+适合场景：
+
+- 日志 ID。
+- 消息 ID。
+- 链路追踪 ID。
+- 对实时生成要求高的业务主键。
+
+它仍然依赖时钟，所以不能忽视服务器时间同步。分布式系统里，时间这种东西看起来温顺，闹起来很不讲理。
+
+## 号段模式
+
+号段模式的思路是：服务一次从数据库申请一段 ID，缓存在本地内存中慢慢用。
+
+表结构示例：
 
 ```sql
 CREATE TABLE leaf_alloc (
-  biz_tag     VARCHAR(128) NOT NULL PRIMARY KEY COMMENT '业务key，如order、user',
-  max_id      BIGINT NOT NULL COMMENT '当前最大id',
-  step        INT NOT NULL COMMENT '号段步长',
+  biz_tag VARCHAR(128) NOT NULL PRIMARY KEY,
+  max_id BIGINT NOT NULL,
+  step INT NOT NULL,
   update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 ```
 
-在资源目录下配置 `leaf.properties`
+生成流程：
 
-```properties
-leaf.segment.enable=true
-leaf.jdbc.url=jdbc:mysql://127.0.0.1:3306/leaf?useSSL=false
-leaf.jdbc.username=root
-leaf.jdbc.password=123456
+```text
+1. 应用按 biz_tag 申请号段。
+2. 数据库把 max_id 增加 step。
+3. 应用拿到 [old_max_id + 1, new_max_id]。
+4. 应用在内存中自增发号。
+5. 号段快用完时提前申请下一段。
 ```
 
-#### 雪花模式
+例如：
 
-依赖 ZooKeeper
-
-配置 `leaf.properties`
-
-```properties
-leaf.snowflake.enable=true
-leaf.snowflake.zk.address=127.0.0.1:2181
-leaf.snowflake.port=8080   # 当前服务端口
+```text
+biz_tag = order
+old max_id = 10000
+step = 1000
+new max_id = 11000
+可用 ID = 10001 到 11000
 ```
 
-Leaf 会在 ZK 上注册临时顺序节点，用于 workerId 分配。
+优点：
 
-### 启动 Leaf 服务
+- 本地发号性能高。
+- ID 递增。
+- 数据库压力低，只有申请号段时访问数据库。
+- 数据库短暂不可用时，当前号段还能继续使用。
 
-```java
-@SpringBootApplication
-public class LeafApplication {
-    public static void main(String[] args) {
-        SpringApplication.run(LeafApplication.class, args);
-    }
-}
-```
+缺点：
 
-当启动 程序后，Leaf 本身会启动一个 **HTTP 接口**，可以通过 HTTP 请求获取 ID
+- 可能跳号。
+- 依赖数据库分配号段。
+- 多业务需要维护不同 `biz_tag`。
 
-#### 号段模式
+号段模式适合订单 ID、用户 ID、商品 ID 等业务主键。跳号通常不是问题，要求绝对连续才是问题。现实里绝对连续往往意味着你牺牲了并发和可用性，代价不小。
 
-```
-http://localhost:8080/api/segment/get/ORDER
-```
+## 方案对比
 
-返回：
+| 方案 | 性能 | 趋势递增 | 依赖 | 适合场景 |
+| --- | --- | --- | --- | --- |
+| UUID | 高 | 否 | 无 | 请求 ID、幂等号、日志追踪 |
+| 数据库自增 | 中 | 是 | 数据库 | 单体、小规模系统 |
+| Redis 自增 | 高 | 是 | Redis | 简单分布式发号 |
+| Snowflake | 很高 | 是 | 时钟、workerId | 高并发业务主键 |
+| 号段模式 | 很高 | 是 | 数据库 | 订单、用户、商品等主键 |
 
-```
-{"status":"SUCCESS","id":10001,"bizTag":"ORDER"}
-```
+## 选择建议
 
-#### 雪花模式
+如果是单体应用，优先数据库自增。
 
-```
-http://localhost:8080/api/snowflake/get/test
-```
+如果需要全局唯一但不进数据库主键，可以用 UUID 或更短的随机 ID。
 
-返回：
+如果是高并发业务主键，优先 Snowflake 或号段模式。
 
-```
-{"status":"SUCCESS","id":657933783557709824}
-```
+如果团队已经有 Leaf、UidGenerator 这类统一发号服务，就接统一服务，不要每个业务自己手写一套。ID 重复这种故障，发生一次就足够让人记很久，甚至不需要第二次来巩固记忆。
 
-**但一般会选择在项目中直接调用**
+## 小结
 
-在项目中注入 `IDGen`
-
-```java
-@Autowired
-@Qualifier("segmentIDGen")  // 或者 "snowflakeIDGen"
-private IDGen idGen;
-
-// 使用
-public Long getOrderId() {
-    Result result = idGen.get("ORDER");
-    if (result.getStatus() == Status.SUCCESS) {
-        return result.getId();
-    }
-    throw new RuntimeException("获取ID失败");
-}
-```
-
-- `IDGen` 是 **Leaf 提供的 ID 生成接口**
-
-- Leaf 有两种实现：
-
-  - `SegmentIDGen` -> 号段模式（基于数据库号段表）
-  - `SnowflakeIDGen` -> 雪花模式（基于 ZooKeeper 分配 workerId）
-
-- 在 Spring Boot 项目中，通过 `@Autowired` 注入其中之一：
-
-  ```java
-  @Autowired
-  @Qualifier("segmentIDGen")  // 或 "snowflakeIDGen"
-  private IDGen idGen;
-  ```
-
- `idGen.get("ORDER")`  会调用 Leaf 生成一个唯一 ID，`"ORDER"` 是业务标识（bizTag）
-
-- 号段模式下，它对应 `leaf_alloc` 表的 `biz_tag` 字段
-- 雪花模式下，它主要用作区分不同业务请求
-
-比如你在数据库表里有这样一行数据：
-
-```bash
-biz_tag = "ORDER", max_id = 10000, step = 1000
-```
-
-那么：
-
-- 第一次调用会返回 ID = 10001
-- 下一次调用 = 10002
-- 一直自增，直到号段用完，才去数据库申请新的号段
-
-Leaf 的 `Result` 对象通常包含：
-
-```java
-public class Result {
-    private long id;        // 生成的ID
-    private Status status;  // 生成状态（SUCCESS、EXCEPTION等）
-    private String msg;     // 错误信息（如果有的话）
-}
-```
-
-使用时要判断状态：
-
-```java
-Result result = idGen.get("ORDER");
-if (result.getStatus() == Status.SUCCESS) {
-    Long orderId = result.getId();
-    System.out.println("生成订单号: " + orderId);
-} else {
-    throw new RuntimeException("获取ID失败: " + result.getMsg());
-}
-```
+ID 生成方案没有绝对最优，只有适合当前系统的取舍。小系统用自增，简单可靠；分布式高并发用 Snowflake 或号段模式；日志追踪用 UUID。真正需要警惕的是在不理解约束的情况下复制一段发号代码，然后把唯一性寄托给运气。

@@ -4,191 +4,228 @@ draft = false
 title = 'Java 集合'
 +++
 
-**在 Java 21 之前，Java 集合一共有两个体系，顶层接口的架构分别为**：
+Java 集合的重点不是背实现类名字，而是理解每个接口表达的语义。接口选对了，代码暴露的能力就刚好够用；接口选大了，调用方就能做不该做的事。
 
-```textt
+集合体系可以先分成两大类：
+
+1. `Collection`：单个元素的集合，例如 `List`、`Set`、`Queue`。
+2. `Map`：键值对集合，例如 `HashMap`、`TreeMap`、`ConcurrentHashMap`。
+
+## 一、Collection 体系
+
+`Collection` 体系的核心结构如下：
+
+```text
 Iterable
-    └── Collection
-            ├── List
-            ├── Set
-            │   └── SortedSet
-            │       └── NavigableSet
-            └── Queue
-                └── Deque
+  └── Collection
+       ├── List
+       ├── Set
+       │    └── SortedSet
+       │         └── NavigableSet
+       └── Queue
+            └── Deque
 ```
 
-****
+`Iterable<E>` 是可迭代接口，提供遍历能力：
 
-```textt
+```java
+Iterator<E> iterator();
+void forEach(Consumer<? super E> action);
+Spliterator<E> spliterator();
+```
+
+`Collection<E>` 提供最基础的增删查能力：
+
+```java
+boolean add(E e);
+boolean addAll(Collection<? extends E> c);
+
+boolean remove(Object o);
+boolean removeAll(Collection<?> c);
+boolean retainAll(Collection<?> c);
+void clear();
+
+boolean contains(Object o);
+boolean containsAll(Collection<?> c);
+boolean isEmpty();
+int size();
+
+Object[] toArray();
+<T> T[] toArray(T[] a);
+
+Stream<E> stream();
+Stream<E> parallelStream();
+```
+
+实际写代码时，引用类型应该尽量使用能表达需求的最小接口：
+
+```java
+List<String> names = new ArrayList<>();
+Set<Long> userIds = new HashSet<>();
+Queue<Task> tasks = new ArrayDeque<>();
+```
+
+这不是形式主义。接口越准确，后续维护者越容易看出这段代码真正需要什么能力。
+
+## 二、List
+
+`List` 表示有序、可重复、可按下标访问的集合。
+
+常用方法：
+
+```java
+E get(int index);
+E set(int index, E element);
+void add(int index, E element);
+E remove(int index);
+int indexOf(Object o);
+int lastIndexOf(Object o);
+List<E> subList(int fromIndex, int toIndex);
+```
+
+常见实现类：
+
+```text
+List
+  ├── ArrayList
+  ├── LinkedList
+  └── CopyOnWriteArrayList
+```
+
+`ArrayList` 底层是数组，适合随机访问和尾部追加。扩容时会创建更大的数组并复制旧元素。
+
+`LinkedList` 底层是双向链表，理论上适合已定位节点后的插入删除，但随机访问很慢，并且每个元素都需要额外的节点对象。实际业务中，`ArrayList` 往往比 `LinkedList` 更常用。
+
+`CopyOnWriteArrayList` 适合读多写少的并发场景。写入时复制数组，读操作无需加锁，但写成本很高。
+
+## 三、Set
+
+`Set` 表示不允许重复元素的集合。
+
+核心方法其实就三个：
+
+| API | 说明 |
+| --- | --- |
+| `add(e)` | 添加元素，已存在则添加失败 |
+| `contains(e)` | 判断元素是否存在 |
+| `remove(e)` | 删除元素 |
+
+常见实现类：
+
+```text
+Set
+  ├── HashSet
+  ├── LinkedHashSet
+  ├── TreeSet
+  ├── ConcurrentSkipListSet
+  └── CopyOnWriteArraySet
+```
+
+`HashSet` 基于 `HashMap` 实现，不保证遍历顺序，适合普通去重。
+
+`LinkedHashSet` 在哈希表基础上维护插入顺序，适合既要去重又要保留顺序的场景。
+
+`TreeSet` 基于红黑树，元素按自然顺序或比较器排序，适合范围查询。
+
+`ConcurrentSkipListSet` 是线程安全的有序集合，底层是跳表。
+
+`CopyOnWriteArraySet` 适合元素少、读多写少的并发场景。
+
+## 四、Queue 和 Deque
+
+`Queue` 表示队列，通常是先进先出。
+
+它有三组核心 API，每组都有“抛异常版本”和“返回特殊值版本”：
+
+| 操作 | 抛异常版本 | 返回特殊值版本 | 说明 |
+| --- | --- | --- | --- |
+| 入队 | `add(e)` | `offer(e)` | 添加元素 |
+| 出队 | `remove()` | `poll()` | 删除并返回队头 |
+| 查看队头 | `element()` | `peek()` | 查看但不删除 |
+
+一般更推荐 `offer`、`poll`、`peek`，因为空队列或容量限制时不会直接抛异常。
+
+`Deque` 是双端队列，可以同时操作队头和队尾：
+
+| 操作 | 抛异常版本 | 返回特殊值版本 |
+| --- | --- | --- |
+| 头部插入 | `addFirst(e)` | `offerFirst(e)` |
+| 头部删除 | `removeFirst()` | `pollFirst()` |
+| 查看头部 | `getFirst()` | `peekFirst()` |
+| 尾部插入 | `addLast(e)` | `offerLast(e)` |
+| 尾部删除 | `removeLast()` | `pollLast()` |
+| 查看尾部 | `getLast()` | `peekLast()` |
+
+现代 Java 中，不建议继续使用旧的 `Stack` 类。栈语义可以用 `Deque` 表达：
+
+```java
+Deque<Integer> stack = new ArrayDeque<>();
+stack.push(1); // 等价于 addFirst
+stack.push(2);
+stack.pop();   // 返回 2
+stack.peek();  // 查看栈顶
+```
+
+队列语义也可以用 `Deque` 表达：
+
+```java
+Deque<Integer> queue = new ArrayDeque<>();
+queue.offer(1); // 入队尾
+queue.offer(2);
+queue.poll();   // 出队头，返回 1
+```
+
+常见实现类：
+
+```text
+Queue
+  ├── Deque
+  │    ├── ArrayDeque
+  │    ├── LinkedList
+  │    └── ConcurrentLinkedDeque
+  ├── PriorityQueue
+  └── BlockingQueue
+       ├── ArrayBlockingQueue
+       ├── LinkedBlockingQueue
+       ├── PriorityBlockingQueue
+       ├── SynchronousQueue
+       ├── LinkedTransferQueue
+       └── DelayQueue
+```
+
+`ArrayDeque` 底层是循环数组，通常比 `LinkedList` 更适合作为栈和队列。它数组连续、对象更少，缓存局部性也更好。
+
+`PriorityQueue` 是优先级队列，默认小顶堆，只保证队头是当前最小元素。
+
+`BlockingQueue` 是阻塞队列，常用于生产者消费者模型。
+
+## 五、Map 体系
+
+`Map` 存储键值对，不属于 `Collection` 体系。
+
+```text
 Map
- └── SortedMap
-       └── NavigableMap
+  ├── HashMap
+  ├── LinkedHashMap
+  ├── TreeMap
+  ├── ConcurrentHashMap
+  └── ConcurrentSkipListMap
 ```
 
-这些接口为他们的实现类提供了基本的操作方法。在使用的时候可以用接口引用实现类，统一操作不同的集合。
-
-**Iterable&lt;E&gt;** 是最顶层迭代接口，它提供了基本的遍历方法。所有集合类都可以通过迭代器遍历集合：
+核心方法：
 
 ```java
-Iterator<E> iterator() // 获取迭代器
-void forEach(Consumer<? super T> action)
-Spliterator<E> spliterator()
+V get(Object key);
+V put(K key, V value);
+V remove(Object key);
+boolean containsKey(Object key);
+boolean containsValue(Object value);
+int size();
+boolean isEmpty();
+void clear();
 ```
 
-**Collection&lt;E&gt;** 接口为集合提供了基本增删查统的能力
-
-新增
-
-```java
-boolean add(E e)
-boolean addAll(Collection<? extends E> c)
-```
-
-删除
-
-```java
-boolean remove(Object o)
-boolean removeAll(Collection<?> c)
-boolean retainAll(Collection<?> c) // 删除其他元素，只保留指定元素
-void clear()
-```
-
-查询
-
-```java
-boolean contains(Object o)
-boolean containsAll(Collection<?> c)
-boolean isEmpty()
-int size()
-```
-
-遍历
-
-```java
-Iterator<E> iterator()
-```
-
-数组转换
-
-```java
-Object[] toArray()
-<T> T[] toArray(T[] a)
-```
-
-&gt; 可以看到，如果要将集合转化为一维数组时直接调用 `toArray()`。但是如果要转化成二维数组，需要使用 `toArray(new int[][])`
-
-```java
-boolean removeIf(Predicate filter)
-Stream<E> stream()
-Stream<E> parallelStream()
-void forEach(Consumer action)
-```
-
-&gt; 在实际的应用中，我们应该使用符合语义的顶层接口来引用实现类。
-
-**List&lt;E&gt;** 接口
-
-```java
-E get(int index)	// 按位置取元素
-E set(int index, E element) 	// 修改元素 
-void add(int index, E element) 	// 指定位置插入
-E remove(int index)		// 指定位置删除 
-int indexOf(Object o)	// 查找首次     
-int lastIndexOf(Object o)	// 查找末次     
-List<E> subList(int fromIndex, int toIndex)	 // 子列表视图 
-```
-
-**Set&lt;E&gt;** 接口最重要的是这 3 个核心方法
-
-| API           | 说明                         |
-| ------------- | ---------------------------- |
-| `add(e)`      | 添加去重的关键方法           |
-| `contains(e)` | 基于 equals 检查元素是否存在 |
-| `remove(e)`   | 删除元素                     |
-
-**Queue&lt;E&gt;** 接口有 6 个核心 API
-
-| 操作                   | 抛异常版本  | 返回特殊值版本 | 说明             |
-| ---------------------- | ----------- | -------------- | ---------------- |
-| **入队（添加元素）**   | `add(e)`    | `offer(e)`     | 把元素插入队尾   |
-| **出队（移除头元素）** | `remove()`  | `poll()`       | 移除队头         |
-| **取队头（不移除）**   | `element()` | `peek()`       | 查看队头但不删除 |
-
-**Deque&lt;E&gt;** 是双端队列的接口，提供 12 个核心 API
-
-头部操作
-
-| 操作                   | 抛异常版本      | 返回特殊值版本  | 说明           |
-| ---------------------- | --------------- | --------------- | -------------- |
-| **头部插入**           | `addFirst(e)`   | `offerFirst(e)` | 在队头加入元素 |
-| **头部删除**           | `removeFirst()` | `pollFirst()`   | 删除并返回队头 |
-| **获取头部（不删除）** | `getFirst()`    | `peekFirst()`   | 查看队头       |
-
-尾部操作
-
-| 操作                   | 抛异常版本     | 返回特殊值版本 | 说明           |
-| ---------------------- | -------------- | -------------- | -------------- |
-| **尾部插入**           | `addLast(e)`   | `offerLast(e)` | 在队尾加入元素 |
-| **尾部删除**           | `removeLast()` | `pollLast()`   | 删除并返回队尾 |
-| **获取尾部（不删除）** | `getLast()`    | `peekLast()`   | 查看队尾       |
-
-**Queue** 是 Java 提供的单向队列，先进先出。从队尾进队头出。
-
-```text
-队头---队尾
-```
-
-**Deque** 是 Java 提供的双端队列。可以对队头和队尾同时操作。
-
-```text
-队头---队尾
-```
-
-Java 最早提供的 Stack 栈类型已被废弃，现代 Java 所有的栈操作可以通过封住 Deque 一端实现，达到先进后出的效果。
-
-**Deque 中内置了带有 Stack 语义的 API，在实际使用中，我们也应该使用这些 API 在进行栈的操作**
-
-```java 
-void push(E e);     // 从双端队列的队头入栈
-E pop();            // 从双端队列的队头出栈
-E peek();           // 从队头查看栈顶，不删除
-```
-
-这几个操作总是作用于队列的头部
-
-**Map&lt;K, V&gt;** 的核心方法
-
-查找
-
-| 方法                                  | 说明                                   |
-| ------------------------------------- | -------------------------------------- |
-| `V get(Object key)`                   | 根据 key 获取 value（不存在返回 null） |
-| `boolean containsKey(Object key)`     | 判断是否存在该 key                     |
-| `boolean containsValue(Object value)` | 判断是否存在该 value                   |
-
-添加 & 修改
-
-| 方法                    | 说明                        |
-| ----------------------- | --------------------------- |
-| `V put(K key, V value)` | 添加或覆盖 key 对应的 value |
-| `void putAll(Map m)`    | 批量添加（相同 key 会覆盖） |
-
-删除
-
-| 方法                   | 说明                               |
-| ---------------------- | ---------------------------------- |
-| `V remove(Object key)` | 删除指定 key（返回被删除的 value） |
-| `void clear()`         | 清空所有键值对                     |
-
-遍历 Map 的核心方法
-
-| 方法                             | 返回内容   | 作用         |
-| -------------------------------- | ---------- | ------------ |
-| `Set&lt;K&gt; keySet()`                | 所有 key   | 遍历 key     |
-| `Collection&lt;V&gt; values()`         | 所有 value | 遍历 value   |
-| `Set&lt;Map.Entry&lt;K,V&gt;&gt; entrySet()` | 所有键值对 | 遍历整个 Map |
-
-其中 `Map.Entry&lt;K,V&gt;` 是 Map 遍历的核心结构
+遍历 Map 时，最常用的是 `entrySet()`：
 
 ```java
 for (Map.Entry<K, V> entry : map.entrySet()) {
@@ -196,278 +233,158 @@ for (Map.Entry<K, V> entry : map.entrySet()) {
 }
 ```
 
-&gt; 在编写代码是，如果要使用 KV 型的类，可以选择 Java 提供的
-&gt;
-&gt; **AbstractMap.SimpleEntry&lt;K,V&gt;**
-&gt;
-&gt; ```java
-&gt; AbstractMap.SimpleEntry&lt;String, Integer&gt; kv = new AbstractMap.SimpleEntry&lt;&gt;("age", 20);
-&gt; ```
-&gt;
-&gt; 这是可变 KV，如果要使用不可变 KV，可以使用
-&gt;
-&gt; **AbstractMap.SimpleImmutableEntry&lt;K,V&gt;**
-&gt;
-&gt; ```java
-&gt; AbstractMap.SimpleImmutableEntry&lt;String, Integer&gt; kv =
-&gt;         new AbstractMap.SimpleImmutableEntry&lt;&gt;("age", 20);
-&gt; 
-&gt; ```
+如果只需要 key，可以用 `keySet()`；只需要 value，可以用 `values()`。
 
-**在 Java 21 之前，有序集合并没有一个统一的顶层接口，只有上图中提供的 SortedSet/SortedMap 和 NavigableSet/NavigableMap** 接口，而后者是前者的增强类
+常见实现类的语义：
 
-**SortedSet/SortedMap** 提供的核心方法有
+| 实现类 | 特点 |
+| --- | --- |
+| `HashMap` | 最常用的哈希表，不保证顺序 |
+| `LinkedHashMap` | 维护插入顺序或访问顺序 |
+| `TreeMap` | 按 key 排序，支持范围查询 |
+| `ConcurrentHashMap` | 高并发场景下的线程安全 Map |
+| `ConcurrentSkipListMap` | 线程安全且按 key 排序 |
 
-| 方法                                 | 作用                                      |
-| ------------------------------------ | ----------------------------------------- |
-| `Comparator&lt;? super E&gt; comparator()` | 返回排序使用的比较器（null 表示自然排序） |
-| `SortedSet&lt;E&gt; subSet(E from, E to)`  | 返回指定范围的子集（[from, to)）          |
-| `SortedSet&lt;E&gt; headSet(E to)`         | 返回所有小于 to 的元素                    |
-| `SortedSet&lt;E&gt; tailSet(E from)`       | 返回所有大于等于 from 的元素              |
-| `E first()`                          | 返回第一个（最小）元素                    |
-| `E last()`                           | 返回最后一个（最大）元素                  |
+如果需要临时表达一个键值对，可以使用：
 
-| 方法                                  | 作用                         |
-| ------------------------------------- | ---------------------------- |
-| `Comparator&lt;? super K&gt; comparator()`  | key 的排序比较器             |
-| `SortedMap&lt;K,V&gt; subMap(K from, K to)` | 返回 key 在区间内的子 Map    |
-| `SortedMap&lt;K,V&gt; headMap(K to)`        | 返回所有 key &lt; to 的键值对   |
-| `SortedMap&lt;K,V&gt; tailMap(K from)`      | 返回所有 key ≥ from 的键值对 |
-| `K firstKey()`                        | 最小 key                     |
-| `K lastKey()`                         | 最大 key                     |
-
-这些方法都围绕 **排序 + 范围查询** 展开
-
-而后者 **NavigableSet/NavigableMap** 提供了更强的导航能力
-
-| 方法                              | 说明                  |
-| --------------------------------- | --------------------- |
-| `E lower(E e)`                    | 严格小于 e 的最大元素 |
-| `E floor(E e)`                    | 小于等于 e 的最大元素 |
-| `E ceiling(E e)`                  | 大于等于 e 的最小元素 |
-| `E higher(E e)`                   | 严格大于 e 的最小元素 |
-| `E pollFirst()`                   | 取出并删除最小值      |
-| `E pollLast()`                    | 取出并删除最大值      |
-| `NavigableSet&lt;E&gt; descendingSet()` | 降序视图              |
-
-| 方法                                 | 说明                     |
-| ------------------------------------ | ------------------------ |
-| `Map.Entry&lt;K,V&gt; lowerEntry(K key)`   | key 前一个 Entry         |
-| `Map.Entry&lt;K,V&gt; floorEntry(K key)`   | ≤ key 的最大 Entry       |
-| `Map.Entry&lt;K,V&gt; ceilingEntry(K key)` | ≥ key 的最小 Entry       |
-| `Map.Entry&lt;K,V&gt; higherEntry(K key)`  | &gt; key 的最小 Entry       |
-| `K lowerKey(K key)`                  | lowerEntry 的 key 版本   |
-| `K floorKey(K key)`                  | floorEntry 的 key 版本   |
-| `K ceilingKey(K key)`                | ceilingEntry 的 key 版本 |
-| `K higherKey(K key)`                 | higherEntry 的 key 版本  |
-| `Map.Entry&lt;K,V&gt; pollFirstEntry()`    | 删除并取最小键值对       |
-| `Map.Entry&lt;K,V&gt; pollLastEntry()`     | 删除并取最大键值对       |
-| `NavigableMap&lt;K,V&gt; descendingMap()`  | 降序视图                 |
-
-提供了 **向前、向后找的功能**
-
-**而在 Java 21 后，补全了有序集的体系。提供了 SequencedCollection、SequencedSet 和 SequencedMap 接口**
-
-&gt; 在 Java 21 之前存在很多有序集合，像 List、ArrayDeque等。它们不在之前的顺序接口体系中。Java 整体缺乏一个通用接口来表示共同的顺序操作。所有在 Java 21 引入了 **Sequenced** 系列接口，作为统一的、有序集合的顶层接口。
-
-```textt
-Collection
-   └── SequencedCollection
-          ├── List
-          ├── Deque
-          └── SequencedSet
+```java
+Map.Entry<String, Integer> entry =
+        new AbstractMap.SimpleEntry<>("age", 20);
 ```
 
-```textt
+如果希望键值对不可变，可以使用：
+
+```java
+Map.Entry<String, Integer> entry =
+        new AbstractMap.SimpleImmutableEntry<>("age", 20);
+```
+
+## 六、排序和导航接口
+
+`SortedSet`、`SortedMap` 表示按顺序排列的集合或映射。
+
+`SortedSet` 常用方法：
+
+| 方法 | 说明 |
+| --- | --- |
+| `comparator()` | 返回排序比较器，`null` 表示自然排序 |
+| `subSet(from, to)` | 返回 `[from, to)` 范围内的子集 |
+| `headSet(to)` | 返回小于 `to` 的元素 |
+| `tailSet(from)` | 返回大于等于 `from` 的元素 |
+| `first()` | 返回第一个元素 |
+| `last()` | 返回最后一个元素 |
+
+`NavigableSet` 在排序基础上提供“向前/向后找”的能力：
+
+| 方法 | 说明 |
+| --- | --- |
+| `lower(e)` | 严格小于 `e` 的最大元素 |
+| `floor(e)` | 小于等于 `e` 的最大元素 |
+| `ceiling(e)` | 大于等于 `e` 的最小元素 |
+| `higher(e)` | 严格大于 `e` 的最小元素 |
+| `pollFirst()` | 删除并返回最小元素 |
+| `pollLast()` | 删除并返回最大元素 |
+| `descendingSet()` | 返回降序视图 |
+
+`TreeSet` 和 `TreeMap` 是最典型的导航集合实现。
+
+## 七、Java 21 的 Sequenced 接口
+
+Java 21 引入了 Sequenced Collections，用来统一表达“有明确首尾顺序”的集合。
+
+在 Java 21 之前，`List`、`Deque`、`LinkedHashSet`、`LinkedHashMap` 都有顺序，但缺少一个统一接口来表达“获取第一个元素、获取最后一个元素、反转视图”这些操作。
+
+Java 21 补上了这组接口：
+
+```text
+Collection
+  └── SequencedCollection
+       ├── List
+       ├── Deque
+       └── SequencedSet
+            └── SortedSet
+
 Map
   └── SequencedMap
+       └── SortedMap
 ```
 
-**SequencedCollection** 提供了以下核心方法
-
-| 方法                                | 作用                             |
-| ----------------------------------- | -------------------------------- |
-| `E getFirst()`                      | 获取第一个元素                   |
-| `E getLast()`                       | 获取最后一个元素                 |
-| `void addFirst(E e)`                | 在头部添加                       |
-| `void addLast(E e)`                 | 在尾部添加                       |
-| `E removeFirst()`                   | 删除并返回第一个                 |
-| `E removeLast()`                    | 删除并返回最后一个               |
-| `SequencedCollection&lt;E&gt; reversed()` | 返回一个“反转视图”（不复制数据） |
-
-统一了 List 和 Deque 的有序操作
-
-**SequencedSet** 实现了 SequencedCollection 提供的所有有序操作
-
-**SequencedMap** 提供的核心方法
-
-| 方法                            | 作用                |
-| ------------------------------- | ------------------- |
-| `K firstKey()`                  | 第一个 key          |
-| `K lastKey()`                   | 最后一个 key        |
-| `Map.Entry&lt;K,V&gt; firstEntry()`   | 第一个 entry        |
-| `Map.Entry&lt;K,V&gt; lastEntry()`    | 最后一个 entry      |
-| `void putFirst(K key, V value)` | 把 entry 插入最前面 |
-| `void putLast(K key, V value)`  | 把 entry 插入最后面 |
-| `SequencedMap&lt;K,V&gt; reversed()`  | 反转视图            |
-
-&gt; **Sequenced 系列接口的出现，是否会代替原本 SortedSet/SortedMap 和 NavigableSet/NavigableMap 接口**？
-&gt;
-&gt; **答案是否定的**
-&gt;
-&gt; **Sequenced 的出现补充的是顺序语义，它解决了顺序访问问题。而 SortedSet/SortedMap 和 NavigableSet/NavigableMap 排序语义和导航语义。**
-
-**在使用集合的实现类时，引用类型应该选择能准确表达实际使用的操作语义接口，用最小必要语义的接口来约束使用，避免暴露不应该用的方法。**
-
-例如使用 **Deque** 却用 **Queue** 接收，这样就限制了 **Deque** 双端操作的功能；如果使用 **BlockingQueue** 却用 **Queue** 接收，这样就不能调用阻塞方法。
-
-## 实现类
-
-### List
-
-```textt
-List
-  ├── ArrayList
-  ├── LinkedList
-  └── CopyOnWriteArrayList
-```
-
-- `ArrayList` 是以数组为底层实现的可变数组。
-- `LinkedList` 是以链表尾底层实现的。
-
-二者的区别就来源于底层实现。包括插入删除性能、查询性能。
-
-### Set
-
-```textt
-Set
- ├── HashSet
- ├── LinkedHashSet
- ├── SortedSet
- │    └── NavigableSet
- │          ├── TreeSet
- │          └── ConcurrentSkipListSet
- ├── SequencedSet
- │    ├── LinkedHashSet
- │    └── TreeSet
- └── CopyOnWriteArraySet
-```
-
-- `HashSet` 是不能包含重复元素的无序集合。它的底层使用 `HashMap` 实现的。
-- `LinkedHashSet` 底层因为引入了链表，因此它是有序的 `Set`
-
-### Queue
-
-```textt
-Queue
-   ├── Deque
-   │     ├── ArrayDeque
-   │     ├── LinkedList
-   │     ├── ConcurrentLinkedDeque
-   │     └── BlockingDeque
-   │           └── LinkedBlockingDeque
-   │
-   ├── PriorityQueue
-   └── BlockingQueue
-         ├── ArrayBlockingQueue
-         ├── LinkedBlockingQueue
-         ├── PriorityBlockingQueue
-         ├── SynchronousQueue
-         ├── LinkedTransferQueue
-         └── DelayQueue
-```
-
-- `ArrayDeque` 底层是环形数组
-- `LinkedList` 底层是双向链表
-
-JDK 官方明确建议使用 `ArrayDeque` 代替 `Stack` 和 `LinkedList` 作为栈和队列使用
-
-#### ArrayDeque
-
-`ArrayDeque` 底层是数组，内存连续，通常比 `LinkedList` 快。
-
-- 数组连续存储，遍历访问时 CPU cache 命中率高；而链表节点分散，指针跳转慢。
-- `LinkedList` 每个元素都要包一层 `Node(prev, nex, item)`，对象多、GC 压力大；`ArrayDeque` 直接将元素放在数组槽位里。
-
-`ArrayDeque` 内部核心是：
-
-- `Object[] elements`：存放元素的数组
-
-- `int head`：队头索引（指向队头元素位置）
-
-- `int tail`：队尾索引（指向下一次插入尾部的位置）
-
-为什么说他是环形的呢，因为数组末尾再往后走会绕回到 0（取模操作）
-
-**入队/出队不移动元素，只移动 head/tail，并在数组里写入/清空槽位**。
-
-下面使用伪代码简单表示一下从尾部入队时 `offerLast` / `addLast` 发生了什么。
+`SequencedCollection` 的核心方法：
 
 ```java
-elements[tail] = x;
-tail = (tail + 1) & (len - 1);
-if (tail == head) grow(); // 满了（尾追上头）
+E getFirst();
+E getLast();
+void addFirst(E e);
+void addLast(E e);
+E removeFirst();
+E removeLast();
+SequencedCollection<E> reversed();
 ```
 
-`tail` 永远指向下一个可查位置。当 `tail == head` 时，代表数组满了，JDK 会自动扩容处理。
-
-扩容步骤一般是：
-
-1. 创建更大的数组，通常是原来的 2 倍
-2. 把旧数组中的元素按逻辑顺序拷贝到新数组
-3. 重置 `head = 0`、`tail = size`
-
-`Deque` 给出的三套语义接口
-
-当队列
-```java
-Deque<Integer> q = new ArrayDeque<>();
-q.offer(1);  // 入队尾
-q.offer(2);
-q.poll();    // 出队头 -> 1
-q.peek();    // 看队头
-```
-
-当栈
+`SequencedMap` 的核心方法：
 
 ```java
-Deque<Integer> st = new ArrayDeque<>();
-st.push(1);  // 等价 addFirst
-st.push(2);
-st.pop();    // 等价 removeFirst -> 2
-st.peek();   // 等价 peekFirst
+Map.Entry<K, V> firstEntry();
+Map.Entry<K, V> lastEntry();
+Map.Entry<K, V> pollFirstEntry();
+Map.Entry<K, V> pollLastEntry();
+K firstKey();
+K lastKey();
+V putFirst(K key, V value);
+V putLast(K key, V value);
+SequencedMap<K, V> reversed();
 ```
 
-当双端队列
+`Sequenced` 系列不会取代 `Sorted` 和 `Navigable` 系列。它们表达的语义不同：
+
+| 接口 | 关注点 |
+| --- | --- |
+| `Sequenced` | 首尾顺序、反转视图 |
+| `Sorted` | 排序规则、范围视图 |
+| `Navigable` | 按顺序查找相邻元素 |
+
+简单说，`Sequenced` 解决“谁在前、谁在后”；`Sorted` 解决“按什么排序”；`Navigable` 解决“比某个值大一点或小一点的是谁”。
+
+## 八、实现类怎么选
+
+常见选择可以按需求判断：
+
+| 需求 | 推荐 |
+| --- | --- |
+| 普通可变列表 | `ArrayList` |
+| 去重，不关心顺序 | `HashSet` |
+| 去重，保留插入顺序 | `LinkedHashSet` |
+| 排序集合、范围查询 | `TreeSet` |
+| 栈或普通队列 | `ArrayDeque` |
+| 每次取最小/最大元素 | `PriorityQueue` |
+| 普通键值对 | `HashMap` |
+| 保留插入顺序的 Map | `LinkedHashMap` |
+| 按 key 排序的 Map | `TreeMap` |
+| 并发 Map | `ConcurrentHashMap` |
+| 生产者消费者队列 | `BlockingQueue` |
+
+接口引用也要跟需求匹配：
 
 ```java
-dq.offerFirst(1);
-dq.offerLast(2);
-dq.pollFirst(); // 1
-dq.pollLast();  // 2
+Queue<Task> queue = new ArrayDeque<>();
+Deque<Integer> stack = new ArrayDeque<>();
+Map<Long, User> users = new HashMap<>();
+NavigableMap<Integer, String> ranges = new TreeMap<>();
 ```
 
-我们经常在层序遍历数、用两个队列实现栈、实现滑动窗口时使用它。
+如果你只需要队列操作，就用 `Queue`；如果需要双端操作，就用 `Deque`；如果需要范围查找，就用 `NavigableMap`。把类型写准确，代码会少很多解释成本。
 
-### Map
+## 九、总结
 
-```textt
-Map
- ├── HashMap
- ├── LinkedHashMap
- │
- ├── SequencedMap
- │      └── LinkedHashMap
- │
- ├── SortedMap
- │     └── NavigableMap
- │            └── TreeMap
- │
- └── ConcurrentMap
-        ├── ConcurrentHashMap
-        └── ConcurrentNavigableMap
-               └── ConcurrentSkipListMap
-```
+Java 集合可以按语义理解：
 
-- `HashMap` 是我们最常用的 KV 型数据结构了
-- `ConcurrentHashMap` 是线程安全的 `HashMap`
+1. `List`：有序、可重复、可按下标访问。
+2. `Set`：去重。
+3. `Queue`：队列。
+4. `Deque`：双端队列，也可当栈。
+5. `Map`：键值对。
+6. `Sorted`：排序。
+7. `Navigable`：排序基础上的相邻查找。
+8. `Sequenced`：Java 21 引入的首尾顺序接口。
+
+集合选型不是背答案，而是先问一句：这段代码到底需要什么语义？能回答这个问题，剩下的实现类通常就自己浮出来了。虽然说得像理所当然，但很多 bug 正是从“随便用个差不多的集合”开始的。

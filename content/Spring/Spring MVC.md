@@ -4,7 +4,7 @@ draft = false
 title = 'Spring MVC'
 +++
 
-#### MVC（Model-View-Controller）
+## 一、MVC（Model-View-Controller）
 
 是软件开发中经典的设计模式，尤其在 Web 开发里广泛使用
 
@@ -38,7 +38,7 @@ title = 'Spring MVC'
 5. Controller 选择 **View**，并把数据传给 View
 6. **View** 渲染数据，生成 HTML 响应给用户
 
-#### Spring MVC 的实现
+## 二、Spring MVC 的实现
 
 Spring MVC 是 Spring 在 Spring Container Core 和 AOP 等技术基础上，遵循上述 Web MVC 的规范推出的 web 开发框架，目的是为了简化 Java 栈的 web 开发
 
@@ -54,7 +54,7 @@ Spring MVC 是 Spring 在 Spring Container Core 和 AOP 等技术基础上，遵
 | **ViewResolver**      | 根据返回的视图名解析成具体 View（JSP/Thymeleaf/JSON 等）     |
 | **View**              | 渲染输出页面或数据给客户端                                   |
 
-##### 请求的处理流程
+### 1. 请求的处理流程
 
 **首先用户发送请求——>DispatcherServlet**，前端控制器收到请求后自己不进行处理，而是委托给其他的解析器进行 处理，作为统一访问点，进行全局的流程控制；
 
@@ -70,7 +70,7 @@ Spring MVC 是 Spring 在 Spring Container Core 和 AOP 等技术基础上，遵
 
 **返回控制权给DispatcherServlet**，由DispatcherServlet 返回响应给用户，到此一个流程结束。
 
-##### 核心注解
+### 2. 核心注解
 
 | 注解                          | 说明                                          |
 | ----------------------------- | --------------------------------------------- |

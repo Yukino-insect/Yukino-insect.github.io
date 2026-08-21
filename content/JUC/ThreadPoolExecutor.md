@@ -4,219 +4,159 @@ draft = false
 title = 'ThreadPoolExecutor'
 +++
 
-> **线程池中的任务队列是怎么实现的？线程是怎么被管理的？线程池如何协调两者？**
+`ThreadPoolExecutor` 是 Java 线程池的核心实现。它把任务队列、工作线程集合、线程池状态和拒绝策略组合在一起，提供了一套可控的并发执行框架。
 
-------
+如果说“线程池”文章适合回答怎么配置，那么这篇更适合回答：**线程池内部到底怎么接收任务、创建线程、复用线程和结束线程**。
 
-##  一、核心类：`ThreadPoolExecutor`
+## 一、核心结构
 
-Java 的线程池核心实现类是：
+`ThreadPoolExecutor` 可以简化成四个部分：
 
-```
-java.util.concurrent.ThreadPoolExecutor
-```
-
-它实现了线程池中所有的核心机制：
-
-- **任务提交与缓存（BlockingQueue）**
-- **线程创建与复用（Worker）**
-- **线程状态与生命周期管理（ctl）**
-
-------
-
-##  二、线程池的核心结构
-
-简化理解，线程池里有三样东西
-
-```
-+------------------------------------------------------+
-| ThreadPoolExecutor                                   |
-|------------------------------------------------------|
-| - BlockingQueue<Runnable> workQueue   —— 任务队列     |
-| - HashSet<Worker> workers             —— 线程集合     |
-| - ctl (AtomicInteger)                 —— 状态 + 数量控制 |
-| - RejectedExecutionHandler            —— 拒绝策略     |
-+------------------------------------------------------+
+```text
+ThreadPoolExecutor
+ ├─ ctl：线程池运行状态 + 工作线程数量
+ ├─ workQueue：等待执行的任务队列
+ ├─ workers：工作线程集合
+ └─ handler：拒绝策略
 ```
 
-### 1. 任务队列：阻塞队列
+其中最关键的是 `ctl`、`workQueue` 和 `Worker`。
 
-用来保存**等待执行**的任务。
- 常见实现：
+## 二、ctl：状态和线程数
 
-| 队列类型     | 类名                    | 特点                     |
-| ------------ | ----------------------- | ------------------------ |
-| 有界队列     | `ArrayBlockingQueue`    | 固定长度，防止任务堆积   |
-| 无界队列     | `LinkedBlockingQueue`   | 可无限增长，容易 OOM     |
-| 同步移交队列 | `SynchronousQueue`      | 不缓存任务，直接交给线程 |
-| 优先队列     | `PriorityBlockingQueue` | 按优先级排序执行         |
+`ctl` 是一个 `AtomicInteger`，同时保存两类信息：
 
-> 线程池会先尝试让空闲线程执行任务；
->  如果没有空闲线程，就把任务放入队列中等待。
+- 高 3 位表示线程池状态。
+- 低 29 位表示当前工作线程数量。
 
-------
+线程池状态包括：
 
-### 2. 线程集合：`HashSet<Worker>`
+| 状态 | 含义 |
+| --- | --- |
+| `RUNNING` | 接收新任务，也处理队列中的任务 |
+| `SHUTDOWN` | 不接收新任务，但继续处理队列中的任务 |
+| `STOP` | 不接收新任务，不处理队列任务，并中断正在执行的任务 |
+| `TIDYING` | 所有任务结束，工作线程数为 0，准备执行终止钩子 |
+| `TERMINATED` | 线程池完全终止 |
 
-线程池中的每个线程都被包装成一个内部类：
+把状态和线程数量放进同一个原子变量，是为了在并发环境下用一次 CAS 同时保证状态判断和线程数变更的正确性。
 
-```
-private final class Worker extends AbstractQueuedSynchronizer implements Runnable
-```
+## 三、Worker：工作线程
 
-它同时扮演：
+线程池中的每个工作线程都会被包装成 `Worker`。它主要做三件事：
 
-- **线程的封装器**（保存 Thread 对象）；
-- **AQS 锁的实现**（用于控制中断、安全退出）；
-- **任务执行循环的载体**（执行 `runWorker` 方法）。
+- 保存真正执行任务的 `Thread`。
+- 保存启动时携带的第一个任务 `firstTask`。
+- 作为一个简化锁，控制线程中断和执行状态。
 
-每个 Worker 都会不断从队列中取任务执行：
+工作线程启动后，会进入 `runWorker` 循环：
 
-```
-while ((task = getTask()) != null) {
-    task.run();
-}
-```
+```java
+final void runWorker(Worker worker) {
+    Runnable task = worker.firstTask;
+    worker.firstTask = null;
 
-------
-
-### 3. 线程控制器：`ctl`
-
-`ctl` 是一个 `AtomicInteger`，用来同时保存：
-
-- **线程池状态（高 3 位）**
-- **当前线程数量（低 29 位）**
-
-内部通过位运算区分：
-
-```
-// ctl 的结构: [ 高3位: 运行状态 | 低29位: 工作线程数 ]
-RUNNING = -1 << COUNT_BITS
-```
-
-状态包括：
-
-| 状态名     | 说明                           |
-| ---------- | ------------------------------ |
-| RUNNING    | 正常运行，接受新任务           |
-| SHUTDOWN   | 不接受新任务，但执行队列中任务 |
-| STOP       | 立即停止所有任务               |
-| TIDYING    | 正在清理资源                   |
-| TERMINATED | 已完全结束                     |
-
-------
-
-##  三、线程池工作流程
-
-### 当调用 `execute(Runnable task)` 时：
-
-```
-           +-------------------------------+
-           | execute(task)                 |
-           +---------------+---------------+
-                           |
-              ┌────────────┴────────────┐
-              │                         │
-        1. 若当前线程数 < corePoolSize  │
-              │                         │
-          创建新线程执行任务            │
-              │                         │
-              ▼                         │
-        2. 否则任务放入队列(workQueue) │
-              │                         │
-              ▼                         │
-        3. 若队列满且线程数 < maxPoolSize│
-              │                         │
-          再创建新线程执行任务           │
-              │                         │
-              ▼                         │
-        4. 否则执行拒绝策略（饱和处理） │
-              │                         │
-              ▼                         ▼
-           END
-```
-
-------
-
-##  四、线程管理的关键方法
-
-| 方法                  | 作用                           |
-| --------------------- | ------------------------------ |
-| `addWorker()`         | 创建并启动一个 Worker 线程     |
-| `getTask()`           | 从队列中取任务（阻塞等待）     |
-| `runWorker()`         | Worker 主循环执行任务          |
-| `processWorkerExit()` | 线程退出后的回收与计数更新     |
-| `tryTerminate()`      | 检查是否所有线程都结束，关闭池 |
-
-这些方法共同维持线程池的生命周期。
-
-------
-
-##  五、任务执行的核心循环（源码简化版）
-
-```
-final void runWorker(Worker w) {
-    Runnable task = w.firstTask;
     try {
         while (task != null || (task = getTask()) != null) {
-            w.lock(); // 防止并发中断
             try {
-                task.run(); // 执行任务
+                task.run();
             } finally {
-                w.unlock();
+                task = null;
             }
-            task = null;
         }
     } finally {
-        processWorkerExit(w, false);
+        processWorkerExit(worker, false);
     }
 }
 ```
 
-当线程执行完任务后，会去队列中取下一个任务；
- 如果等待超时且线程数超过核心数，就销毁线程。
+真实源码比这复杂得多，但主干逻辑就是：先执行初始任务，然后不断从队列里取任务，直到取不到任务或线程池需要退出。
 
-------
+## 四、execute 的执行流程
 
-##  六、线程池的生命周期管理
+调用 `execute(Runnable command)` 后，线程池大致按下面流程处理：
 
-| 方法                 | 作用                                     |
-| -------------------- | ---------------------------------------- |
-| `shutdown()`         | 不再接收新任务，执行完队列中的任务后关闭 |
-| `shutdownNow()`      | 尝试中断正在执行的任务                   |
-| `awaitTermination()` | 阻塞等待线程池关闭完成                   |
-
-------
-
-##  七、可视化总结图
-
-```
-                ┌──────────────┐
-  execute() --> │ workQueue    │
-                └────┬─────────┘
-                     │ poll()
-                     ▼
-                ┌──────────────┐
-                │ Worker(Thread)│
-                └────┬─────────┘
-                     │ run()
-                     ▼
-             [ task.run() ]
-                     │
-                     ▼
-                ┌──────────────┐
-                │ processWorkerExit()│
-                └──────────────┘
+```text
+execute(command)
+ -> 如果工作线程数 < corePoolSize
+      -> 创建核心线程执行 command
+ -> 否则尝试把 command 放入 workQueue
+      -> 入队成功后再次检查线程池状态
+      -> 如果线程池已关闭，则移除任务并执行拒绝策略
+      -> 如果没有工作线程，则补一个空任务线程
+ -> 如果入队失败
+      -> 尝试创建非核心线程执行 command
+ -> 如果创建失败
+      -> 执行拒绝策略
 ```
 
-------
+这里有两个容易被忽略的点。
 
-##  总结一句话
+第一，任务入队成功后还会再次检查线程池状态。因为入队前线程池可能还在运行，入队后可能已经被关闭。
 
-> **线程池 = 阻塞队列 + 线程集合 + 状态控制器**
->
-> - 阻塞队列负责任务的“排队与缓存”；
-> - Worker 线程负责“执行与复用”；
-> - ctl 负责“生命周期与状态同步”；
->
-> 三者配合，实现了一个高性能、可伸缩的并发执行框架。
+第二，如果任务已经入队，但工作线程数是 0，线程池会补充一个不带初始任务的 Worker，让它去队列中取任务执行。
+
+## 五、getTask 如何取任务
+
+`getTask()` 负责从队列中取任务，并决定当前 Worker 是否应该退出。
+
+核心判断包括：
+
+- 线程池是否已经进入 `STOP`。
+- 线程池是否是 `SHUTDOWN` 且队列已经为空。
+- 当前线程数是否超过 `maximumPoolSize`。
+- 当前线程是否允许超时退出。
+
+对于核心线程，默认会一直阻塞等待任务。对于超过核心线程数的非核心线程，如果空闲时间超过 `keepAliveTime`，就会退出。
+
+如果调用了 `allowCoreThreadTimeOut(true)`，核心线程空闲超时后也可以退出。
+
+## 六、任务队列的影响
+
+不同队列会改变线程池行为：
+
+- 使用无界队列时，任务通常会一直入队，线程数很难超过 `corePoolSize`。
+- 使用有界队列时，队列满后线程池才会继续扩容到 `maximumPoolSize`。
+- 使用 `SynchronousQueue` 时，任务不能排队，必须直接交给工作线程，因此更容易创建新线程。
+
+这就是为什么线程池参数不能孤立理解。`maximumPoolSize` 是否生效，很大程度取决于 `workQueue`。
+
+## 七、关闭流程
+
+`shutdown()` 和 `shutdownNow()` 的差异在于是否继续处理队列任务：
+
+| 方法 | 行为 |
+| --- | --- |
+| `shutdown()` | 不再接收新任务，继续执行已提交和队列中的任务 |
+| `shutdownNow()` | 不再接收新任务，尝试中断正在执行的任务，并返回队列中尚未执行的任务 |
+| `awaitTermination()` | 等待线程池进入终止状态 |
+
+线程池不会粗暴杀死线程。`shutdownNow()` 也只是调用中断，任务是否能停下来，取决于任务本身是否响应中断。
+
+## 八、钩子方法
+
+`ThreadPoolExecutor` 提供了几个扩展点：
+
+```java
+protected void beforeExecute(Thread t, Runnable r) {
+}
+
+protected void afterExecute(Runnable r, Throwable t) {
+}
+
+protected void terminated() {
+}
+```
+
+它们常用于统计耗时、记录异常、清理上下文等工作。需要注意的是，如果任务通过 `submit` 提交，异常会被封装进 `Future`，`afterExecute` 的 `Throwable` 参数可能是 `null`，需要额外从 `Future` 中取出异常。
+
+## 九、总结
+
+`ThreadPoolExecutor` 的本质是：
+
+- 用 `ctl` 原子维护线程池状态和线程数量。
+- 用 `workQueue` 缓冲等待执行的任务。
+- 用 `Worker` 循环执行任务并复用线程。
+- 用拒绝策略处理超过承载能力的任务。
+
+理解这几件事以后，线程池的很多行为就不再神秘。所谓源码，拆开以后也只是几个边界条件被小心地放在一起。只是小心这种东西，恰好最不应该省。

@@ -1,10 +1,10 @@
 +++
 date = '2026-02-17T23:51:31+08:00'
 draft = false
-title = 'stream 是惰性的，对空集的操作'
+title = 'Stream 的惰性执行和空集合'
 +++
 
-今天我们来看一下 Java `Stream` 的懒操作
+今天来看一下 Java `Stream` 的惰性执行，以及空集合进入 Stream 流水线时会发生什么。
 
 ### 一、Stream 的懒操作到底是什么？
 
@@ -99,7 +99,43 @@ list.stream()
 
 **后面的元素完全不会执行**
 
-### 三、为什么懒操作能提高性能？
+### 三、空集合会怎样？
+
+空集合创建出来的 Stream 仍然是一条合法流水线。中间操作依然不会立即执行，终止操作触发后，因为没有元素，`filter`、`map` 这类按元素执行的逻辑一次都不会运行。
+
+```java
+List<Integer> list = List.of();
+
+List<Integer> result = list.stream()
+    .filter(x -> {
+        System.out.println("filter " + x);
+        return x > 10;
+    })
+    .map(x -> {
+        System.out.println("map " + x);
+        return x * 2;
+    })
+    .toList();
+
+System.out.println(result); // []
+```
+
+这段代码不会打印 `filter` 或 `map`，最后得到空列表。
+
+常见终止操作在空 Stream 上的结果如下：
+
+| 操作 | 空 Stream 结果 |
+| --- | --- |
+| `count()` | `0` |
+| `toList()` | 空列表 |
+| `findFirst()` | `Optional.empty()` |
+| `anyMatch(...)` | `false` |
+| `allMatch(...)` | `true` |
+| `noneMatch(...)` | `true` |
+
+`allMatch` 在空集合上返回 `true` 可能不太直观。它的含义是“是否不存在违反条件的元素”。空集合里确实没有任何元素违反条件，所以结果为 `true`。
+
+### 四、为什么懒操作能提高性能？
 
 #### 避免无用计算（短路能力）
 
@@ -161,7 +197,7 @@ l1.stream()
 
 **不会产生 5 次遍历**
 
-JVM 会把它们**融合成一次遍历**。等价于：
+Stream 的执行框架会把这些中间操作组织到同一次遍历里。等价于：
 
 ```java
 for (T t : source) {

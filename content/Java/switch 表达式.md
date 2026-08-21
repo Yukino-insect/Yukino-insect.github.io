@@ -22,7 +22,7 @@ switch (status) {
 
 老版本的 switch 必须 `break`，否则会把所有分支都执行一遍。并且 case 只能写常量（编译期常量），比如 `int/char/enum/String`，但不能是范围、不能是条件表达式。
 
-而到了 Java 17+ 的版本。
+从 Java 14 开始，switch 表达式正式成为标准特性。到了 Java 17，这套写法已经可以稳定使用。
 
 switch 可以使用 `->` 箭头 case，这时就可以不写 `break`
 
@@ -36,7 +36,7 @@ switch (op) {
 
 > 注意，如果不写 `->` 的话，是需要写 break 的。
 
-switch 在 Java 17+ 支持产出一个值。
+switch 表达式可以产出一个值。
 
 ```java
 int score = switch (level) {
@@ -48,7 +48,7 @@ int score = switch (level) {
 
 `case HIGH -> 3` 这种写法的意思就是，当 level 是 HIGH 时，这个 switch 表达式的值就是 3。
 
-> 如果我们单独这样写 
+> 如果单独这样写：
 >
 > ```java
 > switch (level) {
@@ -58,7 +58,7 @@ int score = switch (level) {
 > };
 > ```
 >
->  **Java 里通常是不合法/没意义的**。因为它既没有被赋值，也没有被 return
+> 这在 Java 里是不合法的。`case HIGH -> 3` 这样的分支产出了值，但整个 switch 表达式没有被赋值、返回或作为表达式使用。
 
 支持多个 case 合并
 

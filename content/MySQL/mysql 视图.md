@@ -1,133 +1,162 @@
 +++
 date = '2026-02-19T12:33:48+08:00'
 draft = false
-title = 'mysql 视图'
+title = 'MySQL 视图'
 +++
 
-## 一、什么是 MySQL 视图？
+视图是数据库中保存好的查询定义。它本身通常不存储数据，查询视图时，MySQL 会把视图展开成底层 SQL 执行。
 
-**视图是一个保存好的 SQL 查询，本身不存数据，每次访问时动态执行底层 SQL。**
+可以把视图理解成：**给复杂 SQL 起了一个数据库层面的名字。**
 
-```sql
-CREATE VIEW v_user_order AS
-SELECT u.id, u.name, o.amount
-FROM user u
-JOIN orders o ON u.id = o.user_id;
-```
+## 一、创建视图
 
-之后就可以像查表一样：
-
-```java
-SELECT * FROM v_user_order;
-```
-
-## 二、视图 ≠ 表
-
-| 对比项     | 表   | 视图     |
-| ---------- | ---- | -------- |
-| 是否存数据 | 是   | 否       |
-| 是否占空间 | 是   | 几乎不占 |
-| 是否实时   | 否   | 是       |
-| 是否可更新 | 是   | 有条件   |
-| 本质       | 数据 | SQL 封装 |
-
-**视图 = SQL 的别名 + 封装**
-
-## 三、为什么要用视图？
-
-### 简化复杂 SQL
-
-可能写过这种 SQL：
+示例：
 
 ```sql
-SELECT year, xzcd, SUM(amount)
-FROM vt_dr_szyfq_jslcg_b
-WHERE year BETWEEN 2015 AND 2020
-GROUP BY year, xzcd;
+create view v_user_order as
+select
+  u.id as user_id,
+  u.username,
+  o.id as order_id,
+  o.amount
+from user u
+join orders o on o.user_id = u.id;
 ```
 
-如果被 **N 个接口 / 报表复用**：
+之后可以像查询表一样查询视图：
 
 ```sql
-CREATE VIEW v_water_year_xzcd AS
-SELECT year, xzcd, SUM(amount) total_amount
-FROM vt_dr_szyfq_jslcg_b
-GROUP BY year, xzcd;
+select *
+from v_user_order
+where amount > 100;
 ```
 
-以后只查视图：
+视图隐藏了底层 join 细节，但不改变数据实际存放位置。
+
+## 二、视图和表的区别
+
+| 对比项 | 表 | 视图 |
+| ------ | -- | ---- |
+| 是否存储数据 | 存储 | 通常不存储 |
+| 是否占用大量空间 | 会 | 通常很少 |
+| 数据来源 | 自身数据页 | 底层查询 |
+| 是否可更新 | 可以 | 有条件 |
+| 主要价值 | 持久化数据 | 封装查询、统一口径、权限隔离 |
+
+视图不是临时表，也不是缓存。普通视图不会因为创建出来就提前把结果算好。
+
+## 三、为什么使用视图
+
+视图的价值主要体现在结构治理上：复用复杂 SQL、隔离权限、统一字段命名和统计口径。它解决的是“查询定义到处散落”的问题，而不是替代索引或缓存。
+
+## 四、简化复杂 SQL
+
+如果多个接口都要复用同一段复杂 SQL：
 
 ```sql
-SELECT * FROM v_water_year_xzcd WHERE year >= 2018;
+select year, xzcd, sum(amount) as total_amount
+from water_stat
+where year between 2015 and 2020
+group by year, xzcd;
 ```
 
-少写 SQL；少出错；逻辑集中
-
-### 权限隔离
-
-**不给用户表权限，只给视图权限**
+可以封装成视图：
 
 ```sql
-GRANT SELECT ON v_water_year_xzcd TO 'report_user';
+create view v_water_year_xzcd as
+select year, xzcd, sum(amount) as total_amount
+from water_stat
+group by year, xzcd;
 ```
 
-用户：
-
-- 看不到原始表
-- 看不到敏感字段
-- 只能查你允许的结果
-
-**这是视图的一个官方用途**
-
-### 统一字段口径
-
-后端经常遇到：
-
-- 表字段名乱
-- 多表 join 规则复杂
-
-用视图统一：
+查询时：
 
 ```sql
-CREATE VIEW v_order_simple AS
-SELECT
-  o.id AS orderId,
-  u.name AS userName,
+select *
+from v_water_year_xzcd
+where year >= 2018;
+```
+
+这样可以减少重复 SQL，让统计口径集中维护。
+
+## 五、权限隔离
+
+视图可以限制用户只能看到某些列或某些过滤后的数据。
+
+例如只暴露报表字段：
+
+```sql
+create view v_user_report as
+select id, username, create_time
+from user
+where deleted = 0;
+```
+
+授权：
+
+```sql
+grant select on v_user_report to 'report_user'@'%';
+```
+
+这样报表用户不需要直接访问原始用户表，也看不到敏感字段。
+
+## 六、统一字段口径
+
+老系统里经常出现字段名混乱、join 规则分散的问题。视图可以在数据库层提供统一出口：
+
+```sql
+create view v_order_simple as
+select
+  o.id as order_id,
+  u.username as user_name,
   o.amount,
   o.create_time
-FROM orders o
-JOIN user u ON o.user_id = u.id;
+from orders o
+join user u on u.id = o.user_id;
 ```
 
-## 四、视图能不能 UPDATE / INSERT？
+对外统一查 `v_order_simple`，比每个地方手写一遍 join 更稳定。
 
-**有条件可以，大多数复杂视图不行**
+## 七、视图能不能更新
 
-## 五、视图性能如何？会不会慢？
+简单视图在满足条件时可以更新，例如只来源于单表、没有聚合、没有分组、没有 `distinct`、没有复杂表达式。
 
-MySQL 的视图：
-
-- 不缓存结果
-- 每次查询 -> 展开成原 SQL
+复杂视图通常不能直接更新：
 
 ```sql
-SELECT * FROM v_xxx;
+create view v_order_stat as
+select user_id, count(*) as total
+from orders
+group by user_id;
 ```
 
-等价于：
+这个视图是聚合结果，数据库无法把“更新 total”明确映射回底层哪些订单行。
+
+实践中，视图更多用于查询封装。需要写入时，优先直接写真实表。
+
+## 八、视图性能
+
+MySQL 普通视图不是性能优化工具。
+
+查询：
 
 ```sql
-SELECT ... FROM ... JOIN ...;
+select *
+from v_user_order
+where amount > 100;
 ```
 
-### 性能结论：
+本质上仍要执行底层 SQL。视图能提高结构清晰度，但不会天然减少扫描、join 或排序成本。
 
-| 场景        | 性能          |
-| ----------- | ------------- |
-| 简单封装    | 几乎无损      |
-| 多表 + 聚合 | 和原 SQL 一样 |
-| 大表高频    | 要谨慎        |
+性能要点：
 
-**视图不是性能优化工具，是结构优化工具**
+1. 底层表索引仍然重要。
+2. 视图嵌套过深会降低可读性和排查效率。
+3. 复杂聚合视图高频查询时，要考虑汇总表或物化方案。
+4. 查询视图也要看 `EXPLAIN`。
 
-**MySQL 视图本质是 SQL 的封装，用来简化复杂查询、隔离权限、统一数据口径，不存数据、不提升性能，大多数情况下是只读的。**
+## 九、总结
+
+MySQL 视图适合封装复杂查询、统一字段口径、做权限隔离。它不适合被当成缓存，也不适合幻想成“创建之后查询就一定更快”的优化手段。
+
+视图的价值主要在结构，而不是速度。

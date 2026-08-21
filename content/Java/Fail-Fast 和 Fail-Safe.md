@@ -40,9 +40,11 @@ for (String s : list) {
 
 > **Fail-Fast 是一种尽力而为的错误检测机制，用来提醒：这里的代码逻辑是错的。**
 
+注意，“尽力而为”很重要。它不保证在所有并发修改场景下都一定抛异常，因此不能把 `ConcurrentModificationException` 当成线程安全控制手段。
+
 如何在 Fail-Fast 场景下安全的修改集合
 
-可以使用 `Interator.remove()`
+可以使用 `Iterator.remove()`
 
 ```java
 Iterator<String> it = list.iterator();
@@ -70,9 +72,9 @@ list.removeAll(toRemove);
 
 ## Fail-Safe
 
-即使在出现并发修改或异常情况下，系统也**不会抛出异常**，而是尽量保证当前操作能够继续完成。
+Fail-Safe 通常指遍历时不直接基于原集合结构，而是基于快照、副本或弱一致视图，从而避免因为原集合被修改就立即抛出 `ConcurrentModificationException`。
 
-**Fail-Safe** 的核心思想就是**系统不能因为一点问题就崩溃**。
+它的核心不是“绝对安全”，而是“遍历过程尽量不被并发修改打断”。如果把它理解成不会有任何并发问题，那就太乐观了。乐观到几乎不像是在写 Java。
 
 Java 中典型的例子就是 `CopyOnWriteArrayList`
 
@@ -95,8 +97,23 @@ for (String s : list) {
 - 迭代时操作的是数组快照
 - 修改发生在副本上
 - 迭代器不感知修改
-
 - 遍历的是旧数据
-
 - 修改的是“新数据”
 - 二者互不干扰
+
+这也带来了代价：
+
+- 迭代期间看不到最新修改。
+- 每次写入都要复制数组，写多读少的场景很不合适。
+- 它适合读多写少，例如监听器列表、配置快照等。
+
+`ConcurrentHashMap` 的迭代器则是弱一致的：遍历过程中可能看到部分新数据，也可能看不到，但一般不会因为并发修改抛出 `ConcurrentModificationException`。
+
+## 总结
+
+| 类型 | 典型集合 | 遍历时修改集合 | 特点 |
+| --- | --- | --- | --- |
+| Fail-Fast | `ArrayList`、`HashMap` | 可能抛 `ConcurrentModificationException` | 尽早暴露错误，但不保证一定检测到 |
+| Fail-Safe / 弱一致 | `CopyOnWriteArrayList`、`ConcurrentHashMap` | 通常不抛该异常 | 依赖快照或弱一致视图，有可见性和性能取舍 |
+
+写普通集合时，遍历过程中需要删除元素，优先用 `Iterator.remove()` 或先收集再批量删除。写并发集合时，要先想清楚读写比例和一致性要求，再选择具体实现。

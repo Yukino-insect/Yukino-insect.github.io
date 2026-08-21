@@ -217,7 +217,17 @@ async function submit() {
 - 能局部管理就不要放全局。
 - 组件卸载时清理外部资源。
 
-## 十、练习
+## 十、响应式排错思路
+
+当页面没有按预期更新时，先检查三件事：
+
+- 这个值是不是响应式数据，比如 `ref`、`reactive`、`computed`。
+- 在 `<script setup>` 中是否忘了 `.value`。
+- 是否把 `reactive` 对象解构成了普通变量。
+
+响应式问题不要靠猜。沿着“源状态 -> 派生状态 -> 模板使用”的链路查，通常很快就能看到哪里断了。
+
+## 十一、练习讲解：实现搜索列表
 
 实现一个搜索列表：
 
@@ -228,3 +238,174 @@ async function submit() {
 - 页面挂载时加载列表。
 
 这一套组合起来，就是大量真实页面的基本骨架。
+
+### 1. 运行步骤
+
+```bash
+npm create vite@latest vue-reactivity-demo -- --template vue-ts
+cd vue-reactivity-demo
+npm install
+npm run dev
+```
+
+### 2. 替换 `src/App.vue`
+
+```vue
+<script setup lang="ts">
+import { computed, onMounted, ref, watch } from 'vue'
+
+type PostCard = {
+  id: number
+  title: string
+  summary: string
+  tags: string[]
+}
+
+const STORAGE_KEY = 'vue-course-keyword'
+
+const keyword = ref(localStorage.getItem(STORAGE_KEY) ?? '')
+const loading = ref(false)
+const posts = ref<PostCard[]>([])
+
+const filteredPosts = computed(() => {
+  const text = keyword.value.trim().toLowerCase()
+  if (!text) {
+    return posts.value
+  }
+
+  return posts.value.filter((post) => {
+    return post.title.toLowerCase().includes(text)
+      || post.summary.toLowerCase().includes(text)
+      || post.tags.some((tag) => tag.toLowerCase().includes(text))
+  })
+})
+
+watch(keyword, (value) => {
+  localStorage.setItem(STORAGE_KEY, value)
+})
+
+async function loadPosts() {
+  loading.value = true
+  try {
+    await new Promise((resolve) => window.setTimeout(resolve, 400))
+    posts.value = [
+      {
+        id: 1,
+        title: 'ref 和 reactive 怎么选',
+        summary: '基础类型优先 ref，需要整体替换的数据也适合 ref。',
+        tags: ['vue', 'reactivity']
+      },
+      {
+        id: 2,
+        title: 'computed 不是 watch 的替代品',
+        summary: 'computed 表达派生数据，watch 处理副作用。',
+        tags: ['computed', 'watch']
+      },
+      {
+        id: 3,
+        title: '组合函数如何复用加载状态',
+        summary: '组合函数可以包含响应式状态和业务动作。',
+        tags: ['composable', 'loading']
+      }
+    ]
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(() => {
+  loadPosts()
+})
+</script>
+
+<template>
+  <main class="page">
+    <h1>响应式搜索列表</h1>
+
+    <input v-model="keyword" placeholder="搜索标题、摘要或标签" />
+
+    <p v-if="loading" class="state">加载中...</p>
+    <p v-else-if="filteredPosts.length === 0" class="state">没有匹配文章</p>
+
+    <section v-else class="list">
+      <article v-for="post in filteredPosts" :key="post.id" class="card">
+        <h2>{{ post.title }}</h2>
+        <p>{{ post.summary }}</p>
+        <div class="tags">
+          <span v-for="tag in post.tags" :key="tag">{{ tag }}</span>
+        </div>
+      </article>
+    </section>
+  </main>
+</template>
+
+<style scoped>
+.page {
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 32px 20px;
+}
+
+h1 {
+  margin: 0 0 16px;
+}
+
+input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 16px;
+}
+
+.state {
+  margin-top: 18px;
+  color: #64748b;
+}
+
+.list {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.card {
+  padding: 18px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+h2 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+
+p {
+  margin: 0 0 12px;
+  color: #475569;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tags span {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #e0f2fe;
+  color: #0369a1;
+  font-size: 13px;
+}
+</style>
+```
+
+### 3. 实现步骤说明
+
+1. `posts` 保存接口返回的原始列表，后续可以整体替换，所以使用 `ref<PostCard[]>([])`。
+2. `filteredPosts` 是派生数据，用 `computed`，不再额外维护一份搜索结果。
+3. `watch(keyword, ...)` 只负责写入本地存储，这是副作用。
+4. `onMounted(loadPosts)` 模拟页面首次进入时加载数据。
+5. 刷新页面后，搜索关键字能从 `localStorage` 恢复。

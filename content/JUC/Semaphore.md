@@ -4,92 +4,113 @@ draft = false
 title = 'Semaphore'
 +++
 
-用来**限制同一时间访问某个资源的线程数量**
+`Semaphore` 是信号量，用来控制同一时间访问某个资源的线程数量。它维护一组许可，线程执行前先获取许可，执行完再释放许可。
 
-核心方法
+## 一、核心方法
 
-- `acquire()` 获取一个许可，若无可用则阻塞等待
-- `acquire(int permits)` 一次获取多个许可
-- `tryAcquire()` 尝试获取，不阻塞，会返回 `true/false`
-- `tryAcquire(long timeout, TimeUnit unit)` 显示等待获取许可
-- `release()` 释放一个许可
-- `availablePermits()` 返回当前可用许可
-- `drainPermits()` 一次性拿走所有许可
+| 方法 | 作用 |
+| --- | --- |
+| `acquire()` | 获取一个许可，没有许可时阻塞等待 |
+| `acquire(int permits)` | 一次获取多个许可 |
+| `tryAcquire()` | 尝试获取许可，失败立即返回 `false` |
+| `tryAcquire(timeout, unit)` | 在指定时间内尝试获取许可 |
+| `release()` | 释放一个许可 |
+| `availablePermits()` | 查看当前可用许可数 |
+| `drainPermits()` | 一次性取走所有可用许可 |
 
-示例
+许可数量可以理解为并发上限。创建 `new Semaphore(3)`，就表示最多允许 3 个线程同时进入被保护的区域。
+
+## 二、限制并发数
 
 ```java
-public class SemaphoreDemo {
+Semaphore semaphore = new Semaphore(3);
+ExecutorService executor = Executors.newFixedThreadPool(10);
 
-    private static final Semaphore semaphore = new Semaphore(3); 
-    
-    public static void main(String[] args) {
-        
-        for (int i = 0; i < 10; i++) {
-            final int finalI = i;
-            new Thread(() -> {
-                try {
-                    semaphore.acquire();
-                    System.out.println("acquire semaphore");
-                    System.out.println(Thread.currentThread().getName() + " execute " + finalI);
-                    Thread.sleep(2000);
-                } catch (Exception e) {
-
-                } finally {
-                    semaphore.release();
-                    System.out.println("task finish and release semaphore");
-                }
-            }).start();
+for (int i = 0; i < 10; i++) {
+    int taskId = i;
+    executor.execute(() -> {
+        boolean acquired = false;
+        try {
+            semaphore.acquire();
+            acquired = true;
+            System.out.println("task " + taskId + " running");
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } finally {
+            if (acquired) {
+                semaphore.release();
+            }
         }
-    }
+    });
 }
+
+executor.shutdown();
 ```
 
-我们可以看到，控制台上每次只有 3 个线程可以执行任务
+`release()` 应该放在 `finally` 中。否则任务异常退出后许可不归还，后续线程可能一直等待。
 
-也可以尝试获取许可
+## 三、尝试获取许可
+
+如果不想一直阻塞，可以使用 `tryAcquire`：
 
 ```java
 if (semaphore.tryAcquire()) {
     try {
-        System.out.println("成功获取许可，执行任务");
+        doBusiness();
     } finally {
         semaphore.release();
     }
 } else {
-    System.out.println("当前无许可可用，放弃执行");
+    System.out.println("too many requests");
 }
 ```
 
-也可以选择设置等待时间，而不是立即返回失败
+也可以设置等待时间：
 
 ```java
 if (semaphore.tryAcquire(2, TimeUnit.SECONDS)) {
     try {
-        System.out.println("在2秒内拿到了许可");
+        doBusiness();
     } finally {
         semaphore.release();
     }
 } else {
-    System.out.println("2秒超时仍未拿到许可");
+    System.out.println("timeout");
 }
 ```
 
-`Semaphore` 支持公平锁和非公平锁
+这种方式适合做本地并发保护：拿不到许可就快速失败、降级或稍后重试。
+
+## 四、公平和非公平
+
+`Semaphore` 默认是非公平的：
+
+```java
+Semaphore semaphore = new Semaphore(3);
+```
+
+也可以创建公平信号量：
 
 ```java
 Semaphore semaphore = new Semaphore(3, true);
 ```
 
-> 默认 `false` 非公平，后来的线程可能插队，吞吐量更高；`true` 公平，按线程申请顺序排队，吞吐量低，但更公平
+公平模式会尽量按线程等待顺序发放许可，避免后来线程插队；非公平模式吞吐量通常更高。普通业务更常用非公平模式，除非确实需要严格排队。
 
-接下来对比下 `Semaphore` 和其他限流手段
+## 五、和限流的区别
 
-| 限流方式              | 作用范围  | 精度     | 是否分布式 | 优点                   | 缺点               |
-| --------------------- | --------- | -------- | ---------- | ---------------------- | ------------------ |
-| **Semaphore**         | 单JVM本地 | 并发数级 | 否         | 简单高效、轻量         | 无法跨实例全局限流 |
-| **Guava RateLimiter** | 单JVM本地 | QPS级    | 否         | 支持速率限制、平滑突发 | 精度较粗           |
-| **Sentinel / Redis**  | 分布式    | QPS级    | 是         | 可动态调整限流规则     | 依赖外部组件       |
-| **Nginx / Gateway**   | API网关层 | 请求速率 | 是         | 统一控制入口           | 配置复杂           |
+`Semaphore` 限制的是**同时运行的并发数**，不是单位时间内的请求数。
 
-> 因此，`Semaphore` 适合**保护内部资源**（线程池、数据库连接、文件IO等）
+| 工具 | 控制目标 | 是否分布式 |
+| --- | --- | --- |
+| `Semaphore` | 本 JVM 内同时执行的任务数 | 否 |
+| Guava `RateLimiter` | 本 JVM 内每秒通过的请求速率 | 否 |
+| Redis / Sentinel | 多实例间的全局流量或并发 | 可以 |
+| 网关限流 | 入口请求速率 | 可以 |
+
+如果要保护本地资源，例如文件句柄、第三方 SDK、单机连接池，`Semaphore` 很合适。如果要做多实例全局限流，它就不够了。
+
+## 六、总结
+
+`Semaphore` 适合控制并发访问数量。它不关心线程是谁，也不关心任务顺序，只关心还有没有许可。使用时记住一件事：获取许可和释放许可必须成对出现，否则问题迟早会来，而且多半挑你最忙的时候来。

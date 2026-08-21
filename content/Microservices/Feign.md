@@ -1,367 +1,203 @@
 +++
 date = '2025-10-03T00:46:36+08:00'
 draft = false
-title = 'Feign'
+title = 'OpenFeign 服务调用'
 +++
 
-在传统的**单体应用**中，所有模块在同一个项目中，方法调用就是本地方法调用，速度快，但耦合度高。
+在单体应用中，模块之间通常是本地方法调用。拆成微服务后，订单、库存、用户、支付这些模块可能运行在不同进程、不同机器甚至不同网络里，调用方式就变成了远程调用。
 
-而**微服务**将每个模块拆分成独立的服务，部署在不同的服务器上，模块之间的调用不再是方法调用，而是远程调用。所以必须有一套**服务发现**和**调用机制**
+OpenFeign 的价值在于：**把 HTTP 调用声明成 Java 接口，让调用方像调用本地方法一样调用远程服务**。它并没有消除网络调用的成本，只是把 URL 拼接、请求编码、响应解码、负载均衡、拦截器等细节交给框架统一处理。
 
-### 微服务之间的调用方式
+## 服务调用方式
 
-#### HTTP REST 调用
+微服务之间常见调用方式有三类。
 
-最常见的方式，提供 REST API，服务之间通过 `HTTP` 调用
+### HTTP REST
 
-#### RPC 调用
+HTTP REST 最通用，调试简单，适合大多数业务系统。Spring Cloud OpenFeign 就是声明式 HTTP 客户端。
 
-常见的实现有 **gRPC/Dubbo**
+### RPC
 
-服务之间基于二进制协议进行调用，效率比 HTTP 高
+Dubbo、gRPC 这类 RPC 框架通常使用更紧凑的协议和更明确的接口契约，性能和类型约束更强，但技术栈绑定也更明显。
 
-#### 消息队列异步调用
+### 消息队列
 
-通过消息中间件（Kafka/RabbitMQ、RocketMQ），服务之间实现异步解耦
+Kafka、RabbitMQ、RocketMQ 用于异步解耦。它适合事件通知、削峰、最终一致性，不适合要求调用方立刻拿到结果的查询链路。
 
-> 例如 ：
->
-> OrderService 下单 -> 发送 `order_created` 消息
->
-> InventoryService 订阅消息 -> 扣减库存
+## OpenFeign 是什么
 
-### 微服务调用的关键组件
+几个名字容易混在一起：
 
-在 Spring Cloud 微服务体系中，除了服务调用组件，还有以下关键的组件，一起实现微服务的核心功能
+- Feign：Netflix 的声明式 HTTP 客户端项目。
+- OpenFeign：社区延续维护的 Feign。
+- Spring Cloud OpenFeign：Spring Cloud 对 OpenFeign 的集成，支持 Spring MVC 注解、自动装配、服务发现和负载均衡。
 
-**注册中心（Eureka、Nacos、Consul）**
+在 Spring Cloud 项目里，日常说“Feign”通常就是指 Spring Cloud OpenFeign。
 
-- 每个服务启动时注册到注册中心
-- 其他服务通过服务名去注册中心获取实例地址
+## 基本使用
 
-**服务调用（RestTemplate / Feign / gRPC）**
+调用方先启用 Feign 扫描：
 
-- 客户端调用另一个服务时，不需要写死 IP，而是用服务名
-- 负载均衡器（Ribbon / Spring Cloud LoadBalancer）会选择一台实例
+```java
+@EnableFeignClients
+@SpringBootApplication
+public class OrderApplication {
+}
+```
 
-**配置中心（Nacos / Apollo / Spring Cloud Config）**
+然后声明远程接口：
 
-- 服务调用时可能依赖一些公共配置（比如超时时间、服务地址），统一管理
+```java
+@FeignClient(name = "user-service", path = "/api/users")
+public interface UserClient {
 
-**网关（Spring Cloud Gateway / Nginx）**
+    @GetMapping("/{id}")
+    UserDTO getUser(@PathVariable("id") Long id);
+}
+```
 
-- 对外统一入口
-- 内部调用可以绕过网关直连，也可以统一走网关
+业务代码中直接注入：
 
-> 假设有 **订单服务 (OrderService)** 和 **用户服务 (UserService)**：
->
-> 1. UserService 启动 -> 注册到 **Nacos**，服务名 `user-service`
-> 2. OrderService 需要调用 `user-service` -> 向 Nacos 请求 `user-service` 的实例列表
-> 3. Ribbon / LoadBalancer 挑选一台 `user-service` 实例
-> 4. 通过 HTTP/Feign 调用 `http://user-service/users/{id}`
-> 5. UserService 返回数据 -> OrderService 处理
+```java
+@Service
+public class OrderService {
 
-这里，我们只详细介绍一下**服务调用功能**
+    private final UserClient userClient;
 
-常用的服务调用客户端有 **RestTemplate、Feign、OpenFeign**
+    public OrderService(UserClient userClient) {
+        this.userClient = userClient;
+    }
 
-- **RestTemplate**：Spring 提供的 **命令式 HTTP 客户端**（自己写 URL、自己发请求、自己解析响应）。
-- **Feign**：Netflix 开源的 **声明式 HTTP 客户端**（用接口+注解声明 HTTP 调用）。
-- **OpenFeign**：社区维护的 Feign 分支；
-- **Spring Cloud OpenFeign**：把 **OpenFeign 深度集成到 Spring 生态**（支持 Spring MVC 注解、自动装配、与 Spring Cloud 组件协同）。
+    public OrderDetail getOrderDetail(Long orderId) {
+        Order order = findOrder(orderId);
+        UserDTO user = userClient.getUser(order.getUserId());
+        return OrderDetail.of(order, user);
+    }
+}
+```
 
-> 从 Spring 6 开始，官方推荐新项目使用 **RestClient**（取代 RestTemplate 的新 API）。RestTemplate 仍可用，但基本进入维护模式。
+这里的 `name = "user-service"` 通常对应注册中心里的服务名。调用时，Spring Cloud LoadBalancer 会根据服务名获取实例列表并选择一个实例。
 
-#### RestTemplate（命令式客户端）
+## 与 RestTemplate 的区别
 
-基本使用
+`RestTemplate` 是命令式 HTTP 客户端，需要手写 URL、参数、响应类型和错误处理。
+
+```java
+UserDTO user = restTemplate.getForObject(
+    "http://user-service/api/users/{id}",
+    UserDTO.class,
+    userId
+);
+```
+
+OpenFeign 则把这些信息收敛到接口声明上。
+
+```java
+@GetMapping("/{id}")
+UserDTO getUser(@PathVariable("id") Long id);
+```
+
+如果只是少量内部调用，`RestTemplate` 或 `RestClient` 也可以工作；如果服务之间有大量稳定接口，OpenFeign 更利于统一管理调用契约、拦截器、超时、日志和降级。
+
+## 负载均衡
+
+OpenFeign 通常配合注册中心和 Spring Cloud LoadBalancer 使用。调用 `http://user-service` 这类服务名时，负载均衡器会从可用实例中选择一个。
+
+常见策略：
+
+- 轮询：按顺序把请求分配给实例，简单稳定。
+- 随机：随机选择实例，实现简单。
+- 权重：根据实例配置的权重分配流量。
+- 一致性哈希：根据用户 ID、租户 ID 等 key 固定路由到特定实例。
+
+默认策略适合实例能力接近、请求耗时接近的服务。若实例规格不同，或者存在灰度版本、租户隔离、粘性路由，就需要定制负载均衡策略。
+
+## 超时与重试
+
+远程调用一定要设置超时。没有超时的调用会拖垮线程池，进而把一个下游故障扩散成上游故障。
+
+```yaml
+spring:
+  cloud:
+    openfeign:
+      client:
+        config:
+          default:
+            connectTimeout: 2000
+            readTimeout: 5000
+```
+
+重试要谨慎。查询类接口通常可以重试，创建订单、扣款、发券这类写接口必须先确认幂等能力，否则重试可能造成重复写入。
+
+## 日志配置
+
+Feign 内置四种日志级别：
+
+| 级别 | 含义 |
+| --- | --- |
+| `NONE` | 不打印日志 |
+| `BASIC` | 记录请求方法、URL、响应状态和耗时 |
+| `HEADERS` | 在 `BASIC` 基础上记录请求头和响应头 |
+| `FULL` | 记录请求和响应的完整内容 |
+
+生产环境建议默认使用 `BASIC`，排障时再临时打开 `FULL`。全量日志可能输出请求体、响应体和敏感字段，不能长期无差别开启。
+
+```yaml
+logging:
+  level:
+    com.example.client: DEBUG
+
+spring:
+  cloud:
+    openfeign:
+      client:
+        config:
+          default:
+            loggerLevel: basic
+```
+
+## 拦截器
+
+Feign 拦截器常用于透传鉴权信息、租户信息和链路追踪 ID。
 
 ```java
 @Bean
-@LoadBalanced  // 可选：让它支持服务名 + 负载均衡
-public RestTemplate restTemplate() {
-  return new RestTemplate();
+public RequestInterceptor requestInterceptor() {
+    return template -> {
+        ServletRequestAttributes attrs =
+            (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+
+        if (attrs == null) {
+            return;
+        }
+
+        HttpServletRequest request = attrs.getRequest();
+        copyHeader(request, template, "Authorization");
+        copyHeader(request, template, "X-Trace-Id");
+        copyHeader(request, template, "X-Tenant-Id");
+    };
 }
 
-// 使用
-UserDTO dto = restTemplate.getForObject("http://user-service/api/users/{id}", UserDTO.class, 1001L);
-```
-
-#### Feign / OpenFeign（声明式客户端）
-
-Feign vs OpenFeign vs Spring Cloud OpenFeign
-
-- **Feign**：Netflix 原项目（后来停更）。
-- **OpenFeign**：社区延续维护的 Feign。
-- **Spring Cloud OpenFeign**：在 Spring 里“开箱即用”的集成包：
-  - 让接口方法直接用 **Spring MVC 注解**（`@GetMapping` 等）；
-  - 与 **Spring Cloud LoadBalancer**、**Nacos/Eureka**、**Resilience4j** 等无缝协同；
-  - 支持 Bean 注入、拦截器、配置隔离等。
-
-> 在 Spring Cloud 体系里，说“Feign”基本就是指 **Spring Cloud OpenFeign**。
-
-基本用法
-
-```java
-@EnableFeignClients // 启用 Feign 扫描
-@SpringBootApplication
-public class App {
-    
-}
-
-@FeignClient(name = "user-service") // 服务名，可自动负载均衡
-public interface UserClient {
-  @GetMapping("/api/users/{id}")
-  UserDTO get(@PathVariable("id") Long id);
-}
-
-// 调用
-@Autowired UserClient userClient;
-UserDTO u = userClient.get(1001L);
-```
-
-> 在微服务里，一般会有两种角色：
->
-> - **服务提供者（Provider）**：对外暴露 REST 接口。
-> - **服务调用者（Consumer）**：通过 FeignClient 调用 Provider 的接口。
->
-> 通常做法是：
->
-> - Provider 写一个 `@RestController`，定义接口。
-> - Consumer 写一个 `@FeignClient`，再定义一模一样的方法签名。
->
-> 问题：接口定义重复了，既要写在 Controller，又要写在 Feign，维护起来容易出错。
->
-> 为了解决这个问题，我们发现 Controller 可以继承 Feign 接口
->
-> 比如这样：
->
-> **公共接口定义（API 层）：**
->
-> ```java
-> @RequestMapping("/account")
-> public interface AccountFeignClient {
-> 
->     @GetMapping("/get/{id}")
->     AccountDTO getAccountById(@PathVariable("id") Long id);
-> }
-> ```
->
-> **服务提供者（Provider）：**
->
-> ```java
-> @RestController
-> public class AccountFeignController implements AccountFeignClient {
-> 
->     @Override
->     public AccountDTO getAccountById(Long id) {
->         // 从数据库查数据返回
->         return accountService.findById(id);
->     }
-> }
-> ```
->
-> **服务调用者（Consumer）：**
->
-> ```java
-> @FeignClient(name = "account-service")
-> public interface AccountFeignClient {
->     @GetMapping("/account/get/{id}")
->     AccountDTO getAccountById(@PathVariable("id") Long id);
-> }
-> ```
->
-> 这样做实现了
->
-> **接口复用**
->
-> - Provider 只需要实现 Feign 的接口，不用再写一份重复的 `@RequestMapping`。
-> - Consumer 直接引用同一个接口，保证方法签名、路径、参数完全一致。
->
-> **统一契约**
->
-> - `AccountFeignClient` 就是“契约接口”（Contract）。
-> - Provider 必须实现它，Consumer 调用它，避免接口不一致的问题。
->
-> **减少重复代码**
->
-> - 不用在 Controller 和 FeignClient 各写一份接口。
-> - API 层抽取出来，Consumer 和 Provider 都用一份。
->
-> **IDE/编译器检查**
->
-> - 如果 Provider 的实现方法和接口不匹配，编译器会报错。
-> - 保证接口规范强一致。
->
-> #### 这种设计的典型场景
->
-> - **大型微服务系统**：通常会单独建一个 `api` module，把 Feign 接口都放在里面。
->   - Provider 实现接口
->   - Consumer 引用接口
-> - 避免接口的文档化问题，天然实现“接口即文档”。
-
-**RestTemplate** 与 **OpenFeign** 都可以接入 **Spring Cloud LoadBalancer（SCLB）**，通过注册中心（Eureka/Nacos/Consul）按“服务名”调用，并在客户端完成 **轮询/自定义策略**
-
-```java
-// RestTemplate 方式
-@Bean 
-@LoadBalanced // 使用注解
-public RestTemplate restTemplate(){ 
- return new RestTemplate();
-}
-
-// OpenFeign 方式（自动集成 SCLB）
-// 只需 @EnableFeignClients + @FeignClient(name="xxx")
-```
-
-#### 轮询
-
-**轮询**就是：把请求 **依次** 分配到可用的服务器/服务实例上，形成一种循环的调度方式。
-
-例如有 3 台服务器：
-
-- 第 1 个请求 -> Server A
-- 第 2 个请求 -> Server B
-- 第 3 个请求 -> Server C
-- 第 4 个请求 -> 再回到 Server A
-   ... 以此类推。
-
-为什么要用轮询
-
-- **简单**：实现容易，不需要复杂计算。
-- **均衡**：理论上每个实例分到的请求数相近。
-- **适合场景**：实例性能差不多、请求处理时间差不多。
-
-##### 实现方式
-
-方式一：简单计数器取模
-
-```java
-AtomicInteger counter = new AtomicInteger(0);
-
-public Server getServer(List<Server> servers) {
-    int index = counter.getAndIncrement() % servers.size();
-    return servers.get(index);
-}
-```
-
-> 每次计数器 +1，对服务器数取模，得到要选的实例。
-
-方式二：平滑加权轮询（Weighted Round Robin）
-
-有时服务器性能不同，要按权重分配流量。
- 例如：
-
-- A 权重 5
-- B 权重 3
-- C 权重 2
-   10. 个请求 -> A 处理 5 个，B 3 个，C 2 个。
-
-这样可以避免“短时间内倾斜”，分布更均匀。
-
-##### 轮询的优点
-
-- 算法简单、性能开销小；
-- 对实例数目变化（新增/下线）能快速适应；
-- 默认策略，很多框架都支持（Nginx、Ribbon、Spring Cloud LoadBalancer）。
-
-##### 缺点
-
-- **不考虑实例性能差异**：慢的机器也会分到同样的请求量；
-- **不考虑请求开销**：如果有些请求特别耗时，可能导致不均衡；
-- **无状态假设**：假设每个请求独立、服务无状态，否则“粘性”需求难满足。
-
-在微服务里的应用
-
-- **Spring Cloud LoadBalancer** 默认就是 **轮询**；
-- **Nginx upstream** 默认也是 **轮询**；
-- 如果要定制，可以换成：
-  - 随机（Random）
-  - 最小连接数（Least Connections）
-  - 一致性哈希（Consistent Hashing）
-  - 加权轮询（Weighted Round Robin）
-
-#### 日志处理
-
-Feign 内置了 4 种日志级别（枚举 `feign.Logger.Level`）：
-
-| 级别      | 说明                                                 |
-| --------- | ---------------------------------------------------- |
-| `NONE`    | 默认，不打印任何日志                                 |
-| `BASIC`   | 只记录请求方法、URL、响应状态码、执行时间            |
-| `HEADERS` | 在 BASIC 基础上，记录请求和响应头                    |
-| `FULL`    | 打印所有请求细节，包括 URL、方法、头、请求体、响应体 |
-
-Spring Cloud 会根据 **Spring Boot 的日志配置**（logback/log4j）+ `feign.Logger.Level` 来决定日志输出。
-
-##### 全局配置
-
-使用配置文件
-
-```yaml
-logging:
-  level:
-    # 你自己 Feign Client 的包路径
-    com.example.client: DEBUG
-```
-
-使用 Java
-
-```java
-@Configuration
-public class FeignLogConfig {
-    @Bean
-    Logger.Level feignLoggerLevel() {
-        return Logger.Level.FULL; // 全量日志
+private void copyHeader(HttpServletRequest request, RequestTemplate template, String name) {
+    String value = request.getHeader(name);
+    if (value != null && !value.isBlank()) {
+        template.header(name, value);
     }
 }
 ```
 
-##### 针对单个 Feigin Client 配置日志级别
+注意不要无脑透传所有 Header。`Host`、`Content-Length`、内部网关标识、用户可伪造的灰度 Header，都应该由网关或服务端可信组件控制。
 
-在配置文件中
+## 常见误区
 
-```yaml
-feign:
-  client:
-    config:
-      user-service:    # FeignClient 的 name
-        loggerLevel: FULL
-```
+1. 把 Feign 当成本地方法调用。远程调用会失败、超时、抖动，必须有超时、错误处理和观测。
+2. Controller 直接调用 Feign。更推荐封装一层 Facade 或 Domain Service，统一处理异常和返回语义。
+3. 写接口没有幂等设计。尤其是重试、熔断恢复、消息补偿都会放大这个问题。
+4. 日志开到 `FULL` 后忘记关闭。排查结束就收回，否则成本和安全风险都会上来。
+5. Provider 和 Consumer 各写一份接口。大型项目更适合抽出 `xxx-api` 契约模块。
 
-这样只有 `user-service` 的日志会打印详细信息，其他的还是默认
+## 总结
 
-Java 配置方式
+OpenFeign 解决的是“如何更规范地发起 HTTP 服务调用”，不是“远程调用就此变得可靠”。真正可靠的微服务调用，还需要服务发现、负载均衡、超时、熔断、降级、幂等、日志和链路追踪一起配合。
 
-先在配置文件中打开日志
-
-```yaml
-logging:
-  level:
-    com.example.client.UserFeignClient: DEBUG
-```
-
-然后
-
-```java
-@FeignClient(
-    name = "user-service", 
-    configuration = UserFeignConfig.class // 单独配置类
-)
-public interface UserFeignClient {
-    @GetMapping("/api/users/{id}")
-    UserDTO getUserById(@PathVariable("id") Long id);
-}
-```
-
-```java
-// 不需要写 @Configuration，否则就成了全局日志配置
-public class UserFeignConfig {
-
-    @Bean
-    public Logger.Level feignLoggerLevel() {
-        // 只针对 user-service 的 FeignClient 生效
-        return Logger.Level.FULL; 
-    }
-}
-```
+接口声明只是开始，工程约束才是重点。

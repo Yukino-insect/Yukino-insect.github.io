@@ -567,25 +567,25 @@ eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4
 - 第二部分：我们称其为载荷（payload），用户数据就存放在里面；
 - 第三部分：是签证（signature），主要用于服务端的验证；
 
-##### header
+#### header
 
 JWT的头部承载两部分信息：
 
 - 声明类型，这里是JWT；
 - 声明加密的算法，通常直接使用 HMAC SHA256；
 
-完整的头部就像下面这样的JSON：
+完整的头部就像下面这样的 JSON：
 
-```java
+```json
 {
-  'typ': 'JWT',
-  'alg': 'HS256'
+  "typ": "JWT",
+  "alg": "HS256"
 }
 ```
 
 使用 `base64` 加密，构成了第一部分。
 
-##### playload
+#### payload
 
 载荷就是存放有效信息的地方，这些有效信息包含三个部分：
 
@@ -611,7 +611,7 @@ JWT的头部承载两部分信息：
 
 定义一个 payload 后，将其进行`base64`加密，得到`Jwt`的第二部分：
 
-##### signature
+#### signature
 
 jwt 的第三部分是一个签证信息，这个签证信息由三部分组成：
 

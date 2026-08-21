@@ -1,151 +1,154 @@
 +++
 date = '2025-09-02T22:33:38+08:00'
 draft = false
-title = 'Java锁的作用'
+title = 'Java 锁的作用'
 +++
 
-1. 互斥访问：任何时刻，只有一个线程能够访问特定资源或特定代码块
-2. 内存可见性：通过锁的获取和释放，确保锁保护的代码块中对共享变量的修改对其他线程可见
-3. 保证原子性：通过锁保证代码块内的操作是原子操作
-4. 同步：协调线程间的执行顺序，保证程序的逻辑正确
+Java 中的锁用于协调多个线程对共享资源的访问。它不只是“防止同时进入一段代码”，还承担着可见性、原子性和执行顺序控制的职责。
 
-## 锁的实现
+## 一、锁解决什么问题
 
-1. synchronized 
+锁主要解决四类并发问题：
 
-   是 Java 语法层面提供的内置锁，是 JVM 支持原生并发控制机制。它不仅保证互斥访问，还保证线程之间的内存可见性
+- 互斥访问：同一时间只允许一个线程进入临界区。
+- 原子性：让一组操作作为整体执行，避免中间状态被其他线程观察或修改。
+- 可见性：释放锁前的修改，对后续获取同一把锁的线程可见。
+- 协作顺序：配合条件队列或等待通知机制，让线程按业务条件协作。
 
-   > 程序进入 synchronized 块时，线程会刷新工作内存，从内存中读取最新变量值
-   >
-   > 离开时，会把修改写回主内存
+所谓“同一把锁”很重要。如果两个线程锁的不是同一个对象，就不存在互斥和可见性保证。
 
-   ```java
-   // 方法锁
-   public synchronized void instanceMethod() {
-       // 锁住当前对象实例 this
-   }
-   
-   public static synchronized void staticMethod() {
-       // 锁住当前类对象 Class
-   }
-   ```
+## 二、synchronized
 
-   ```java
-   // 代码块锁
-   public Object lock = new Object();
-   public void method() {
-       synchronized (lock) {
-           // 只锁住 lock 对象
-       }
-   }
-   ```
+`synchronized` 是 JVM 内置锁，使用简单，退出同步块时会自动释放。
 
-2. ReentrantLock
+```java
+private final Object lock = new Object();
 
-   是 Java 类库实现的锁，相比于 synchronized，它更灵活，支持公平性、中断、条件变量，但必须手动加解锁
+public void update() {
+    synchronized (lock) {
+        doUpdate();
+    }
+}
+```
 
-   基本用法
+它适合大多数普通互斥场景。优点是语法简单、不容易忘记释放；缺点是不支持超时获取、可中断获取和公平锁配置。
 
-   ```java
-   // 1. 创建ReentrantLock对象
-   public ReentrantLock lock = new ReentrantLock();
-   public void method() {
-       // 2.获取锁
-       lock.lock(); 
-       try {
-           // 3.得到锁，执行需要同步的代码块
-       } finally {
-           // 4.释放锁
-           lock.unlock(); 
-       }
-   }
-   ```
+## 三、ReentrantLock
 
-   进阶
+`ReentrantLock` 是 JUC 提供的可重入锁，基于 AQS 实现。
 
-   ```java
-   public ReentrantLock lock = new ReentrantLock();
-   public void method() {
-       // 尝试获取锁，等待2秒，超时返回false
-       boolean locked = lock.tryLock(2, TimeUnit.SECONDS);
-       if (locked) {
-           try {
-               // 执行需要同步的代码块
-           } finally {
-               lock.unlock();
-           }
-       }
-   }
-   ```
+```java
+private final ReentrantLock lock = new ReentrantLock();
 
-3. ReentrantReadWriteLock
+public void update() {
+    lock.lock();
+    try {
+        doUpdate();
+    } finally {
+        lock.unlock();
+    }
+}
+```
 
-   在面对读多写少的情况下，使用前两种锁每次只允许一个线程执行读操作。但读操做本应允许多个线程同时执行，因此这样会导致性能下降。
+相比 `synchronized`，它提供了更多能力：
 
-   ReentrantReadWriteLock 是 Java 并发包提供的提供的可重入读写锁，用于在多线程环境下提高读操作的并发性，同时保证写操作的独占性。它比单纯的 ReentrantLock 更适合 多读少写 的场景。
+- `tryLock()`：尝试获取锁，失败立即返回。
+- `tryLock(timeout, unit)`：在指定时间内尝试获取锁。
+- `lockInterruptibly()`：等待锁时可以响应中断。
+- 公平锁：构造时传入 `true` 可以按等待顺序获取锁。
+- 多个 `Condition`：可以为一把锁创建多个等待队列。
 
-   ```java
-   class Counter {
-   
-       private ReadWriteLock lock = new ReentrantReadWriteLock();
-       private final Lock readLock = lock.readLock();
-       private final Lock writeLock = lock.writeLock();
-   
-       private int[] count = new int[10];
-   
-       public void increment(int index) {
-           writeLock.lock();
-           try {
-               count[index]++;
-           } finally {
-               writeLock.unlock();
-           }
-       }
-   
-       public int get(int index) {
-           readLock.lock();
-           try {
-               return count[index];
-           } finally {
-               readLock.unlock();
-           }
-       }
-   }
-   ```
+它的代价是必须手动释放锁，因此一定要在 `finally` 中调用 `unlock()`。
 
-4. StampedLock
+## 四、ReadWriteLock
 
-   ReentrantReadWriteLock 在写的过程中是不允许有读操作的，而 StampedLock 提供了乐观读锁。允许线程在写的过程中进行读操作，进一步提高了并发性能。
+`ReadWriteLock` 把锁拆成读锁和写锁，适合读多写少的场景。
 
-   ```java
-   class Point {
-       private final StampedLock stampedLock = new StampedLock();
-       private double x, y;
-   
-       public void move(double x, double y) {
-           long stamp = stampedLock.writeLock();
-           try {
-               this.x =+ x;
-               this.y =+ y;
-           } finally {
-               stampedLock.unlockWrite(stamp);
-           }
-       }
-   
-       public double getDistance() {
-           long stamp = stampedLock.tryOptimisticRead(); // 获取一个乐观锁
-           double x = this.x;
-           double y = this.y;
-           if (!stampedLock.validate(stamp)) {
-               stamp = stampedLock.readLock(); // 获取一个悲观锁
-               try {
-                   x = this.x;
-                   y = this.y;
-               } finally {
-                   stampedLock.unlockRead(stamp);
-               }
-           }
-           return Math.sqrt(x*x + y*y);
-       }
-   }
-   ```
+```java
+private final ReadWriteLock rwLock = new ReentrantReadWriteLock();
+private final Lock readLock = rwLock.readLock();
+private final Lock writeLock = rwLock.writeLock();
+
+public String read() {
+    readLock.lock();
+    try {
+        return value;
+    } finally {
+        readLock.unlock();
+    }
+}
+
+public void write(String newValue) {
+    writeLock.lock();
+    try {
+        value = newValue;
+    } finally {
+        writeLock.unlock();
+    }
+}
+```
+
+读写规则是：
+
+- 读锁和读锁可以共存。
+- 读锁和写锁互斥。
+- 写锁和写锁互斥。
+
+如果写操作很多，读写锁的收益会下降，甚至不如普通互斥锁简单稳定。
+
+## 五、StampedLock
+
+`StampedLock` 提供写锁、悲观读锁和乐观读。乐观读不会阻塞写线程，但读取后必须校验戳是否仍然有效。
+
+```java
+class Point {
+    private final StampedLock lock = new StampedLock();
+    private double x;
+    private double y;
+
+    public void move(double deltaX, double deltaY) {
+        long stamp = lock.writeLock();
+        try {
+            x += deltaX;
+            y += deltaY;
+        } finally {
+            lock.unlockWrite(stamp);
+        }
+    }
+
+    public double distanceFromOrigin() {
+        long stamp = lock.tryOptimisticRead();
+        double currentX = x;
+        double currentY = y;
+
+        if (!lock.validate(stamp)) {
+            stamp = lock.readLock();
+            try {
+                currentX = x;
+                currentY = y;
+            } finally {
+                lock.unlockRead(stamp);
+            }
+        }
+
+        return Math.sqrt(currentX * currentX + currentY * currentY);
+    }
+}
+```
+
+`StampedLock` 性能潜力更高，但使用复杂度也更高。它不可重入，使用时要非常谨慎。
+
+## 六、如何选择
+
+| 场景 | 建议 |
+| --- | --- |
+| 普通互斥同步 | 优先使用 `synchronized` |
+| 需要超时、可中断、公平锁 | 使用 `ReentrantLock` |
+| 读多写少 | 使用 `ReadWriteLock` |
+| 读很多、写很少且能接受复杂度 | 考虑 `StampedLock` |
+| 简单计数或状态更新 | 优先考虑原子类 |
+| 线程协作 | 优先考虑 JUC 工具类，而不是手写多锁 |
+
+## 七、总结
+
+锁的作用不是让代码看起来“线程安全”，而是明确地保护共享状态。选择锁时先问三个问题：共享资源是什么、竞争是否激烈、是否需要超时或条件队列。问题问清楚了，工具通常也就不难选。

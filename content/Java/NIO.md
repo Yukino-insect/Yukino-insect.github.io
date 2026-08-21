@@ -4,7 +4,7 @@ draft = false
 title = 'NIO'
 +++
 
-在 1.4 版本之前，Java IO 类是阻塞式的；从 1.4 版本开始，引进了新的异步 IO 库，被称为 Java New IO 类库，简称为 Java NIO
+在 JDK 1.4 之前，Java 主要使用 `java.io` 里的同步阻塞 IO。JDK 1.4 引入了 `java.nio`，也就是 Java New IO。NIO 的重点不是“异步”，而是 `Channel`、`Buffer`、`Selector` 这一套模型，它让 Java 可以更方便地使用非阻塞 IO 和 IO 多路复用。
 
 Java NIO 类库包含以下三个核心组件：
 
@@ -12,25 +12,25 @@ Java NIO 类库包含以下三个核心组件：
 - Buffer（缓冲区）
 - Selector（选择器）
 
-Java NIO 属于 IO 多路复用模型
+在网络编程中，NIO 常和 IO 多路复用一起使用；在文件操作中，NIO 也提供了 `FileChannel`、`MappedByteBuffer` 等更接近操作系统能力的 API。
 
-NIO 和传统的 IO（OIO）相比，OIO是面向流的，read() 操作总是以流的方式顺序的从一个流中读取一个或多个字符，它是顺序的，不能随意的改变读取指针的位置，也不能前后移动流中的数据。
+NIO 和传统 IO 相比，传统 IO 是面向流的，`read()` 操作通常按顺序从流中读取一个或多个字节或字符。流强调单向、顺序访问，不能像数组那样随意移动读写位置。
 
-而 NIO 引入了 Channel（通道）和 Buffer（缓冲区）的概念，读取和写入都是对缓冲区进行交互。用户程序只需要从通道中读取数据到缓冲区中，或将数据从缓冲区中写入到通道中。NIO不像OIO那样是顺序操作，可以随意地读取Buffer中任意位置的数据，可以随意修改Buffer中任意位置的数据。
+而 NIO 引入了 Channel（通道）和 Buffer（缓冲区）的概念。读取时，数据从通道进入缓冲区；写入时，数据从缓冲区写入通道。缓冲区本质上是一块可读写的内存区域，因此可以按位置访问其中的数据。
 
-OIO 调用 read()、write() 时，该线程被阻塞，只有数据被读取或者写入完成后，该线程才能干其他事，否则在此期间将一直等待。
+传统阻塞 IO 调用 `read()`、`write()` 时，当前线程通常会阻塞，直到数据可读、可写或发生异常。
 
-而 NIO 在调用 read() 时系统底层已经把数据准备到通道了，应用程序只需要将数据从通道复制到缓冲区即可，即使没有准备好，当前线程也可以执行其他操作，无需等待。
+NIO 的通道可以配置为非阻塞模式。此时调用 `read()` 时，如果暂时没有数据，方法可以立即返回，线程不必一直等待。配合 `Selector`，一个线程就可以管理多个网络连接。
 
 ### Buffer
 
 缓冲区主要与通道之间进行数据的读写操作。通道提供文件、网络读取数据的渠道，但是读写的数据都会经过缓存。
 
-读操作是指将数据从通道读取到缓存区中；写操作是将数据从缓存区写入通道。它本质是上就是一块内存。
+读操作是指将数据从通道读取到缓冲区中；写操作是将数据从缓冲区写入通道。缓冲区本质上就是一块内存。
 
-Buffer 类是一个抽象类，对应 Java 的主要数据类型在 NIO 有 8 种 缓冲区类，分别是：ByteBuffer、CharBuffer、DoubleBuffer、FloatBuffer、IntBuffer、LongBuffer、ShortBuffer、MappedByteBuffer。MappedByteBuffer是专门用于内存映射的一种ByteBuffer类型。不同的Buffer子类，其能操作的数据类型能够通过名称进行判断，比如IntBuffer只能操作Integer类型的对象。
+`Buffer` 是一个抽象类。NIO 为 Java 的主要基本类型提供了对应的缓冲区类，例如 `ByteBuffer`、`CharBuffer`、`DoubleBuffer`、`FloatBuffer`、`IntBuffer`、`LongBuffer`、`ShortBuffer`。`MappedByteBuffer` 是用于内存映射文件的一种特殊 `ByteBuffer`。不同 `Buffer` 子类能操作的数据类型可以从类名看出来，例如 `IntBuffer` 操作的是 `int` 数据。
 
-Buffer 基类并没有定义缓存内存区的字段，这个字段被具体定义到了子类种。如ByteBuf子类就拥有一个byte[]类型的数组成员final byte[] hb，作为自己的读写缓冲区，数组的元素类型与Buffer子类的操作类型相互对应。
+`Buffer` 基类维护 `capacity`、`position`、`limit`、`mark` 等状态；具体的数据存储由子类负责。以堆内 `ByteBuffer` 为例，它底层会持有一个 `byte[]`，作为实际读写区域。
 
 Buffer 类额外提供了一些重要属性来记录读写的状态和位置：
 
@@ -124,7 +124,7 @@ limit: 20
 
 从结果也能够看出 position 的变化
 
-如果不使用`flip()`改变写入模式直接调用`get()`的化是会直接返回当前 position 的值，并执行`position++`
+如果不使用 `flip()` 从写模式切换到读模式就直接调用 `get()`，读到的往往不是刚才写入的那段有效数据，结果很容易和预期不一致。
 
 ```java
 public static void main(String[] args) {
@@ -254,6 +254,17 @@ limit: 20
 
 前者是记录当前的 position 值；后者是让 position 回到 mark 标记的位置
 
+把几个常用方法放在一起看，会更清楚：
+
+| 方法 | 常见使用时机 | 对状态的影响 |
+| --- | --- | --- |
+| `flip()` | 写完数据，准备读 | `limit = position`，`position = 0`，丢弃 `mark` |
+| `clear()` | 读完或不关心剩余数据，准备重新写 | `position = 0`，`limit = capacity`，丢弃 `mark`，数据本身不一定清零 |
+| `compact()` | 还有未读数据，但想继续写 | 把未读数据挪到开头，`position` 移到未读数据之后，`limit = capacity` |
+| `rewind()` | 想从头再读一遍当前有效数据 | `position = 0`，`limit` 不变，丢弃 `mark` |
+
+这里尤其要注意 `clear()`：它清的是读写状态，不是把底层数组全部擦掉。名字有点容易骗新人，当然，API 命名偶尔也会有自己的任性。
+
 ### Channel
 
 Channel 担任的角色和 OIO 中流的角色差不多。在 OIO 中，一个网络连接需要两个流：一个输入流；一个输出流。Java 程序通过这两个单向流不断的进行输入输出操作。
@@ -279,27 +290,30 @@ FileChannel 只能为阻塞模式，不能设置成非阻塞模式
 public class FileChannelTest {
     
     public static void main(String[] args) throws IOException {
-        try (FileInputStream inputStream = new FileInputStream("../test/test.txt");
-            FileOutputStream outputStream = new FileOutputStream("../test/test.txt");) {
-            FileChannel inputChannel = inputStream.getChannel(); // 从输入流获取 Channel
-            FileChannel outputChannel = outputStream.getChannel(); // 从输出流获取 Channel
-            // 写入通道需要是将一个 ByteBuffer 缓存中的数据写入 Channel
-            ByteBuffer wriBuffer = ByteBuffer.wrap("xuezhixiaxuenai".getBytes(StandardCharsets.UTF_8));
-            while (wriBuffer.hasRemaining()) {
-                outputChannel.write(wriBuffer); // 写入 Channel，返回写入的字节数
-            }
-            outputChannel.force(false); // //强制刷新到磁盘
-            outputChannel.close(); // 关闭 Channel
-            ByteBuffer readBuffer = ByteBuffer.allocate(100); // 创建一个从 Channel 中读取数据的缓存
-            // 调用 read() 进行读取，Channel 中的数据会写入 Buffer
-            while (inputChannel.read(readBuffer) != -1) {
+        Path path = Paths.get("../test/test.txt");
 
+        try (FileChannel channel = FileChannel.open(
+                path,
+                StandardOpenOption.CREATE,
+                StandardOpenOption.WRITE,
+                StandardOpenOption.TRUNCATE_EXISTING)) {
+            ByteBuffer writeBuffer = ByteBuffer.wrap("xuezhixiaxuenai".getBytes(StandardCharsets.UTF_8));
+            while (writeBuffer.hasRemaining()) {
+                channel.write(writeBuffer); // 可能一次写不完，所以循环写
             }
+            channel.force(false); // 强制把文件内容刷新到磁盘，元数据不一定刷新
+        }
+
+        try (FileChannel channel = FileChannel.open(path, StandardOpenOption.READ)) {
+            ByteBuffer readBuffer = ByteBuffer.allocate(100);
+            while (channel.read(readBuffer) != -1) {
+                if (!readBuffer.hasRemaining()) {
+                    break;
+                }
+            }
+
             readBuffer.flip();
-            while (readBuffer.hasRemaining()) {
-                System.out.print((char) readBuffer.get());
-            }
-            inputChannel.close();
+            System.out.println(StandardCharsets.UTF_8.decode(readBuffer));
         }
     }
 }
@@ -309,11 +323,11 @@ public class FileChannelTest {
 
 在 NIO 中，涉及网络连接的通道有两个，一个是  SocketChannel 负责连接的数据传输，对应 OIO 中的 Socket 类；另一个是 ServerSocketChannel 负责连接的监听，对应 OIO 的 ServerSocket 类。
 
-ServerSocketChannel 仅仅应用于服务器端，而 SocketChannel 则同时处于服务器端和客户端，所以，对应于一个连接，两端都有一个负责传输的 SocketChanne l传输通道。
+`ServerSocketChannel` 只用于服务器端监听连接；`SocketChannel` 则同时出现在客户端和服务器端。对于一个 TCP 连接，两端各有一个负责数据传输的 `SocketChannel`。
 
-无论是ServerSocketChannel，还是SocketChannel，都支持阻塞和非阻塞两种模式。在阻塞模式下，SocketChannel通道的connect连接、read读、write写操作，都是同步的和阻塞式的，在效率上与Java旧的OIO的面向流的阻塞式读写操作相同。在非阻塞模式下，通道的操作是异步、高效率的，这也是相对于传统的OIO的优势所在。
+无论是 `ServerSocketChannel`，还是 `SocketChannel`，都支持阻塞和非阻塞两种模式。在阻塞模式下，`connect`、`read`、`write` 操作都是同步阻塞的，效率和传统阻塞 IO 接近。在非阻塞模式下，通道操作不会因为暂时无数据就长期阻塞当前线程。它不是 AIO 那种完成后回调的异步模型，而是由应用程序配合 `Selector` 主动轮询就绪事件。
 
-> SocketChannel 通过调用`configureBlocking()`来设置阻塞还是非阻塞，`ture`为阻塞，`false`为非阻塞。
+> `SocketChannel` 通过调用 `configureBlocking()` 设置阻塞或非阻塞，`true` 为阻塞，`false` 为非阻塞。
 
 下面介绍非阻塞模式下通道的打开、读写和关闭操作。
 
@@ -404,13 +418,15 @@ public class SocketClient {
 }
 ```
 
-上述代码使用了 IO 多路复用技术，这个技术用于客户端有点脱裤子放屁的感觉。这里只有一个客户端连接，因此可以直接使用阻塞。
+上述代码使用了 IO 多路复用技术。对只有一个连接的客户端来说，这样写有些过度设计；直接使用阻塞 IO 往往更清楚。`Selector` 真正擅长的是一个线程管理多个连接，常见位置是服务端或需要同时维护大量连接的客户端。
 
 着重讲一下`read()`和`write()`操作
 
 Channel 的`read()`方法会从 Channel 中读取数据写入 buffer 中，返回读取的字节数。这时 buffer 中的 position 位置就会变化，因此下次从 buffer 中读数据时需要调用`flip()`方法重置 position。在非阻塞情况下，`read()`可能返回 0。如果返回 -1 表示 TCP 连接已经断开。`read()`操作并不会一次性将 Channel 中的数据全部读入 buffer 中，如果要将 Channel 中的数据全部读完，可以多次调用。
 
 `write()`方法会从 buffer 中读取数据写入 Channel 中，因此在其方法前需要调用`flip()`操作使 buffer 中 position 返回到 0 的位置，以便正确读写。它会返回写入的字节数可能小于 buffer 中的数据长度，需要循环写
+
+还要注意 `OP_WRITE`：多数时候 Socket 发送缓冲区都有空间，所以写事件可能频繁就绪。如果一直注册 `OP_WRITE`，事件循环可能被写事件刷屏。实际项目里通常只在确实有待发送数据时关注写事件，写完后取消对 `OP_WRITE` 的关注。
 
 **DatagramChannel**
 

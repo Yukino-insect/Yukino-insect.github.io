@@ -4,237 +4,144 @@ draft = false
 title = 'synchronized'
 +++
 
-`synchronized` 是 Java 语法层面提供的一个锁机制，是 Java 并发模型中最经典、最基础的同步机制之一，用于保证代码块或方法的原子性和可见性
+`synchronized` 是 Java 语言层面的内置锁，用于保证临界区代码的互斥、可见性和有序性。它不需要手动释放锁，线程退出同步块或同步方法时，JVM 会自动释放对应的监视器锁。
 
-`synchronized` 有三种用法
+## 一、三种用法
 
-```java 
-// 修饰代码块
-synchronized (lock) {
-    
-}
-
-// 修饰方法
-public synchronized void method() {
-    
-}
-
-// 修饰静态方法
-public static synchronized void method() {
-    
-}
-```
-
-修饰代码块需要自己显示的提供对象锁 
+### 1. 修饰代码块
 
 ```java
-public class Demo {
-    private static Object lockA;
-    private static Object lockB;
-    
-    public void method1() {
-        synchronized (lockA) {
-            
-        }
+private final Object lock = new Object();
+
+public void update() {
+    synchronized (lock) {
+        doUpdate();
     }
-    
-    public void method2() {
-        synchronized (lockB) {
-            
-        }
-    }
-} 
+}
 ```
 
-上面的代码中，我们创建了两个锁，分别用于两个同步代码块，多个线程只会竞争对应的锁
+锁对象是括号中的 `lock`。不同锁对象之间互不影响。
 
-使用 `synchronized` 修饰普通方法并没有显示的为其指定锁，但是默认是锁定当前对象，也就是 `this`
+### 2. 修饰实例方法
 
-使用 `synchronized` 修饰静态方法时默认是锁定当前类，即 `Class`
-
-### synchronized 底层的实现机制
-
-`synchronized` 在编译后，会生成两个关键的 JVM 字节码指令
-
-- `monitorenter` 获取对象的 Monitor
-- `monitorexit` 释放对象的 Monitor
-
-当 JVM 执行到 `monitorenter` 时，会尝试去获取为 `synchronized` 指定的对象的 Monitor 锁，执行完同步代码块后，通过 `monitorexit` 释放锁
-
-**Monitor** 是什么呢
-
-这就涉及到了对象在 JVM 中的内存结构
-
-每一个对象在 JVM 中分为三部分
-
-- 对象头
-- 对象体
-- 填充字节
-
-锁机制就涉及到了对象头，它的组成部分为
-
-- Mark Word：存放锁标志、hashCode、GC标志、线程ID 等
-- Kalss Ponter
-- 数组长度（可选）
-
-`synchronized` 底层的执行流程
-
-```markdown
-Thread -> monitorenter
-   ↓
-检查对象的 Mark Word
-   ↓
-  无锁状态？-> 尝试 CAS 竞争
-   ↓
-  成功？-> 获取锁
-   ↓
-  失败？-> 自旋等待 or 锁膨胀
-   ↓
-  获得锁后，执行临界区
-   ↓
-  monitorexit -> 释放锁
+```java
+public synchronized void update() {
+    doUpdate();
+}
 ```
 
-从上述的执行流程可知，线程会通过检查对象的 Mark Word 来获取其对应的 Monitor
+实例同步方法锁住的是当前对象，也就是 `this`。
 
-`synchronized` 的底层机制是基于 **对象头（Mark Word）+ Monitor 结构** 的对象级锁实现。
- 它通过 **monitorenter / monitorexit** 指令操作对象的 **Monitor**，
- 并通过 **偏向锁 -> 轻量级锁 -> 重量级锁** 的升级策略，在性能与安全之间取得平衡
+### 3. 修饰静态方法
 
-## Monitor 是什么？
-
-Monitor（监视器锁）是 **JVM 层实现对象锁的结构**，底层对应 **操作系统的 Mutex（互斥量）**。
-
-每个对象在 JVM 中都有一个 **ObjectMonitor**（C++实现），
- 当锁升级为重量级锁时，线程的锁竞争就交由这个 Monitor 来管理。
-
-Monitor 内部有：
-
-| 字段           | 含义                             |
-| -------------- | -------------------------------- |
-| **Owner**      | 当前持有锁的线程                 |
-| **EntryList**  | 等待获取锁的线程队列（阻塞）     |
-| **WaitSet**    | 调用 `wait()` 进入等待的线程集合 |
-| **Recursions** | 重入计数                         |
-| **Condition**  | 用于实现 `wait()/notify()`       |
-
-------
-
-##  三、锁是如何升级到 Monitor（重量级锁）的
-
-1. **初始状态（无锁 / 偏向锁）**
-
-- 没有竞争或仅单线程访问；
-- JVM 在对象头的 Mark Word 中存储锁标志和线程ID。
-
-2. **轻量级锁阶段**
-
-- 第二个线程尝试获取锁；
-- 通过 **CAS（Compare-And-Swap）** 尝试加锁；
-- 如果能自旋等待（短暂竞争），仍保持轻量级锁。
-
-3. **锁竞争严重（CAS多次失败）**
-
-- JVM 认为竞争过于频繁；
-- 会将锁升级为 **重量级锁（Monitor 锁）**；
-- 线程进入 **阻塞状态（Block）**；
-- Monitor 使用操作系统的 **互斥锁（mutex）+ 条件变量** 控制调度。
-
-------
-
-##  四、Monitor 为什么叫“重量级锁”
-
-因为一旦升级为 Monitor：
-
-| 特征                          | 说明                          |
-| ----------------------------- | ----------------------------- |
-| 需要系统调用（进入内核态）    | 涉及 OS 的线程挂起与唤醒      |
-| 线程阻塞 / 唤醒开销大         | 包含上下文切换                |
-| 不再自旋等待                  | 线程进入等待队列（EntryList） |
-| 实现依赖 ObjectMonitor（C++） | JVM 的重量级数据结构          |
-
-换句话说：
-
-> 轻量级锁的竞争发生在 **用户态（CAS、自旋）**，
->  而 Monitor 锁的竞争发生在 **内核态（mutex、wait）**。
-
-切换到内核态 = 性能损耗大 -> 因此称为 **重量级锁**。
-
-------
-
-##  五、直观对比：轻量级锁 vs 重量级锁
-
-| 对比项   | 轻量级锁（CAS + 自旋） | 重量级锁（Monitor） |
-| -------- | ---------------------- | ------------------- |
-| 加锁方式 | CAS 尝试修改 Mark Word | 使用操作系统 Mutex  |
-| 阻塞机制 | 不阻塞（自旋等待）     | 阻塞线程，等待唤醒  |
-| 开销     | 低                     | 高（内核态切换）    |
-| 实现位置 | JVM 用户态             | JVM + OS 内核态     |
-| 适合场景 | 短期竞争               | 长时间竞争          |
-| 实现结构 | Lock Record            | ObjectMonitor       |
-
-------
-
-##  六、从源码层面看（HotSpot）
-
-在 HotSpot 中，ObjectMonitor（C++定义）是 Monitor 锁的核心：
-
-```
-class ObjectMonitor {
-  void* Owner;          // 当前持锁线程
-  ObjectWaiter* EntryList; // 进入锁等待的线程队列
-  ObjectWaiter* WaitSet;   // wait() 等待线程集合
-  int Recursions;       // 重入次数
-  ...
-};
+```java
+public static synchronized void updateGlobal() {
+    doUpdate();
+}
 ```
 
-当锁升级为重量级锁时：
+静态同步方法锁住的是当前类的 `Class` 对象，例如 `Demo.class`。
 
-- 对象头（Mark Word）会被修改为 `monitor` 指针；
-- Monitor 负责后续所有的线程阻塞与唤醒逻辑。
+## 二、能保证什么
 
-------
+`synchronized` 主要保证三件事：
 
-##  七、可视化流程（简图）
+- 原子性：同一把锁保护的代码，同一时间只能有一个线程执行。
+- 可见性：释放锁前的修改，对后续获取同一把锁的线程可见。
+- 有序性：同步块内外的指令重排会受到锁语义约束。
 
-```
-Thread A            Thread B            JVM Object
----------            ---------           ------------------
- monitorenter                              [Mark Word]
-     │                                           │
-     │ 成功获取锁                                │
-     │──────────────────────────────────────────- Owner = A
-     │                                           │
-     │ Thread B 也想获取锁 -> CAS 失败            │
-     │──────────────────────────────────────────- 进入 EntryList
-     │                                           │
-     │ Thread A 执行完释放锁                     │
-     │──────────────────────────────────────────- 唤醒 EntryList
-     │                                           │
+注意，必须是**同一把锁**才有这些保证。一个方法锁 `this`，另一个方法锁 `new Object()`，它们之间没有互斥关系。
+
+## 三、字节码层面的实现
+
+同步代码块会编译成 `monitorenter` 和 `monitorexit` 指令：
+
+```text
+monitorenter
+  执行同步代码
+monitorexit
 ```
 
-此时，Monitor 控制锁的拥有与线程调度。
+如果同步块内抛出异常，编译器也会生成异常路径上的 `monitorexit`，确保锁能释放。
 
-------
+同步方法则不会直接在方法体里生成这两个指令，而是在方法访问标志中带上 `ACC_SYNCHRONIZED`，由 JVM 在方法调用和返回时隐式完成加锁和解锁。
 
-##  八、结论总结
+## 四、对象头和 Monitor
 
-| 结论                                                     | 说明                                               |
-| -------------------------------------------------------- | -------------------------------------------------- |
-| **Monitor 锁就是重量级锁**                               | 它是 `synchronized` 的底层实现，当锁竞争激烈时触发 |
-| **轻量级锁在用户态自旋，不用 Monitor**                   | 用 CAS 机制完成加锁                                |
-| **锁升级路径：偏向 -> 轻量级 -> 重量级（Monitor）**        | JVM 动态调整锁的粒度与性能                         |
-| **重量级锁的本质：OS Mutex + Condition + ObjectMonitor** | 涉及线程阻塞、唤醒、上下文切换                     |
+Java 对象头中的 Mark Word 会记录锁相关信息，例如锁标志位、线程 ID、hashCode、GC 年龄等。
 
-------
+当线程进入同步块时，JVM 会根据对象头中的锁状态选择不同策略。竞争较轻时，可以使用轻量级锁和 CAS；竞争严重时，会膨胀为重量级锁，由 `ObjectMonitor` 管理等待队列和阻塞唤醒。
 
- **一句话记忆：**
+可以简化理解为：
 
->  `Monitor` 是 `synchronized` 最终的“重量级锁”实现，
->  当 CAS 自旋失败后，线程进入阻塞，由 `ObjectMonitor` 管理互斥与等待队列。
+```text
+对象
+ └─ 对象头 Mark Word
+      -> 无锁
+      -> 轻量级锁
+      -> 重量级锁 Monitor
+```
 
-------
+## 五、锁升级
 
+现代 JVM 中，`synchronized` 会根据竞争情况优化锁实现。常见状态包括：
 
-synchronized 做了一系列升级，在竞争条件尚不激烈的情况下，是不会进行获取操作系统底层提供的监视器锁的，而是先操作对象头
+| 锁状态 | 特点 |
+| --- | --- |
+| 无锁 | 没有线程进入同步区域 |
+| 轻量级锁 | 通过 CAS 和栈帧中的锁记录尝试获取锁 |
+| 重量级锁 | 竞争激烈时膨胀为 Monitor，线程阻塞等待 |
+
+早期 HotSpot 还包含偏向锁优化，但根据 OpenJDK JEP 374，从 JDK 15 开始偏向锁默认禁用，并废弃相关 JVM 参数。因此现在学习 `synchronized` 时，更应该关注轻量级锁、重量级锁和 Monitor，而不是把偏向锁当成永远存在的主线。
+
+## 六、Monitor 内部结构
+
+重量级锁依赖 JVM 内部的 `ObjectMonitor`。可以简化成：
+
+```text
+ObjectMonitor
+ ├─ Owner：当前持有锁的线程
+ ├─ EntryList：等待进入同步块的线程
+ ├─ WaitSet：调用 wait 后等待唤醒的线程
+ └─ Recursions：重入次数
+```
+
+`EntryList` 和 `WaitSet` 容易混淆：
+
+- 获取锁失败进入的是 `EntryList`。
+- 已经持有锁并调用 `wait()` 后进入的是 `WaitSet`。
+
+调用 `notify` 或 `notifyAll` 唤醒的是 `WaitSet` 中的线程，被唤醒后它们仍然要重新竞争锁。
+
+## 七、可重入性
+
+`synchronized` 是可重入锁。同一个线程已经持有某把锁时，可以再次进入由同一把锁保护的同步代码。
+
+```java
+public synchronized void outer() {
+    inner();
+}
+
+public synchronized void inner() {
+    doSomething();
+}
+```
+
+如果不可重入，`outer` 调用 `inner` 时会把自己堵住。幸好 JVM 没有设计成那样，不然很多代码会显得过于悲惨。
+
+## 八、和 ReentrantLock 的区别
+
+| 对比项 | `synchronized` | `ReentrantLock` |
+| --- | --- | --- |
+| 实现层级 | JVM 内置 | JUC 类库，基于 AQS |
+| 释放方式 | 自动释放 | 必须手动 `unlock` |
+| 可中断获取 | 不支持 | 支持 `lockInterruptibly` |
+| 超时获取 | 不支持 | 支持 `tryLock(timeout)` |
+| 公平锁 | 不支持显式配置 | 可配置公平或非公平 |
+| 条件队列 | 一个对象对应一个 WaitSet | 可创建多个 `Condition` |
+
+普通同步场景优先考虑 `synchronized`，代码更简洁，也不容易忘记释放锁。需要超时、可中断、公平锁、多条件队列时，再使用 `ReentrantLock`。
+
+## 九、总结
+
+`synchronized` 的表层语义很简单：进入时加锁，退出时解锁。底层则由对象头、CAS、锁升级和 Monitor 协作完成。使用时最重要的是确认锁对象是否正确、锁范围是否足够小，以及不要在锁内执行不必要的耗时操作。

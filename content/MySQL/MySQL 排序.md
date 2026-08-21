@@ -4,343 +4,318 @@ draft = false
 title = 'MySQL 排序'
 +++
 
-MySQL 存在存在多种排序方式 `ORDER BY`
+MySQL 的 `ORDER BY` 看起来只是排序，背后却可能走完全不同的执行路径。性能差异最大的地方不是排序算法名字，而是：**能不能直接按索引顺序返回，需不需要额外 `filesort`，会不会使用临时表或落盘。**
 
-如果 `ORDER BY` 排序字段是索引，那性能是相当的好了。
+## 一、常见执行方式
 
-如果不是索引，那就有可能走 `filesort` 内存排序，读出需要排序的数据，在内存中使用快排完成排序。
+从执行路径看，`ORDER BY` 大致分三类：按索引顺序直接返回、额外执行 `filesort`、在复杂查询中配合临时表排序。下面按成本从低到高展开。
 
-如果这部分数据相当的大，MySQL 分配的这块排序内存不足以放下这么多数据，就会使用磁盘临时文件，采用归并排序
+## 二、按索引顺序返回
 
-对 `ORDER BY` 来说，核心不是“很多种排序算法名字”，而是三条执行路径——按索引顺序直接取、`filesort` 内存排序、`filesort`/临时表落盘。接下来我把它整理成你做业务时最有用的判断顺序。
+这是最理想的情况。如果 `ORDER BY` 能被索引满足，MySQL 可以按索引顺序读取数据，避免额外排序。
 
-Thought for 1m 20s
+例如：
 
-可以把这个问题拆成两层看：
-
-**第一层：MySQL 真正常见的“排序执行方式”并不多。**
- 官方文档里，`ORDER BY` 的核心路径其实主要就是两类：**直接按索引顺序取数据**，或者 **做 `filesort`**。另外，某些查询还会伴随**内部临时表**，比如 `ORDER BY` 和 `GROUP BY` 不一致、`DISTINCT + ORDER BY`、或者排序列来自连接中的非首个驱动表时。`EXPLAIN` 里常见的信号就是 `Using filesort` 和 `Using temporary`。
-
-**第二层：优化器不是“任选一种”，而是按代价模型和统计信息选它认为更便宜的方案。**
- MySQL 的代价模型会把 `filesort`、读索引块、读数据块等成本算进去；统计信息和索引基数也会影响它到底选索引顺序扫描、范围扫描还是扫描后再排序。`ANALYZE TABLE` 会更新这些统计信息，统计不准时优化器可能选错计划。
-
-------
-
-## 常见排序方式
-
-### 1）按索引顺序直接返回
-
-这是最理想的情况。
- 如果 `ORDER BY` 能被某个索引满足，MySQL 可以**避免额外排序阶段**。多列索引遵循**最左前缀**规则；并且 `ORDER BY` 的列顺序、连续性、方向组合都要和索引匹配。MySQL 8.x 也支持降序索引，混合 `ASC/DESC` 的场景可以通过合适的升降序索引来适配。
-
-典型能走索引排序的例子：
-
-```
-SELECT * FROM t ORDER BY a, b;
-
-SELECT * FROM t WHERE a = ? ORDER BY b;
-
-SELECT * FROM t ORDER BY a DESC, b DESC;
+```sql
+select id, title, create_time
+from post
+where status = 1
+order by create_time desc, id desc
+limit 20;
 ```
 
-这类计划下，`EXPLAIN` 通常**不会出现** `Using filesort`。
+适合的联合索引：
 
-------
-
-### 2）`filesort`，但能基本在内存里完成
-
-如果索引不能满足 `ORDER BY`，MySQL 会进入 `filesort`。
- 注意：`Using filesort` 不等于“一定落磁盘”，它表示**有额外排序阶段**。排序缓冲按需增量分配到 `sort_buffer_size`，结果集较小时可以纯内存完成；某些 `single table + ORDER BY 非索引列 + LIMIT N` 的场景还比较适合纯内存 `filesort`。
-
-------
-
-### 3）`filesort` + 临时文件 / 临时表落盘
-
-这是更重的一类。
- 当排序结果放不进内存，`filesort` 会用临时磁盘文件；而且有些 SQL 结构本身就容易触发内部临时表，比如 `ORDER BY` 和 `GROUP BY` 不同、`DISTINCT + ORDER BY`、窗口函数、以及某些复杂连接。内部临时表先在内存里用 `TempTable`/`MEMORY`，超阈值后会转成磁盘上的 `InnoDB` 临时表。
-
-------
-
-## 性能高低怎么排
-
-一般可以这样排：
-
-**覆盖索引顺序返回**
- **> 非覆盖索引顺序返回（还要回表）**
- **> 内存 `filesort`**
- **> 磁盘 `filesort` / 临时表 + 排序**
-
-原因很直接：
- 能用索引顺序返回时，MySQL可以省掉额外排序；如果还是覆盖索引，连回表都省了。`filesort` 至少多一轮排序；一旦出现临时文件、merge pass、磁盘临时表，I/O 和 CPU 开销都会明显上去。官方文档也明确说了，代价模型里 `filesort` 会被视为更贵，而 `Using index` 表示可以只靠索引拿列值。
-
-不过这不是绝对定律。
- 比如“索引顺序扫描 + 大量随机回表”有时未必比“小结果集内存排序”更快，所以优化器会按成本估算来选。
-
-------
-
-## 哪些写法最容易让排序退化
-
-### 1）`ORDER BY` 列和索引对不上
-
-比如：
-
-```
-SELECT * FROM t ORDER BY key1, key2;
+```sql
+create index idx_post_status_time_id
+on post(status, create_time desc, id desc);
 ```
 
-但你只有 `idx(key1)` 和 `idx(key2)` 两个单列索引，没有一个联合索引 `(key1, key2)`，那通常不能直接靠索引完成排序。官方文档明确举了“`ORDER BY` 用到不同索引”“用到索引的非连续列”这类反例。
+这里 `status = 1` 用于过滤，`create_time desc, id desc` 用于有序扫描。
 
-### 2）排序列上做表达式
+如果查询列都在索引里，还可能形成覆盖索引：
 
-比如：
-
-```
-SELECT * FROM t ORDER BY ABS(score);
-SELECT * FROM t ORDER BY -create_time;
-```
-
-这类写法通常不能直接利用原列索引来排序。
-
-### 3）前缀索引拿来做完整排序
-
-如果只给长字符串建了前缀索引，例如只索引前 10 个字节，那它不能完整区分后续内容，排序仍可能需要 `filesort`。
-
-### 4）多表 join 后按不合适的表字段排序
-
-在 join 里，如果 `ORDER BY` 的列不都来自执行计划里的**第一个非 const 表**，就很容易退化成 `Using temporary` / `Using filesort`。
-
-------
-
-## 代码里怎么优化
-
-### 1）把 `WHERE + ORDER BY` 设计成一个联合索引
-
-这是最重要的。
-
-例如业务 SQL：
-
-```
-SELECT id, title, create_time
-FROM post
-WHERE status = 1
-ORDER BY create_time DESC, id DESC
-LIMIT 20;
+```sql
+select id, create_time
+from post
+where status = 1
+order by create_time desc, id desc
+limit 20;
 ```
 
-更适合的索引是：
+覆盖索引能减少回表成本。
 
-```
-CREATE INDEX idx_post_status_ctime_id
-ON post(status, create_time DESC, id DESC);
-```
+## 三、Using filesort
 
-这样 `status = 1` 用于过滤，后面的 `create_time, id` 用于有序扫描。
- 多列索引的最左前缀和降序索引能力，都是官方明确支持的。
+如果索引无法满足排序，MySQL 会进入额外排序阶段，`EXPLAIN` 中常见 `Using filesort`。
 
-------
+需要注意：`Using filesort` 不等于一定使用磁盘文件。它只是表示 MySQL 需要额外排序，而不是直接按索引顺序返回。
 
-### 2）给排序补一个稳定的 tiebreaker
+排序数据较少时，可能在内存中完成。数据较多、排序字段较大、返回列较宽时，可能需要临时文件或多轮归并。
 
-比如不要只写：
+例如：
 
-```
-ORDER BY create_time DESC
-```
-
-而要写成：
-
-```
-ORDER BY create_time DESC, id DESC
+```sql
+select *
+from post
+where status = 1
+order by title;
 ```
 
-原因是：当多个行的 `create_time` 相同，MySQL 对这些并列行的返回顺序可以是不确定的，尤其 `LIMIT` 存在时更明显。官方文档明确说了，同一 `ORDER BY` 值的多行在非排序列上的顺序是 nondeterministic。
+如果没有适合 `(status, title)` 的索引，就可能触发 `filesort`。
 
-------
+## 四、临时表和落盘
 
-### 3）深分页别用大 `OFFSET`
+有些 SQL 不只是排序，还会创建内部临时表。例如：
 
-差的写法：
+1. `order by` 和 `group by` 不一致。
+2. `distinct` 搭配复杂排序。
+3. 多表 join 后按非驱动表字段排序。
+4. 窗口函数、派生表、复杂聚合。
 
-```
-SELECT id, title, create_time
-FROM post
-WHERE status = 1
-ORDER BY create_time DESC, id DESC
-LIMIT 100000, 20;
-```
+`EXPLAIN` 中可能看到：
 
-这会让 MySQL 先找到并处理前面大量行，再丢掉。
- 更好的做法是**seek pagination / keyset pagination**：
-
-```
-SELECT id, title, create_time
-FROM post
-WHERE status = 1
-  AND (create_time < :last_create_time
-       OR (create_time = :last_create_time AND id < :last_id))
-ORDER BY create_time DESC, id DESC
-LIMIT 20;
+```text
+Using temporary; Using filesort
 ```
 
-这个写法不是 MySQL 文档里的专门术语，但从执行机理上看，它更容易继续沿着索引向后扫描，而不是“跳过 10 万行”。
+这通常比单纯 `Using filesort` 更重。临时表如果超过内存阈值，还可能落到磁盘。
 
-------
+## 五、性能大致排序
 
-### 4）先拿 ID，再回表取大字段
+一般可以这样理解：
 
-当行很宽、正文很大时，直接排序全字段很吃亏。可以拆成两步：
-
-```
-SELECT id
-FROM post
-WHERE status = 1
-ORDER BY create_time DESC, id DESC
-LIMIT 20;
+```text
+覆盖索引顺序返回
+> 非覆盖索引顺序返回
+> 内存 filesort
+> 临时表 / 磁盘 filesort
 ```
 
-然后：
+但这不是绝对规则。比如“按索引顺序扫描大量数据再随机回表”有时不一定比“小结果集内存排序”快。最终仍要看优化器估算和真实执行数据。
 
-```
-SELECT id, title, author, summary, content
-FROM post
-WHERE id IN (...20个id...);
-```
+## 六、哪些写法容易退化
 
-第一步尽量走**覆盖索引 + LIMIT**，第二步再按主键取明细。
- 这类优化本质是在减少排序阶段携带的数据量，避免把大字段带入排序或回表过早发生；官方 `filesort_summary` 里也能看到排序缓冲里到底是 `<sort_key, rowid>` 还是 `<sort_key, additional_fields>`。
+### 1. ORDER BY 列和索引顺序不匹配
 
-------
+只有两个单列索引：
 
-### 5）少用 `ORDER BY` 表达式，必要时改成“可索引列”
-
-例如不要：
-
-```
-ORDER BY DATE(create_time) DESC
+```sql
+key idx_a(a),
+key idx_b(b)
 ```
 
-而改成直接排序原列，或者增加一个生成列并索引它。
- 因为表达式排序通常不能直接利用原索引。
+查询：
 
-------
-
-### 6）复杂 join 排序时，先缩小结果集，再排
-
-如果是：
-
-```
-SELECT ...
-FROM a
-JOIN b ...
-JOIN c ...
-WHERE ...
-ORDER BY c.create_time DESC
-LIMIT 20;
+```sql
+select *
+from t
+order by a, b;
 ```
 
-常见思路是先把过滤最强、排序字段所在的那部分结果集缩小，再 join 其余表。否则就很容易走 `Using temporary` / `Using filesort`。官方也明确提到，排序列来自 join 中不合适的位置时，会影响能否用索引排序。
+通常不能同时靠两个单列索引完成 `a, b` 的整体排序。更合适的是联合索引：
 
-------
-
-### 7）让统计信息保持新鲜
-
-大批量导入、冷热分布变化后，跑一下：
-
-```
-ANALYZE TABLE post;
+```sql
+create index idx_t_a_b on t(a, b);
 ```
 
-因为优化器会基于索引基数和分布估计来选计划；统计不准时，它可能错误地觉得“扫描后排序”更便宜。
+### 2. 排序列上做表达式
 
-------
-
-### 8）Hint 只在最后兜底
-
-如果你确认优化器老是选错，可以用：
-
-```
-... FORCE INDEX FOR ORDER BY (idx_xxx)
+```sql
+select *
+from t
+order by date(create_time) desc;
 ```
 
-或者 MySQL 8.x 的 `ORDER_INDEX` / `NO_ORDER_INDEX` hint。
- 但这应该是最后手段，不是第一选择。
+这类写法通常无法直接利用 `create_time` 的普通索引排序。可以改为直接按原字段排序，或用生成列加索引。
 
-------
+### 3. 前置模糊或函数处理
 
-## 排序问题怎么排查
-
-先看这三个东西就够用了：
-
-```
-EXPLAIN FORMAT=TREE ...
-EXPLAIN ANALYZE ...
-EXPLAIN FORMAT=JSON ...
+```sql
+where name like '%Tom'
+order by create_time desc
 ```
 
-`EXPLAIN` 可以看是否出现 `Using filesort`、`Using temporary`；`EXPLAIN ANALYZE` 会给真实执行时间；`FORMAT=JSON` / optimizer trace 还能看到 `filesort_summary`，包括临时文件数、峰值内存等。
+如果过滤阶段已经无法有效走索引，排序阶段的输入数据就可能变多。
 
-再配合状态指标：
+### 4. 多表 join 后排序字段位置不合适
 
-- `Sort_merge_passes`：看排序是否发生多轮 merge
-- `Created_tmp_tables` / `Created_tmp_disk_tables`：看临时表是否频繁落盘
-
-这些都是官方建议观察的点。
-
-------
-
-## 你可以直接记这个结论
-
-对 MySQL 排序，最实用的判断顺序是：
-
-**先争取“索引直接有序返回”**
- 做不到，再争取**“小结果集 + LIMIT + 内存 filesort”**
- 尽量避免**“大结果集 + 临时表 + 磁盘 filesort”**。
-
-如果你愿意，我可以下一条直接拿一个你自己的 SQL，帮你判断它现在会走哪种排序方式，以及该建什么联合索引。
-
-MySQL 是把返回数据排序完成后返回，还是只排序指定字段，再返回
-
-我去核对一下 MySQL 官方文档里 `filesort` 的细节，因为这个问题的关键就在于：它并不总是“把整行都搬去排序”。
-
-Thought for 28s
-
-不是固定只会一种，**要分“排序阶段”和“返回阶段”看**。
-
-**最终返回给客户端时，MySQL 会按 `ORDER BY` 要求的顺序返回整条结果行（也就是你 `SELECT` 出来的那些列）**；但在**内部排序阶段**，它**不一定把整行数据都拿去排序**。如果 `ORDER BY` 能直接用索引满足，就**没有额外排序阶段**，MySQL 直接按索引顺序读行并返回；如果不能，就会执行 `filesort`。`EXPLAIN` 里出现 `Using filesort` 就表示用了额外排序，没出现则通常是靠索引顺序完成的。
-
-当发生 `filesort` 时，MySQL 排序缓冲里放的内容也**不总是整行**。官方给出的 `sort_mode` 有三种典型形式：`<sort_key, rowid>`、`<sort_key, additional_fields>`、`<sort_key, packed_additional_fields>`。这说明它可能只是**排序键 + 行指针**，也可能是**排序键 + 额外字段**，而不是无条件把整行完整搬进去排序。
-
-你可以这样理解：
-
-```
-SELECT id, name, age
-FROM user
-ORDER BY create_time DESC;
+```sql
+select *
+from a
+join b on b.a_id = a.id
+order by b.create_time desc
+limit 20;
 ```
 
-有两种常见执行思路：
+如果执行计划中不能以 `b` 的有序索引作为合适驱动，可能需要先 join 出大量结果，再临时表排序。
 
-1. **走索引顺序**
-    如果 `create_time` 上的索引正好能满足排序，MySQL 直接按索引顺序读，再把 `id, name, age` 返回，**不额外排序**。
-2. **走 filesort**
-    如果不能用索引，MySQL 会进入 `filesort`。这时它可能先排：
-   - `create_time + rowid`，排完后再按排序结果去取 `id, name, age`
-   - 或者 `create_time + additional_fields`，把部分需要返回的字段一起带着排，减少后续取行成本。
+## 七、优化方式
 
-所以最准确的回答是：
+### 1. 设计 WHERE + ORDER BY 联合索引
 
-**MySQL 最终是“按排好序的结果返回”；但内部并不一定“先把整条返回数据全部排序完再返回”，很多时候它只排“排序键 + 行定位信息”或“排序键 + 部分附加字段”。**
+常见列表查询：
 
-你做性能优化时，可以记这一条：
+```sql
+select id, title, create_time
+from post
+where status = 1
+order by create_time desc, id desc
+limit 20;
+```
 
-- 想让它最省事，就让 `ORDER BY` **尽量走索引**
-- 一旦看到 `Using filesort`，就说明它进入了额外排序阶段
-- `SELECT *` 往往更容易让排序后的取数成本变高，因为即使排序时没搬整行，后面也可能要回表拿更多列。官方文档也专门提醒，`SELECT *` 时优化器会权衡“按索引顺序读 + 取额外列”是否比“扫描后排序”更便宜。
+索引：
 
-把一句话压缩成面试版就是：
+```sql
+create index idx_post_status_time_id
+on post(status, create_time desc, id desc);
+```
 
-**返回时一定是有序结果；排序时不一定排整行，常见是排排序键，再配合 rowid 或 additional_fields。**
+不要只给 `status`、`create_time` 分别建两个单列索引就以为万事大吉。优化器不一定能把它们拼成你想要的排序路径。
 
-参考：
+### 2. 给排序补稳定字段
 
-**https://zhuanlan.zhihu.com/p/618391862**
+不推荐：
+
+```sql
+order by create_time desc
+```
+
+如果多行 `create_time` 相同，分页时顺序可能不稳定。
+
+推荐：
+
+```sql
+order by create_time desc, id desc
+```
+
+`id` 作为 tiebreaker，可以让排序结果稳定，也方便做游标分页。
+
+### 3. 深分页改成游标分页
+
+深分页：
+
+```sql
+select id, title, create_time
+from post
+where status = 1
+order by create_time desc, id desc
+limit 100000, 20;
+```
+
+数据库要处理前面十万行再丢弃。
+
+游标分页：
+
+```sql
+select id, title, create_time
+from post
+where status = 1
+  and (
+    create_time < :last_create_time
+    or (create_time = :last_create_time and id < :last_id)
+  )
+order by create_time desc, id desc
+limit 20;
+```
+
+它更适合信息流、列表下一页、后台滚动加载。
+
+### 4. 先取 ID，再取大字段
+
+如果表行很宽，正文、JSON、大文本字段很多，可以先用覆盖索引拿 ID：
+
+```sql
+select id
+from post
+where status = 1
+order by create_time desc, id desc
+limit 20;
+```
+
+再按主键取详情：
+
+```sql
+select id, title, author, content
+from post
+where id in (...);
+```
+
+这样可以减少排序阶段携带的数据量。
+
+### 5. 统计信息保持新鲜
+
+大批量导入、删除、冷热数据变化后，统计信息不准可能导致优化器选错执行计划：
+
+```sql
+analyze table post;
+```
+
+这不是万能药，但在执行计划明显不合理时值得检查。
+
+### 6. Hint 只作为兜底
+
+如果非常确定优化器选错，可以考虑：
+
+```sql
+select *
+from post force index for order by (idx_post_status_time_id)
+where status = 1
+order by create_time desc, id desc
+limit 20;
+```
+
+Hint 会把执行计划和当前索引绑定得更紧，后续数据分布变化时可能反而变差。所以它应该是兜底手段，不是日常习惯。
+
+## 八、MySQL 排序时排什么
+
+最终返回给客户端的结果一定是按 `ORDER BY` 排好的。
+
+但内部排序阶段不一定搬整行数据去排。`filesort` 可能排序：
+
+1. 排序键 + 行定位信息。
+2. 排序键 + 需要返回的部分字段。
+3. 排序键 + 打包后的附加字段。
+
+因此 `select *` 往往会增加排序或回表成本。列表页尽量只查需要的列，详情页再按主键取完整数据。
+
+## 九、排查方式
+
+先看执行计划：
+
+```sql
+explain select ...
+```
+
+MySQL 8.0 可以看真实执行：
+
+```sql
+explain analyze select ...
+```
+
+重点关注：
+
+1. 是否出现 `Using filesort`。
+2. 是否出现 `Using temporary`。
+3. 扫描行数是否过大。
+4. 是否使用了预期索引。
+5. 是否出现大量回表。
+
+也可以观察排序相关状态：
+
+```sql
+show global status like 'Sort%';
+show global status like 'Created_tmp%';
+```
+
+## 十、总结
+
+优化 `ORDER BY` 的优先级是：
+
+1. 尽量让排序走联合索引。
+2. 排序字段加稳定 tiebreaker。
+3. 避免深分页大 offset。
+4. 减少排序阶段携带的大字段。
+5. 用 `EXPLAIN` 验证，而不是靠感觉。
+
+最实用的一句话：**能按索引顺序返回，就不要让 MySQL 额外排序；必须排序时，就尽量让参与排序的数据更少。**

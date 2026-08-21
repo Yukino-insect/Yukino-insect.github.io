@@ -4,121 +4,117 @@ draft = false
 title = 'AQS'
 +++
 
-AQS 是 `AbstractQueuedSynchronizer` 的缩写，位于 `java.util.concurrent.locks` 中。
+`AQS` 是 `AbstractQueuedSynchronizer` 的缩写，位于 `java.util.concurrent.locks` 包中。它是 Java 并发包里很多同步组件的基础，例如 `ReentrantLock`、`Semaphore`、`CountDownLatch`、`ReentrantReadWriteLock`。
 
-它是 Java 并发锁于同步器的基础框架，用于实现各种同步状态管理与线程等待队列机制
+一句话概括：**AQS 负责排队、阻塞、唤醒和同步状态管理；具体同步器负责定义 state 的含义**。
 
-#### AQS 的设计思想
+## 一、核心思想
 
-AQS 维护一个关键的整数变量
+AQS 内部维护一个 `volatile int state`：
 
 ```java
 private volatile int state;
 ```
 
-`state` 表示同步状态，AQS 通过一套 `acquire/release` 模板方法操作这个 `state`，管理内部线程排队、挂起、唤醒等逻辑
-##### AQS 的两种模式
+`state` 是同步状态。不同组件对它的解释不同：
 
-- 独占模式：同一时间只能由一个线程占有资源
-- 共享：多个线程可以共享资源
+| 组件 | state 的含义 |
+| --- | --- |
+| `ReentrantLock` | 锁重入次数，0 表示未被持有 |
+| `Semaphore` | 剩余许可数量 |
+| `CountDownLatch` | 还需要倒数的次数 |
+| `ReentrantReadWriteLock` | 同时编码读锁和写锁状态 |
 
-##### AQS 的核心组成
+AQS 提供模板方法处理排队和阻塞，子类只需要实现尝试获取、释放同步状态的逻辑。
 
-- 同步状态（state）：表示资源是否可用，如锁是否被持有
-- 等待队列（CLH 双向队列）：当线程获取资源失败时，会进入 FIFO 等待队列
-- 模板方法（模板设计模式）：子类只需实现下面几个核心方法
-  - `tryAcquire(int arg)`：尝试独占式获取资源
-  - `tryRelease(int arg)`：尝试独占式释放资源
-  - `tryAcquireShared(int arg)`：尝试共享式获取资源
-  - `tryReleaseShared(int arg)`：尝试共享式释放资源
-  - `isHeldExclusicely()`：当前线程是否独占资源
+## 二、两种模式
 
-> AQS 主要负责实现了线程排队、阻塞唤醒、状态维护；实现 AQS 的子类负责定义 state 的意义与修改逻辑
+AQS 支持两种获取模式：
 
-##### 线程获取锁的流程（独占模式）
+- 独占模式：同一时间只能有一个线程获取资源，例如 `ReentrantLock`。
+- 共享模式：同一时间允许多个线程获取资源，例如 `Semaphore`、`CountDownLatch`。
 
-以 `ReentrantLock` 为例
+独占模式关注“锁是不是被某个线程独占”。共享模式关注“资源是否还能被多个线程共同获取”。
 
-它实现的 `lock()` 方法会调用 `acquire(1)`
+## 三、等待队列
 
-底层流程
+当线程获取同步状态失败时，会被包装成节点加入 AQS 的 CLH 变体队列。
 
-```markdown
-Thread-1 调用 acquire(1)
- ├─ tryAcquire(1) -> 成功？（CAS修改state=1）
- │     ├─ 成功：拿到锁，继续执行
- │     └─ 失败：进入等待队列
- │
- ├─ park() 挂起等待前驱节点唤醒
- └─ 被唤醒后重新尝试获取锁
+```text
+head -> node1 -> node2 -> node3 -> tail
 ```
 
-当锁被释放时
+每个节点保存线程、等待状态、前驱节点和后继节点。队列的基本原则是 FIFO：前面的线程先获得重新竞争资源的机会。
 
-```markdown
-unlock() -> release(1)
- ├─ tryRelease(1) -> state=0？
- ├─ 成功则唤醒队列中下一个等待线程（LockSupport.unpark）
+AQS 并不会让所有等待线程同时醒来争抢锁，而是尽量唤醒合适的后继节点。这样可以减少无意义竞争。
+
+## 四、独占模式流程
+
+以 `ReentrantLock.lock()` 为例，底层会调用 AQS 的 `acquire(1)`：
+
+```text
+acquire(1)
+ -> tryAcquire(1)
+      -> 成功：直接获得锁
+      -> 失败：加入等待队列
+ -> 在队列中判断前驱节点是否为 head
+ -> 条件满足则再次尝试获取锁
+ -> 仍失败则 LockSupport.park() 挂起
+ -> 被唤醒后继续重试
 ```
 
-##### AQS 内部维护了一个 CLH 变体队列
+释放锁时调用 `release(1)`：
 
-它可以被视为时一个 FIFO 双向队列
-```markdown
-head -> [Node-1] -> [Node-2] -> [Node-3] -> tail
+```text
+release(1)
+ -> tryRelease(1)
+ -> 如果释放成功，唤醒后继节点
 ```
 
-每个节点 Node 存储等待线程 `Thread`、等待状态 `waitStatus`、前后指针 `prev/next`
+AQS 使用 `LockSupport.park()` 和 `unpark()` 挂起、唤醒线程，而不是使用 `wait` 和 `notify`。
 
-等待机制：
+## 五、共享模式流程
 
-1. 线程获取锁失败 -> 进入队列尾部；
-2. 前一个节点释放资源 -> 唤醒下一个节点；
-3. 被唤醒的线程重新竞争锁。
+共享模式的入口是 `acquireShared`：
 
-##### 共享模式下的流程
-
-```markdown
-acquireShared(n)
- ├─ tryAcquireShared(n)
- │     ├─ 返回负数 -> 获取失败，入队
- │     ├─ 返回0 -> 成功但不再共享
- │     └─ 返回正数 -> 成功且可继续共享
- ├─ 等待队列中线程逐个唤醒（releaseShared）
+```text
+acquireShared(arg)
+ -> tryAcquireShared(arg)
+      -> 返回负数：获取失败，进入队列等待
+      -> 返回 0：获取成功，但不继续传播唤醒
+      -> 返回正数：获取成功，并可能继续唤醒后继节点
 ```
 
-##### 核心 API 指向流程图
+`Semaphore` 就是典型共享模式。只要许可数量足够，多个线程都可以成功获取；许可不足时，后来的线程才进入队列等待。
 
-```markdown
-acquire(arg)
- ├─ if tryAcquire(arg) -> 成功
- └─ 否则：
-     ├─ addWaiter(Node.EXCLUSIVE)
-     ├─ acquireQueued(node, arg)
-         ├─ park()
-         ├─ 被唤醒后重新尝试 tryAcquire(arg)
-release(arg)
- ├─ if tryRelease(arg) 成功
- └─ unparkSuccessor(head)
-```
+`CountDownLatch` 也是共享模式，只是它的含义反过来：当 `state` 还不为 0 时，等待线程获取失败；当 `state` 减到 0 后，等待线程会被批量唤醒。
 
-AQS 底层使用了  `LockSupport.park()` / `unpark()` 来挂起或唤醒线程，而不是传统的 `wait()/notify()`
+## 六、模板方法
 
-**AQS 用“用户态的智能调度”替代了“内核态的被动调度”。**
- 它通过：
+自定义同步器通常需要实现这些方法：
 
-- CAS 原子更新（无锁抢占）
-- CLH 队列排队（顺序化竞争）
-- 精准唤醒（LockSupport）
-   **最大限度地减少了线程上下文切换开销。**
+| 方法 | 作用 |
+| --- | --- |
+| `tryAcquire(int arg)` | 尝试独占获取 |
+| `tryRelease(int arg)` | 尝试独占释放 |
+| `tryAcquireShared(int arg)` | 尝试共享获取 |
+| `tryReleaseShared(int arg)` | 尝试共享释放 |
+| `isHeldExclusively()` | 当前线程是否独占同步状态 |
 
-> **线程从用户态（User Mode）切到内核态（Kernel Mode）是非常昂贵的！**
->  每一次切换都意味着：
->
-> - CPU 寄存器上下文切换
-> - 内核调度
-> - 缓存失效
-> - TLB flush（页表缓存清空）
+这些方法只负责状态判断和修改。线程入队、挂起、唤醒、取消等待等复杂流程由 AQS 统一处理。
 
-这些代价在高并发场景下会被无限放大。
- AQS 的设计哲学就是：**尽可能“用户态解决战斗”**。
+## 七、AQS 解决了什么问题
+
+如果没有 AQS，每个同步组件都要自己处理这些细节：
+
+- 如何用 CAS 修改同步状态。
+- 获取失败后如何排队。
+- 线程什么时候应该阻塞。
+- 释放资源后应该唤醒谁。
+- 中断、超时、取消等待如何处理。
+
+AQS 把这些通用逻辑抽出来，让并发工具只需要关心自己的同步语义。这就是它在 JUC 中重要的原因。
+
+## 八、总结
+
+AQS 的核心是 `state + CLH 队列 + LockSupport`。`state` 表达资源状态，队列表达等待顺序，`park/unpark` 负责阻塞和唤醒。理解 AQS 以后，再看 `ReentrantLock`、`Semaphore`、`CountDownLatch` 这些工具，就不会只是背 API，而是能看见它们共享的骨架。

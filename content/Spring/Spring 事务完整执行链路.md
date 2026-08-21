@@ -250,13 +250,13 @@ getTransaction()（新建 / 加入）
 方法返回
 ```
 
-# 事务管理器的作用是什么？
+## 八、事务管理器的作用是什么？
 
 **事务管理器 = 事务的执行者。它只负责：开、提交、回滚事务，不负责：什么时候开、为什么回滚、用什么规则。**
 
-## 事务管理器解决的核心问题
+### 1. 事务管理器解决的核心问题
 
-### 把抽象事务翻译成具体技术动作
+#### 把抽象事务翻译成具体技术动作
 
 Spring 定义了统一接口：
 
@@ -274,7 +274,7 @@ PlatformTransactionManager
 
 **事务管理器就是适配器**
 
-### 负责事务的三个原子操作
+#### 负责事务的三个原子操作
 
 所有事务管理器，只关心这三件事：
 
@@ -292,7 +292,7 @@ rollback()
 
 **没有任何业务语义判断**
 
-### 维护事务状态（TransactionStatus）
+#### 维护事务状态（TransactionStatus）
 
 ```java
 TransactionStatus
@@ -304,7 +304,7 @@ TransactionStatus
 
 **它只是状态，不是策略**
 
-## 事务管理器不知道这些事情
+### 2. 事务管理器不知道这些事情
 
 事务管理器 **完全不知道**：
 
@@ -315,7 +315,7 @@ TransactionStatus
 
 **这些都不是它的职责**
 
-# TransactionAspectSupport 的作用是什么？
+## 九、TransactionAspectSupport 的作用是什么？
 
 TransactionAspectSupport = Spring 声明式事务的总指挥
 它决定：
@@ -326,7 +326,7 @@ TransactionAspectSupport = Spring 声明式事务的总指挥
 - 异常时回滚还是提交
 - 事务结束后如何清理
 
-## 它在体系中的位置
+### 1. 它在体系中的位置
 
 ```java
 @Transaction
@@ -344,11 +344,9 @@ Database
 
 **它站在策略层，而不是执行层**
 
-------
+### 2. TransactionAspectSupport 干的 6 件关键事情
 
-## TransactionAspectSupport 干的 6 件关键事情
-
-### 解析事务元数据
+#### 解析事务元数据
 
 ```java
 TransactionAttribute txAttr =
@@ -358,7 +356,7 @@ TransactionAttribute txAttr =
 - 把 `@Transactional` 转成 `TransactionAttribute`
 - 决定：要不要事务、用什么规则
 
-### 选择事务管理器
+#### 选择事务管理器
 
 ```java
 PlatformTransactionManager tm =
@@ -368,7 +366,7 @@ PlatformTransactionManager tm =
 - 支持多数据源
 - 支持指定事务管理器
 
-### 创建 / 加入事务
+#### 创建 / 加入事务
 
 ```java
 TransactionInfo txInfo =
@@ -380,13 +378,13 @@ TransactionInfo txInfo =
 
 **传播行为不在事务管理器，而在这里**
 
-### 执行业务方法
+#### 执行业务方法
 
 ```java
 Object ret = invocation.proceed();
 ```
 
-### 决定提交还是回滚
+#### 决定提交还是回滚
 
 ```java
 if (txAttr.rollbackOn(ex)) {
@@ -402,7 +400,7 @@ if (txAttr.rollbackOn(ex)) {
 
 **这是事务语义的核心判断**
 
-### 清理事务上下文
+#### 清理事务上下文
 
 ```java
 cleanupTransactionInfo(txInfo);
@@ -412,23 +410,23 @@ cleanupTransactionInfo(txInfo);
 - 恢复挂起事务
 - 防止事务污染
 
-# TransactionAspectSupport 能做什么 / 不能做什么
+## 十、TransactionAspectSupport 能做什么 / 不能做什么
 
-##### 它能做的
+### 1. 它能做的
 
 1. **手动标记事务回滚**
 2. **获取当前事务状态**
 3. **在复杂分支中决定是否回滚**
 4. **在不抛异常的情况下回滚事务**
 
-##### 它不能做的
+### 2. 它不能做的
 
 - 不能 `begin()` 新事务
 - 不能 `commit()` 事务
 - 不能脱离 Spring AOP 使用
 - 不能跨线程使用
 
-#### 最常见 & 正确用法：手动回滚事务
+### 3. 手动回滚事务
 
 业务失败，但你 **不想抛异常**，仍然希望事务回滚。
 
@@ -455,7 +453,7 @@ public class OrderService {
 }
 ```
 
-##### 发生了什么？
+#### 发生了什么？
 
 - Spring 已经开启事务（AOP）
 

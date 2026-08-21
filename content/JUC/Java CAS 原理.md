@@ -4,77 +4,138 @@ draft = false
 title = 'Java CAS 原理'
 +++
 
-## 背景
+CAS 是 Compare And Swap 的缩写，中文通常叫“比较并交换”。它是一种乐观并发控制方式：先判断内存中的值是否仍然等于预期值，如果相等就更新；如果不相等，说明期间被其他线程修改过，本次更新失败。
 
-Java 在使用 synchronized 关键字保证同步时，会导致有锁。锁机制存在一下问题：
+## 一、为什么需要 CAS
 
-- 在多线程竞争下，加锁、释放锁会导致比较多的上下文切换和调度延时，引起性能问题。
-- 一个线程持有锁会导致其它所有需要此锁的线程挂起。
+多线程更新共享变量时，常见问题有三个：
 
-像这样的锁就是一种悲观锁，它的效率相比乐观锁要低。
+- 原子性：`count++` 不是一个不可分割的操作。
+- 可见性：一个线程修改后的值，其他线程不一定立刻可见。
+- 有序性：编译器和 CPU 可能在不改变单线程语义的前提下重排指令。
 
-volatile关键字能够在并发条件下，强制将修改后的值刷新到主内存中来保持内存的可见性。通过 CPU内存屏障禁止编译器指令性重排来保证并发操作的有序性。但是，它并不保证操作的原子性。在多个线程同时操作 volatile 修饰的变量时，也会造成数据的不一致。
-
-> 每一个线程在操作内存时不会直接操作主存，而是会操作每一个线程独立拥有的工作内存。这样就造成了内存可见性问题，当某个线程修改了主存中的共享变量值之后，其他线程不能感知到该线程被修改了，它会一直使用自己工作内存中的旧值。
-
-## CAS
-
-CAS（Compare and Swap）是一种轻量级的同步操作，也是一种乐观锁的实现方式。在多线程环境中，CAS 可以实现非阻塞算法，避免了使用锁所带来的上下文切换、调度延迟、死锁等问题。
-
-实现 CAS 大致的原理是：将需要操作的变量读进线程工作空间，比较工作空间的值和主缓存的值，如果工作空间缓存的值和主缓存的值相等，修改工作空间缓存并将修改后的值写入主缓存，如果不相等，则失败。
-
-在 Java 中，AtomicInteger 就是通过 CAS 和 volatile 实现的一个线程安全整数类。比用锁更轻量，常用于高并发环境下的计数和状态更新。
-
-常用方法：
+`volatile` 能保证可见性，并通过内存屏障约束部分重排，但它不能保证复合操作的原子性。
 
 ```java
-AtomicInteger atomicInt = new AtomicInteger(0);
+private volatile int count = 0;
 
-// 获取值
-atomicInt.get();          // 0
-
-// 设置值
-atomicInt.set(10);
-
-// 原子加一
-atomicInt.incrementAndGet();  // 11
-atomicInt.getAndIncrement();  // 11 (返回旧值，再+1)
-
-// 原子减一
-atomicInt.decrementAndGet();
-
-// 原子加指定值
-atomicInt.addAndGet(5);   // 当前值+5
-
-// CAS 操作
-atomicInt.compareAndSet(15, 20); // 如果当前值是15，就改成20
-
+public void increment() {
+    count++;
+}
 ```
 
-## ABA问题
+上面的 `count++` 仍然包含读取、加一、写回三个步骤。多个线程同时执行时，更新可能丢失。
 
-在并发编程中，如果一个变量初次读取时是 A 值，它的值被修改成 B，然后其他线程又把 B 修改成 A 了。而另一个早期线程在对比值时会误以为值没有发生改变 。这就是 ABA 问题。
+## 二、CAS 的基本过程
 
-解决 ABA 问题的一个方式是使用带版本号的的 CAS。在每次进行 CAS 操作时，不仅需要比较要修改的内存地址的值与期望的值是否相等，还需要比较这个内存地址的版本号是否与期望的版本号相等。如果相等，才进行修改操作。这样上述早期线程在对比版本号时会发现版本号错误，从而避免了误判。
+CAS 操作包含三个值：
 
-Java 提供的 AtomicInteger 等基础原子类只能保证单值原子性，可能会遇到 ABA 问题。AtomicStampedReference 维护了一个引用对象和整数版本号每次更新时，除了比较对象本身，还要比较版本号（stamp），从而解决 CAS 操作的 ABA 问题。
+- 内存位置中的当前值。
+- 线程期望看到的旧值。
+- 准备写入的新值。
 
-常用方法：
+流程可以表示为：
+
+```text
+读取当前值 current
+ -> current == expected ?
+      -> 是：写入 newValue，更新成功
+      -> 否：不写入，更新失败
+```
+
+CAS 通常由 CPU 原子指令支持。Java 中的原子类会借助底层原子操作完成更新。
+
+## 三、AtomicInteger 示例
+
+`AtomicInteger` 使用 CAS 和 `volatile` 实现线程安全的整数更新。
 
 ```java
-AtomicStampedReference<String> ref = new AtomicStampedReference<>("A", 1); // 初始值 A，版本号 1
+AtomicInteger count = new AtomicInteger(0);
 
-// 获取当前值和版本号
+int next = count.incrementAndGet();
+boolean success = count.compareAndSet(next, 100);
+```
+
+常见方法：
+
+| 方法 | 作用 |
+| --- | --- |
+| `get()` | 获取当前值 |
+| `set(value)` | 设置新值 |
+| `incrementAndGet()` | 先加一，再返回新值 |
+| `getAndIncrement()` | 先返回旧值，再加一 |
+| `addAndGet(delta)` | 增加指定值并返回新值 |
+| `compareAndSet(expect, update)` | 当前值等于期望值时更新 |
+
+原子类适合计数、状态标记、轻量级并发更新等场景。
+
+## 四、自旋重试
+
+CAS 更新失败时，常见做法是重新读取最新值，再次尝试更新：
+
+```java
+public int increment(AtomicInteger value) {
+    for (;;) {
+        int current = value.get();
+        int next = current + 1;
+        if (value.compareAndSet(current, next)) {
+            return next;
+        }
+    }
+}
+```
+
+这种循环称为自旋。竞争不激烈时，自旋 CAS 很轻量；竞争激烈时，大量线程反复失败，会浪费 CPU。
+
+## 五、ABA 问题
+
+CAS 只比较“值是否等于预期值”。如果一个值从 A 变成 B，又变回 A，CAS 会认为它没有变过。
+
+```text
+线程 1 读取到 A
+线程 2 把 A 改成 B
+线程 2 又把 B 改回 A
+线程 1 比较发现仍然是 A，于是更新成功
+```
+
+如果业务只关心当前值，ABA 可能不是问题；如果业务关心中间是否发生过变化，ABA 就会造成误判。
+
+## 六、解决 ABA
+
+常见解决方式是增加版本号。Java 提供了 `AtomicStampedReference`：
+
+```java
+AtomicStampedReference<String> ref =
+        new AtomicStampedReference<>("A", 1);
+
 int[] stampHolder = new int[1];
-String value = ref.get(stampHolder); // 版本号被存放在了长度为 1 的 stampHolder 数组中
-System.out.println("值=" + value + " 版本号=" + stampHolder[0]);
+String value = ref.get(stampHolder);
+int stamp = stampHolder[0];
 
-// CAS 更新（需要同时提供预期值和预期版本号）
-boolean success = ref.compareAndSet("A", "B", 1, 2); 
-// 如果当前值是 A 且版本号是 1，就更新为 B，版本号变成 2
-
-// 单独获取
-ref.getReference(); // 获取引用
-ref.getStamp();     // 获取版本号
-
+boolean success = ref.compareAndSet(
+        value,
+        "B",
+        stamp,
+        stamp + 1
+);
 ```
+
+它不仅比较引用值，还比较版本号。只要中间发生过更新，版本号就会变化，从而避免把“变回来了”误判成“没变过”。
+
+## 七、CAS 的优缺点
+
+优点：
+
+- 不需要阻塞线程，避免一部分上下文切换成本。
+- 适合低到中等竞争下的轻量级状态更新。
+- 是很多 JUC 组件和原子类的基础。
+
+缺点：
+
+- 高竞争下可能长时间自旋，浪费 CPU。
+- 单个 CAS 通常只能保证一个变量的原子更新。
+- 可能遇到 ABA 问题，需要版本号或其他机制处理。
+
+## 八、总结
+
+CAS 的核心是“先比较，再交换”。它不是锁的完全替代品，而是一种适合特定场景的乐观更新方式。竞争轻、操作短、状态简单时，CAS 很优雅；竞争重、逻辑复杂时，强行自旋只会把问题变成 CPU 热点。

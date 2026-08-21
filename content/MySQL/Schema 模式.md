@@ -4,55 +4,50 @@ draft = false
 title = 'Schema 模式'
 +++
 
-我第一次在实习公司使用 PostgreSQL 数据库，第一次接触到了 **Schema（模式）设计**。
+我第一次在实习项目里接触 PostgreSQL 时，最容易混淆的概念就是 schema。MySQL 中也能看到 `schema` 这个词，但它和 PostgreSQL 的 schema 不是同一层级的东西。
 
-在 **PostgreSQL** 里，命名空间 = **schema**，它是数据库内部的逻辑分组容器。
+简单说：**PostgreSQL 的 schema 是 database 内部的命名空间；MySQL 里 schema 基本可以理解为 database 的同义词。**
 
-## 一、什么是 PostgreSQL 的命名空间？
+## 一、PostgreSQL 的 schema
 
-结构层级是这样的：
+PostgreSQL 的层级大致是：
 
 ```text
-数据库（Database）
-    └── 模式（Schema）← 命名空间
-            ├── 表（Table）
-            ├── 视图（View）
-            ├── 函数（Function）
-            ├── 类型（Type）
-            ├── 序列（Sequence）
+server
+  └── database
+        └── schema
+              ├── table
+              ├── view
+              ├── function
+              ├── sequence
+              └── type
 ```
 
-比如：
+例如：
 
 ```text
 public.user
 auth.user
 ```
 
-这里：
+这里 `public` 和 `auth` 是两个 schema。它们下面都可以有一张叫 `user` 的表，因为完整对象名不同。
 
-- `public` 是 schema
-- `auth` 是 schema
-- `user` 是表
+## 二、schema 的作用
 
-这两个表可以同时存在，因为它们属于不同命名空间。
+### 1. 解决重名
 
-## 二、为什么要设计命名空间？
-
-### 解决重名问题
-
-不同 schema 可以有同名对象：
+不同模块可以有同名对象：
 
 ```text
-public.order
-test.order
+auth.user
+report.user
 ```
 
-避免表名冲突。
+只要 schema 不同，就不会冲突。
 
-### 模块化组织数据库
+### 2. 模块化组织
 
-例如：
+可以像包结构一样管理数据库对象：
 
 ```text
 auth.users
@@ -61,109 +56,126 @@ order.orders
 order.order_items
 ```
 
-像包结构一样管理数据库对象。
+大型系统里，这比把所有表都丢进一个公共命名空间更清楚。
 
-### 权限隔离
+### 3. 权限隔离
 
-可以给 schema 授权：
+可以按 schema 授权：
 
 ```sql
-GRANT USAGE ON SCHEMA auth TO app_user;
+grant usage on schema auth to app_user;
+grant select on all tables in schema auth to app_user;
 ```
 
-比单表授权更方便。
+这样权限边界可以按模块组织。
 
-### 多租户支持
+### 4. 多租户隔离
 
-不同租户使用不同 schema：
+一种多租户设计是每个租户一个 schema：
 
 ```text
 tenant_a.user
 tenant_b.user
 ```
 
-逻辑隔离，物理仍在同一数据库。
+这种方式逻辑隔离较清晰，但租户数量太多时，迁移、DDL、连接配置和权限管理都会变复杂。
 
-## 三、默认命名空间机制
+## 三、search_path
 
-PostgreSQL 有一个默认 schema：
+PostgreSQL 用 `search_path` 决定未指定 schema 时从哪里找对象：
+
+```sql
+show search_path;
+```
+
+常见默认值类似：
 
 ```text
-public
-```
-
-当你执行：
-
-```sql
-SELECT * FROM user;
-```
-
-实际上 PostgreSQL 会根据 `search_path` 去找：
-
-```sql
-SHOW search_path;
-```
-
-默认通常是：
-
-```sql
 "$user", public
 ```
 
-意思是：
+如果设置：
 
-1. 先找与你用户名同名的 schema
-2. 再找 public
-
-## 四、search_path 是关键
-
-`search_path` 决定解析顺序。
-
-如果：
-
-```text
-SET search_path TO auth, public;
+```sql
+set search_path to auth, public;
 ```
 
 执行：
 
 ```sql
-SELECT * FROM user;
+select *
+from user;
 ```
 
-优先找：
+会优先查找：
 
-```
+```text
 auth.user
 ```
 
-找不到再去 public。
+找不到才继续查 `public.user`。
 
-## 五、和 MySQL 的区别
+生产 SQL 中，如果对象归属很重要，可以显式写 schema，避免被 `search_path` 影响。
 
-在 **MySQL** 里：
+## 四、MySQL 中的 schema
 
-```text
-数据库 = 命名空间
-```
-
-没有 schema 概念。
-
-而 PostgreSQL 是：
+MySQL 中：
 
 ```text
-数据库
-   └── 多个 schema（命名空间）
+schema ≈ database
 ```
 
-PostgreSQL 更细粒度。
+例如：
 
-## 六、底层实现原理
+```sql
+create database blog;
+use blog;
+```
 
-在 PostgreSQL 内部：
+在很多 MySQL 工具里，`schema` 和 `database` 基本指同一个东西。MySQL 没有 PostgreSQL 那种 database 内再分多个 schema 的层级。
 
-- 每个 schema 在系统表 `pg_namespace` 里
-- 每个对象（表、函数等）都有一个 namespace OID
-- 通过 namespace + name 唯一确定对象
+对比：
 
-我实习公司里面的项目，有一个我感觉非常反人类的设计，他将不同的 schema 当作不同的数据源，通过 MP 多数据源为每一个 schema 分一个 JDBC 连接。要知道，这个项目并没有分布式事务。当一个业务操作横跨多个 schema 时，不同的 JDBC 连接不可以被认做一个事务，在一些操作中，就不能用事务保证操作的完整性。因此不得不放弃事务，因为该项目没有这种情况的解决方案，我一个实习生人微言轻。
+```text
+PostgreSQL:
+database -> schema -> table
+
+MySQL:
+database/schema -> table
+```
+
+## 五、schema 和数据源
+
+schema 是命名空间，不天然等于数据源。
+
+如果同一个 PostgreSQL database 里有多个 schema，只要使用同一个连接，就可以在一个本地事务中访问它们：
+
+```sql
+begin;
+insert into schema_a.t1 values (...);
+insert into schema_b.t2 values (...);
+commit;
+```
+
+但如果应用层给每个 schema 都配置一个独立 `DataSource`，那就变成了多个连接。一个本地事务不再天然覆盖全部操作。
+
+这类设计会让事务边界变复杂。除非有明确隔离需求，否则不要把“命名空间隔离”误建模成“数据源隔离”。
+
+## 六、底层理解
+
+在 PostgreSQL 内部，schema 信息存放在系统目录中。对象会通过 namespace 和 name 共同确定身份。
+
+这也是为什么同名表可以存在于不同 schema 中：
+
+```text
+namespace = auth, name = user
+namespace = report, name = user
+```
+
+它们不是同一个对象。
+
+## 七、总结
+
+PostgreSQL schema 是 database 内部的命名空间，适合做模块化、权限隔离和有限的租户隔离。MySQL 里的 schema 基本等同于 database。
+
+理解这个差异很重要。否则在设计多数据源、事务边界和对象命名时，很容易把“逻辑命名空间”误认为“物理数据源”。

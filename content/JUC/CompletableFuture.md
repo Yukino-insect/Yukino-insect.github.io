@@ -4,173 +4,155 @@ draft = false
 title = 'CompletableFuture'
 +++
 
-是 Java 8 提供的一个可组合的异步计算类，它实现了 `Future` 接口，但功能比 `Future` 要更加强大，支持
+`CompletableFuture` 是 Java 8 引入的异步编排工具。它实现了 `Future`，但比传统 `Future` 更适合表达任务之间的依赖、组合、汇总和异常处理。
 
-- 异步执行
-- 任务依赖
-- 并行组合
-- 异常处理
-- 多任务竞争与汇总
+传统 `Future` 主要是“提交任务，然后阻塞获取结果”。`CompletableFuture` 更像是“任务完成后，继续执行下一段流程”。
 
-`CompletableFuture.runAsync(Runnable task)` 执行无返回值任务
+## 一、创建异步任务
+
+无返回值任务使用 `runAsync`：
 
 ```java
 CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
-    try {
-        Thread.sleep(2000);
-        System.out.println("execute");
-    } catch (Exception e) {
-
-    }
+    System.out.println("run async");
 });
-System.out.println("join main");
+
 future.join();
-System.out.println("main end");
 ```
 
-`CompletableFuture.supplyAsync(Callable task)` 执行有返回值任务
+有返回值任务使用 `supplyAsync`：
 
 ```java
 CompletableFuture<String> future = CompletableFuture.supplyAsync(() -> {
-    try {
-        System.out.print("execute");
-        Thread.sleep(2000);
-    } catch (Exception e) {
-
-    }
-    return "finish";
+    return "hello";
 });
-try {
-    System.out.println(future.get());            
-} catch (Exception e) {
 
-}
-System.out.println("main end");
+String result = future.join();
 ```
 
-> PS：`CompletableFuture` 默认使用 `ForkJoinPool.commomPool` 线程池，它适合 CPU 密集型任务，并且所有没有指定线程池的都会共享它。它在处理阻塞任务，如 IO、数据库、网络时会卡死整个池导致性能骤降。所以推荐在使用过程中传入自定义线程池来获得可控的异步执行环境
-
-`thenApply(Supplier<U> supplier)` 接收上一个任务结果并返回新结果
+默认情况下，未指定线程池的异步任务会使用 `ForkJoinPool.commonPool()`。业务项目中更推荐传入自定义线程池，尤其是任务里包含数据库、RPC、文件 IO 等阻塞操作时。
 
 ```java
 CompletableFuture<String> future = CompletableFuture.supplyAsync(() -> {
-    return "Hello ";
-})
-.thenApply(res -> {
-    return res + "world";
-});
-try {
-    System.out.println(future.get());            
-} catch (Exception e) {
-
-}
-System.out.println("main end");
+    return queryUserName();
+}, bizExecutor);
 ```
 
-`thenAccept(Consumer<? supper T> action)` 接收结果但不返回值
+## 二、串行编排
+
+`thenApply` 接收上一步结果，并返回新结果：
 
 ```java
-CompletableFuture.supplyAsync(() -> {
-    return "Hello ";
-})
-.thenApply(res -> {
-    return res + "world";
-})
-.thenAccept(res -> {
-    System.out.println(res);
-});
-System.out.println("main end");
+CompletableFuture<String> future = CompletableFuture
+        .supplyAsync(() -> "hello", bizExecutor)
+        .thenApply(value -> value + " world");
 ```
 
-`thenRun(Runnable task)` 不关心结果只执行一个 `Runnable`
+`thenAccept` 接收结果，但不返回新值：
 
 ```java
-CompletableFuture.supplyAsync(() -> {
-    return "Hello ";
-})
-.thenApply(res -> {
-    return res + "world";
-})
-.thenAccept(res -> {
-    System.out.println(res);
-})
-.thenRun(() -> {
-    System.out.println("this task is finished");
-});
-System.out.println("main end");
+CompletableFuture<Void> future = CompletableFuture
+        .supplyAsync(() -> "hello", bizExecutor)
+        .thenAccept(value -> System.out.println(value));
 ```
 
-`thenCombine(CompletionStage<? extends U> other, BiFunction<? super T,? super U,? extends V> fn)` 两个任务都完成后合并结果
+`thenRun` 不关心上一步结果，只在上一步完成后继续执行：
 
 ```java
-CompletableFuture<String> f1 = CompletableFuture.supplyAsync(() -> {
-    return "world";
-});
-CompletableFuture<String> res = CompletableFuture.supplyAsync(() -> {
-    return "Hello ";
-})
-.thenCombine(f1, (s1, s2) -> {
-    return s1 + s2;
-});
-try {
-    System.out.println(res.get());
-} catch (Exception e) {
-
-}
-System.out.println("main end");
+CompletableFuture<Void> future = CompletableFuture
+        .supplyAsync(() -> "hello", bizExecutor)
+        .thenRun(() -> System.out.println("finished"));
 ```
 
-`CompletableFuture.allOf(CompletableFuture<?>... cfs)` 等待所有任务完成
+如果回调方法名带 `Async`，例如 `thenApplyAsync`，表示回调会异步执行。没有 `Async` 的回调，可能由完成上一步任务的线程直接执行。
+
+## 三、组合两个任务
+
+两个任务都完成后合并结果，用 `thenCombine`：
 
 ```java
-CompletableFuture<Void> res = CompletableFuture.allOf(
-            CompletableFuture.runAsync(() -> {
-                try {
-                    Thread.sleep(2000);
-                    System.out.println("execute 1");
-                } catch (Exception e) {
+CompletableFuture<String> userFuture =
+        CompletableFuture.supplyAsync(() -> queryUser(), bizExecutor);
 
-                }
+CompletableFuture<Integer> scoreFuture =
+        CompletableFuture.supplyAsync(() -> queryScore(), bizExecutor);
 
-            }),
-            CompletableFuture.runAsync(() -> {
-                System.out.println("execute 2");
-            })
-        );;
-System.out.println("main join");
-res.join();
-System.out.println("main join finish");
-System.out.println("main end");
+CompletableFuture<String> resultFuture = userFuture.thenCombine(scoreFuture,
+        (user, score) -> user + ":" + score);
 ```
 
-`CompletableFuture.anyOf(CompletableFuture<?>... cfs)` 任意一个完成就返回
+如果第二个任务依赖第一个任务的结果，并且第二个任务本身也返回 `CompletableFuture`，使用 `thenCompose` 避免嵌套：
 
 ```java
-CompletableFuture<Object> res = CompletableFuture.anyOf(
-            CompletableFuture.supplyAsync(() -> {
-                try {
-                    Thread.sleep(20);
-                } catch (Exception e) {
-
-                }
-                return "1";
-            }),
-            CompletableFuture.supplyAsync(() -> {
-                return "2";
-            })
-        );;
-try {
-    System.out.println(res.get());
-} catch (Exception e) {
-
-}
-System.out.println("main end");
+CompletableFuture<Order> orderFuture = CompletableFuture
+        .supplyAsync(() -> queryUserId(), bizExecutor)
+        .thenCompose(userId -> CompletableFuture.supplyAsync(
+                () -> queryOrder(userId), bizExecutor));
 ```
 
-还有一些其他处理异常的方法：
+## 四、等待多个任务
 
-- `exceptionally()` 捕获异常并返回默认值
+`allOf` 等待所有任务完成：
 
-- `handle()` 无论成功或失败都执行
+```java
+CompletableFuture<User> userFuture =
+        CompletableFuture.supplyAsync(() -> queryUser(), bizExecutor);
 
-- `whenComplete()` 执行结束回调，不改变结果
+CompletableFuture<Order> orderFuture =
+        CompletableFuture.supplyAsync(() -> queryOrder(), bizExecutor);
+
+CompletableFuture<Void> all = CompletableFuture.allOf(userFuture, orderFuture);
+all.join();
+
+User user = userFuture.join();
+Order order = orderFuture.join();
+```
+
+`anyOf` 任意一个任务完成后返回：
+
+```java
+CompletableFuture<Object> first = CompletableFuture.anyOf(
+        CompletableFuture.supplyAsync(() -> queryFromCache(), bizExecutor),
+        CompletableFuture.supplyAsync(() -> queryFromRemote(), bizExecutor)
+);
+```
+
+`allOf` 返回的是 `CompletableFuture<Void>`，不会自动帮你收集每个任务的结果。结果仍然要从原来的 future 中取。
+
+## 五、异常处理
+
+常用异常处理方法有三个：
+
+| 方法 | 作用 |
+| --- | --- |
+| `exceptionally` | 发生异常时返回兜底值 |
+| `handle` | 成功或失败都会执行，并返回新结果 |
+| `whenComplete` | 成功或失败都会执行，通常用于记录日志，不改变原结果 |
+
+示例：
+
+```java
+CompletableFuture<String> future = CompletableFuture
+        .supplyAsync(() -> queryRemote(), bizExecutor)
+        .exceptionally(ex -> {
+            log.warn("query remote failed", ex);
+            return "fallback";
+        });
+```
+
+`join()` 和 `get()` 都能获取结果，但异常包装不同：
+
+- `get()` 抛出受检异常，例如 `ExecutionException`。
+- `join()` 抛出运行时异常 `CompletionException`。
+
+## 六、常见坑
+
+- 不要让阻塞 IO 任务长期占用 `ForkJoinPool.commonPool()`。
+- 不要忘记处理异常，否则异步任务失败时可能只在最终 `join` 才暴露。
+- 不要无限制创建大量异步任务，本质上仍然会消耗线程池和队列资源。
+- 注意没有 `Async` 后缀的回调可能在当前完成线程中执行，回调太重会拖慢上游任务。
+- 多个任务并行时，要明确超时、降级和取消策略。
+
+## 七、总结
+
+`CompletableFuture` 适合表达异步流程：串行依赖用 `thenApply`、`thenCompose`，并行合并用 `thenCombine`、`allOf`，异常兜底用 `exceptionally` 或 `handle`。它能让异步代码少一点回调泥潭，但前提是线程池、异常和超时都被认真处理。

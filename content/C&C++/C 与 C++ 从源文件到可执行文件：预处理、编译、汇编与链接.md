@@ -631,8 +631,6 @@ gcc main.c -I/path/to/foo/include -L/path/to/foo/lib -lfoo -o app
 
 ## 十、动态链接和程序运行
 
-用户提到“程序运行的时候好像还有链接什么的事情”，这个感觉是对的。
-
 链接可以分成：
 
 - 构建时链接。

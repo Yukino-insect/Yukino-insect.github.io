@@ -96,13 +96,15 @@ hugo --cleanDestinationDir
 
 ```text
 计算机基础
-Java 技术栈
-数据库与检索
+Java
+数据存储与检索
 分布式架构
 AI 工程
 随笔杂谈
+前端知识
+消息队列
 Python
-Git
+C/C++
 ```
 
 `工程实践` 分类已取消。`ProjectExperience` 等真实内容目录仍然可以作为普通内容目录存在，但不会出现在首页泛化分类中，除非你把它们配置到 `data/topic_groups.yaml`。

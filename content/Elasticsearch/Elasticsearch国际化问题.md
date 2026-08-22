@@ -1,8 +1,7 @@
 +++
 date = '2026-03-17T21:33:38+08:00'
 draft = false
-title = 'Elasticsearch国际化问题'
-
+title = 'Elasticsearch 国际化问题'
 +++
 
 我就面个实习，面试官询问跨境电商搜索业务。作为只会 CRUD ES 的、人怎么可能会。很自然的被拷打了，现在查阅资料了解一下。
@@ -54,11 +53,13 @@ title = 'Elasticsearch国际化问题'
 
 ES 层如何存不同语言的数据呢，现提供如下方案。
 
-### 多字段方案
+### 同一文档多语言字段方案
 
 > 最推荐该方案。
 
-在同一个业务字段中使用不同语言分词器建立多个字段。
+在同一个商品文档中保存多种语言的标题、属性和描述字段，并为不同语言字段配置不同 analyzer。
+
+需要注意：这里说的“多语言字段”不是 ES mapping 中 `fields` 那种 multi-fields。`fields` 适合把**同一个字符串值**用不同方式索引，例如 `title` 同时有 `text` 和 `keyword` 形态；而多语言翻译通常是不同字符串，例如中文标题和英文标题，应该使用独立字段或 object 字段。
 
 它的 mapping 设计如下：
 
@@ -80,29 +81,26 @@ PUT /product_i18n
   },
   "mappings": {
     "properties": {
-      "title": {
-        "type": "text",
-        "fields": {
-          "zh": { "type": "text", "analyzer": "ik_zh" },
-          "en": { "type": "text", "analyzer": "en_analyzer" }
-        }
-      }
+      "title_zh": { "type": "text", "analyzer": "ik_zh" },
+      "title_en": { "type": "text", "analyzer": "en_analyzer" },
+      "attrs_zh": { "type": "text", "analyzer": "ik_zh" },
+      "attrs_en": { "type": "text", "analyzer": "en_analyzer" }
     }
   }
 }
 ```
 
-`title` 是整体的业务字段；`title.zh` 是特定语言对应的业务字段内容
+`title_zh` 和 `title_en` 是同一个商品在不同语言下的标题字段。这样既能为不同语言配置不同 analyzer，也能在查询时给用户当前语言更高权重。
 
 写入数据
 
 ```http
 POST /product_i18n/_doc/1
 {
-  "title": {
-    "zh": "苹果手机",
-    "en": "iPhone"
-  }
+  "title_zh": "苹果手机",
+  "title_en": "iPhone",
+  "attrs_zh": "钛金属 256GB",
+  "attrs_en": "titanium 256GB"
 }
 ```
 
@@ -113,7 +111,7 @@ GET /product_i18n/_search
 {
   "query": {
     "match": {
-      "title.en": "iphone"
+      "title_en": "iphone"
     }
   }
 }
@@ -187,13 +185,15 @@ public class SearchFieldConfig {
 
     public static Map<Lang, Map<String, Float>> fieldBoosts() {
         Map<String, Float> zhBoost = Map.of(
-                "title.zh", 3.0f,
-                "title.en", 1.0f
+                "title_zh", 3.0f,
+                "attrs_zh", 2.0f,
+                "title_en", 1.0f
         );
 
         Map<String, Float> enBoost = Map.of(
-                "title.en", 3.0f,
-                "title.zh", 1.0f
+                "title_en", 3.0f,
+                "attrs_en", 2.0f,
+                "title_zh", 1.0f
         );
 
         return Map.of(
@@ -246,7 +246,7 @@ public class SearchService {
 
         Lang lang = LanguageResolver.resolve(request);
 
-        Query query = QueryBuilder.buildCrossLangQuery(keyword, lang);
+        Query query = QueryBuilder.buildMultiLangQuery(keyword, lang);
 
         return client.search(s -> s
                 .index(index)

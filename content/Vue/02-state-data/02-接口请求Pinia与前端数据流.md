@@ -513,11 +513,14 @@ localStorage token：浏览器持久化副本，负责刷新后恢复
 
 ```ts
 export const useAuthStore = defineStore('auth', () => {
+  // 状态
   const token = ref<string | null>(localStorage.getItem('token'))
   const profile = ref<UserProfile | null>(null)
-
+  
+  // getter
   const loggedIn = computed(() => Boolean(token.value))
 
+  // action
   async function login(form: LoginForm) {
     const result = await loginApi(form)
     token.value = result.token
@@ -542,6 +545,10 @@ export const useAuthStore = defineStore('auth', () => {
 ```
 
 Store 中可以有 state、getter、action。组合式写法下，`ref` 是 state，`computed` 是 getter，函数是 action。
+
+`defineStore` 是 Vue 官方状态管理库 **Pinia** 用于定义并创建一个状态存储库（Store）的核心函数。
+
+它的主要作用是将应用中的全局共享状态（state）、计算属性（getter）和修改逻辑（action）封装在一起，供跨组件复用。
 
 `defineStore('auth', ...)` 里的 `'auth'` 是 store id。它应该稳定、唯一、能表达业务领域。这个 id 会参与 DevTools 展示、状态分组、插件处理和持久化逻辑。随手写成 `'store1'` 当然也能跑，只是后面排查问题时，你会为当时的随手付出一点并不浪漫的代价。
 

@@ -10,6 +10,7 @@ title = '接口请求、Pinia 与前端数据流：把服务端数据管起来'
 
 - 接口请求应该怎样从组件里抽离出来。
 - 什么状态适合放在 Pinia，什么状态应该留在页面。
+- Pinia store 的状态到底存在浏览器哪里，和 `localStorage` 有什么关系。
 - Store 怎样处理加载、失败、缓存、乐观更新和并发请求。
 
 ## 一、前端数据流
@@ -260,7 +261,255 @@ settingsStore：主题、语言、布局偏好
 - 失败时知道是否保留旧数据。
 - 页面不需要知道请求 URL 和响应结构细节。
 
-## 七、定义 Store
+## 七、Pinia Store 到底存在哪里
+
+很多初学者会把 Pinia 和 `localStorage` 混在一起理解，好像“用了 Pinia，数据就会自动存到浏览器里”。这当然不对。准确地说：
+
+```text
+Pinia store 默认存在 JavaScript 运行时内存里
+localStorage 存在浏览器提供的本地持久化存储里
+后端数据存在服务端数据库、缓存或文件系统里
+```
+
+这三者不是同一层东西。
+
+### 1. Store 默认是内存状态
+
+当 Vue 应用启动时，代码会执行：
+
+```ts
+const pinia = createPinia()
+
+createApp(App)
+  .use(pinia)
+  .mount('#app')
+```
+
+`createPinia()` 会创建一个 Pinia 实例。之后你在组件里调用：
+
+```ts
+const authStore = useAuthStore()
+```
+
+Pinia 会根据 `defineStore('auth', ...)` 创建或复用一个 `auth` store。这个 store 可以理解成挂在当前 Vue 应用上的响应式对象。多个组件调用 `useAuthStore()`，拿到的是同一个应用里的同一份 `auth` 状态。
+
+概念上可以把它想成这样：
+
+```ts
+const piniaState = {
+  auth: {
+    token: 'xxx',
+    profile: {
+      id: 1,
+      nickname: 'Yukino'
+    }
+  },
+  post: {
+    posts: [],
+    loaded: false
+  }
+}
+```
+
+这不是让你真的这样写代码，而是帮助你理解：store 是按 `id` 分组的应用状态树。`auth`、`post`、`settings` 这些名字不是装饰，它们决定了状态归属。名字随便起，后面自然也会随便乱。
+
+但这份状态默认只存在于当前页面的 JavaScript 内存中。只要用户刷新页面、关闭标签页、重新打开网站，内存就会重新初始化。
+
+```text
+进入页面 -> 创建 Vue 应用 -> 创建 Pinia -> 初始化 store
+刷新页面 -> 旧 JS 内存销毁 -> 重新创建 Vue 应用 -> 重新初始化 store
+```
+
+所以，Pinia 本身不负责“刷新后还在”。如果刷新后 token 还在，那通常是因为你手动把 token 写进了 `localStorage`、`sessionStorage`、Cookie，或者重新向后端请求了用户信息。功劳不要算错对象，虽然代码不会介意，但维护代码的人会。
+
+### 2. Pinia 底层依赖 Vue 响应式
+
+Pinia 不是另起一套神秘存储系统。它建立在 Vue 的响应式能力上。
+
+组合式写法中：
+
+```ts
+export const useCounterStore = defineStore('counter', () => {
+  const count = ref(0)
+  const doubleCount = computed(() => count.value * 2)
+
+  function increment() {
+    count.value++
+  }
+
+  return {
+    count,
+    doubleCount,
+    increment
+  }
+})
+```
+
+可以这样理解：
+
+| 写法 | 在 store 中的角色 | 类比 |
+| ---- | ---------------- | ---- |
+| `ref()` / `reactive()` | state | 组件里的响应式数据 |
+| `computed()` | getter | 根据 state 算出来的值 |
+| `function` | action | 修改状态或发请求的业务动作 |
+
+组件读取 `count`，模板就会追踪它；action 修改 `count`，依赖它的组件会重新渲染。这就是 Pinia 看起来“全局自动更新”的原因：它不是把数据存到了什么特殊地方，而是把共享状态做成了 Vue 能追踪的响应式状态。
+
+### 3. Store 和组件状态的区别
+
+组件里的 `ref`：
+
+```ts
+const keyword = ref('')
+```
+
+通常只属于当前组件实例。组件卸载后，这份状态就没了。
+
+Pinia store 里的 `ref`：
+
+```ts
+export const useSearchStore = defineStore('search', () => {
+  const keyword = ref('')
+
+  return { keyword }
+})
+```
+
+属于当前 Vue 应用的 store 实例。只要应用还在，路由切换、组件卸载、另一个组件重新挂载，都可以继续读到同一份状态。
+
+差异可以简化成：
+
+| 状态位置 | 生命周期 | 共享范围 |
+| -------- | -------- | -------- |
+| 组件 `ref` | 组件创建到组件卸载 | 当前组件及其子组件 |
+| 组合函数内部 `ref` | 调用组合函数的组件生命周期 | 通常是当前调用方 |
+| Pinia store | 当前 Vue 应用运行期间 | 整个应用 |
+| `localStorage` | 浏览器保存到被清理为止 | 同源页面 |
+| 后端数据库 | 服务端决定 | 多设备、多用户、多会话 |
+
+这张表很重要。状态管理最常见的错误，就是把生命周期不同的东西硬塞进同一个位置。页面临时输入值放进 store，会污染全局；登录 token 只放组件内，一刷新就丢。两者都不是什么高深错误，只是边界没想清楚。
+
+### 4. localStorage 是什么
+
+`localStorage` 是浏览器提供的 Web Storage API。它是一个按站点来源隔离的键值存储。
+
+所谓“同源”，大致由协议、域名、端口共同决定：
+
+```text
+https://example.com
+http://example.com
+https://example.com:8080
+```
+
+这三个来源并不完全相同。浏览器会按来源隔离 `localStorage`，一个来源下写入的数据，另一个来源通常读不到。
+
+最基本的用法：
+
+```ts
+localStorage.setItem('token', 'abc')
+
+const token = localStorage.getItem('token')
+
+localStorage.removeItem('token')
+```
+
+它有几个关键特点：
+
+- 只能直接存字符串。
+- 数据刷新页面后仍然存在。
+- 数据不会像 Cookie 那样自动随请求发送给服务器。
+- API 是同步的，读写很方便，但大量读写会阻塞主线程。
+- 存储容量有限，通常适合小数据，不适合大列表、大文件。
+- 浏览器环境才有，服务端渲染时不能直接访问 `window.localStorage`。
+
+因为只能存字符串，所以对象要自己序列化：
+
+```ts
+const profile = {
+  id: 1,
+  nickname: 'Yukino'
+}
+
+localStorage.setItem('profile', JSON.stringify(profile))
+
+const rawProfile = localStorage.getItem('profile')
+const parsedProfile = rawProfile ? JSON.parse(rawProfile) as UserProfile : null
+```
+
+这也意味着，`localStorage` 里没有类型保护。你今天存的是 `UserProfile`，明天代码改了字段名，旧数据不会自动迁移。它只会安静地躺在那里，然后在某个用户浏览器里给你一份过期结构。很体贴吗？不，它只是没有判断力。
+
+### 5. localStorage 和 Cookie、sessionStorage 的区别
+
+常见本地存储可以粗略对比如下：
+
+| 存储方式 | 是否刷新后保留 | 是否关闭标签页后保留 | 是否自动随请求发送 | 适合存什么 |
+| -------- | -------------- | -------------------- | ------------------ | ---------- |
+| 内存状态 | 否 | 否 | 否 | 当前运行期间的页面状态 |
+| `localStorage` | 是 | 是 | 否 | 主题、语言、非敏感偏好、部分 token 场景 |
+| `sessionStorage` | 是 | 通常否 | 否 | 单个标签页会话数据 |
+| Cookie | 是，取决于过期时间 | 是，取决于过期时间 | 是 | 服务端需要识别的会话信息 |
+| IndexedDB | 是 | 是 | 否 | 大量结构化本地数据 |
+
+这里不展开 Cookie 的安全细节，但要记住一点：如果 token 放在 `localStorage`，一旦页面存在 XSS 漏洞，攻击脚本就可能读取它。前端存储不是保险柜。能不能存、存多久、怎么失效，要结合后端认证方案一起设计。
+
+### 6. Store 和 localStorage 怎样配合
+
+常见登录状态会这样设计：
+
+```text
+应用启动
+ -> 从 localStorage 读取 token
+ -> 初始化 authStore.token
+ -> 请求 /me 获取用户资料
+ -> 用户登录后更新 authStore，并写入 localStorage
+ -> 用户退出后清空 authStore，并删除 localStorage
+```
+
+代码上大致是：
+
+```ts
+const TOKEN_KEY = 'blog-token'
+
+export const useAuthStore = defineStore('auth', () => {
+  const token = ref<string | null>(localStorage.getItem(TOKEN_KEY))
+  const profile = ref<UserProfile | null>(null)
+
+  const loggedIn = computed(() => Boolean(token.value))
+
+  async function login(form: LoginForm) {
+    const result = await loginApi(form)
+
+    token.value = result.token
+    profile.value = result.profile
+    localStorage.setItem(TOKEN_KEY, result.token)
+  }
+
+  function logout() {
+    token.value = null
+    profile.value = null
+    localStorage.removeItem(TOKEN_KEY)
+  }
+
+  return {
+    token,
+    profile,
+    loggedIn,
+    login,
+    logout
+  }
+})
+```
+
+这里有两份状态：
+
+```text
+authStore.token：运行时响应式状态，负责驱动页面更新
+localStorage token：浏览器持久化副本，负责刷新后恢复
+```
+
+页面应该主要读 `authStore.token` 和 `authStore.loggedIn`，而不是每个组件都去 `localStorage.getItem('token')`。如果到处读写 `localStorage`，你就失去了 store 的统一入口。既然已经引入 Pinia，又绕过 Pinia 去拿状态，那就像买了门牌却从窗户进屋，倒也不是不行，只是没必要。
+
+## 八、定义 Store
 
 ```ts
 export const useAuthStore = defineStore('auth', () => {
@@ -293,6 +542,21 @@ export const useAuthStore = defineStore('auth', () => {
 ```
 
 Store 中可以有 state、getter、action。组合式写法下，`ref` 是 state，`computed` 是 getter，函数是 action。
+
+`defineStore('auth', ...)` 里的 `'auth'` 是 store id。它应该稳定、唯一、能表达业务领域。这个 id 会参与 DevTools 展示、状态分组、插件处理和持久化逻辑。随手写成 `'store1'` 当然也能跑，只是后面排查问题时，你会为当时的随手付出一点并不浪漫的代价。
+
+实际项目里通常按业务拆文件：
+
+```text
+src/
+  stores/
+    authStore.ts
+    postStore.ts
+    permissionStore.ts
+    settingsStore.ts
+```
+
+一个 store 文件最好只管理一个业务领域。`authStore` 管登录和用户身份，`postStore` 管文章列表和文章动作。不要把登录、主题、文章、权限都塞进一个 `appStore`。那不叫集中管理，那只是集中混乱。
 
 ### 1. 在项目中注册 Pinia
 
@@ -378,7 +642,7 @@ const loggedIn = computed(() => {
 
 清理 token 这类动作应该放在 `logout` 或请求错误处理里，而不是藏在 getter 里。getter 一旦有副作用，读取状态就可能改变状态，调试体验会非常不友好。
 
-## 八、Store 请求状态设计
+## 九、Store 请求状态设计
 
 Store 处理请求时，至少要明确四个状态：
 
@@ -517,7 +781,7 @@ async function refreshPosts() {
 
 `loadPosts` 表示没有缓存时加载，`refreshPosts` 表示用户明确要刷新。名字清楚，页面调用时才不会猜。
 
-## 九、乐观更新
+## 十、乐观更新
 
 点赞这类交互可以先更新 UI，再请求接口。
 
@@ -565,44 +829,213 @@ async function toggleLike(postId: number) {
 
 这样无论哪个页面触发点赞，失败回滚规则都是同一份。否则首页一种回滚，详情页另一种回滚，最后状态就会开始分裂，像一场没有主持人的辩论。
 
-## 十、持久化边界
+## 十一、持久化边界
+
+持久化的意思是：页面刷新、关闭后，再次打开还能恢复某些状态。Pinia 默认不做这件事。你需要自己决定把哪些状态同步到 `localStorage`、`sessionStorage`、Cookie、IndexedDB，或者重新从后端拉取。
 
 不是所有 store 状态都应该持久化到 `localStorage`。
 
 适合持久化：
 
-- token。
+- token，前提是你的认证方案允许这样做。
 - 主题。
 - 语言。
 - 用户主动选择的布局偏好。
+- 不敏感、体积小、允许过期的草稿。
 
 不适合持久化：
 
-- loading。
-- errorMessage。
+- `loading`。
+- `errorMessage`。
 - 临时弹窗状态。
+- 只对当前页面有效的筛选面板展开状态。
 - 可能过期的敏感用户资料。
 - 很大的列表缓存。
+- 后端权限、价格、库存这类必须保持新鲜的数据。
 
-以 token 为例，可以在登录和退出时显式同步：
+判断标准不是“能不能存”，而是“恢复旧值后会不会误导用户”。浏览器存储很听话，你让它存错东西，它也会认真存下去。问题当然还是你的。
+
+### 1. 显式同步：适合登录、退出这类关键动作
+
+登录状态建议在 action 中显式同步，因为登录和退出都有明确业务含义。
 
 ```ts
-async function login(form: LoginForm) {
-  const result = await loginApi(form)
-  token.value = result.token
-  localStorage.setItem('token', result.token)
+const TOKEN_KEY = 'blog-token'
+
+export const useAuthStore = defineStore('auth', () => {
+  const token = ref<string | null>(localStorage.getItem(TOKEN_KEY))
+  const profile = ref<UserProfile | null>(null)
+
+  async function login(form: LoginForm) {
+    const result = await loginApi(form)
+
+    token.value = result.token
+    profile.value = result.profile
+    localStorage.setItem(TOKEN_KEY, result.token)
+  }
+
+  function logout() {
+    token.value = null
+    profile.value = null
+    localStorage.removeItem(TOKEN_KEY)
+  }
+
+  return {
+    token,
+    profile,
+    login,
+    logout
+  }
+})
+```
+
+这段代码把 `token` 当成两份数据处理：
+
+```text
+store 中的 token：页面运行时使用，响应式，驱动视图
+localStorage 中的 token：刷新后恢复 store 的初始值
+```
+
+真正应该被组件依赖的是 store。`localStorage` 只是恢复手段，不应该变成组件之间共享状态的入口。
+
+### 2. 初始化时要考虑坏数据
+
+`localStorage` 里的数据不一定可信。它可能是旧版本留下的，也可能被用户手动改过，也可能是格式损坏的字符串。
+
+读取对象时，不要直接裸 `JSON.parse`：
+
+```ts
+type UserSettings = {
+  theme: 'light' | 'dark'
+  language: 'zh-CN' | 'en-US'
 }
 
-function logout() {
-  token.value = null
-  profile.value = null
-  localStorage.removeItem('token')
+const SETTINGS_KEY = 'blog-settings'
+
+function readSettings(): UserSettings {
+  const raw = localStorage.getItem(SETTINGS_KEY)
+
+  if (!raw) {
+    return {
+      theme: 'light',
+      language: 'zh-CN'
+    }
+  }
+
+  try {
+    const value = JSON.parse(raw) as Partial<UserSettings>
+
+    return {
+      theme: value.theme === 'dark' ? 'dark' : 'light',
+      language: value.language === 'en-US' ? 'en-US' : 'zh-CN'
+    }
+  } catch {
+    localStorage.removeItem(SETTINGS_KEY)
+    return {
+      theme: 'light',
+      language: 'zh-CN'
+    }
+  }
 }
 ```
 
-持久化的关键不是“存进去”，而是知道什么时候清理。登录过期、退出登录、切换账号时，如果旧状态还留着，页面会展示出非常自信但完全错误的信息。
+然后在 store 中使用：
 
-## 十一、状态渲染
+```ts
+export const useSettingsStore = defineStore('settings', () => {
+  const initialSettings = readSettings()
+
+  const theme = ref(initialSettings.theme)
+  const language = ref(initialSettings.language)
+
+  function setTheme(value: UserSettings['theme']) {
+    theme.value = value
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({
+      theme: theme.value,
+      language: language.value
+    }))
+  }
+
+  function setLanguage(value: UserSettings['language']) {
+    language.value = value
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({
+      theme: theme.value,
+      language: language.value
+    }))
+  }
+
+  return {
+    theme,
+    language,
+    setTheme,
+    setLanguage
+  }
+})
+```
+
+这里看起来比直接 `JSON.parse(localStorage.getItem('settings')!)` 麻烦一点，但它至少承认了现实：用户浏览器里的旧数据不一定配合你的新代码。现实不配合时，代码最好不要也跟着任性。
+
+### 3. 使用 `$subscribe` 自动同步
+
+对于设置类 store，也可以用 Pinia 的 `$subscribe` 监听 state 变化，然后统一写入 `localStorage`。
+
+```ts
+const settingsStore = useSettingsStore()
+
+settingsStore.$subscribe((_mutation, state) => {
+  localStorage.setItem('blog-settings', JSON.stringify({
+    theme: state.theme,
+    language: state.language
+  }))
+})
+```
+
+`$subscribe` 适合“状态一变就同步”的场景，比如主题、语言、布局偏好。它不太适合登录退出这种需要清理多份状态、跳转页面、取消请求、重置权限的业务动作。那些动作应该放在明确的 action 里。
+
+如果你想全局持久化所有 Pinia 状态，也可以监听 `pinia.state`，或者使用持久化插件。但在学习阶段先不要急着全自动。自动化会把错误也自动化，而且速度很快。
+
+### 4. 用户信息不一定要长期存本地
+
+很多项目会在登录后保存：
+
+```text
+token
+profile
+permissions
+menus
+```
+
+但它们的持久化策略不一定相同。
+
+| 数据 | 建议 |
+| ---- | ---- |
+| `token` | 根据认证方案决定是否持久化 |
+| `profile` | 可以启动后通过 `/me` 重新获取 |
+| `permissions` | 更建议启动后重新拉取，避免权限变更后仍用旧值 |
+| `menus` | 可以缓存，但要有刷新或失效策略 |
+| `loading` / `errorMessage` | 不持久化 |
+
+例如应用启动时可以这样做：
+
+```ts
+async function bootstrap() {
+  if (!token.value) {
+    return
+  }
+
+  try {
+    profile.value = await fetchCurrentUser()
+  } catch {
+    logout()
+  }
+}
+```
+
+这表示：`localStorage` 只负责告诉应用“以前可能登录过”，最终是否真的有效，要以后端校验为准。前端本地状态只能提升体验，不能替代服务端判断。这个边界如果想不明白，权限系统迟早会给你上一课。
+
+持久化的关键不是“存进去”，而是知道什么时候清理、什么时候刷新、什么时候以后端为准。登录过期、退出登录、切换账号时，如果旧状态还留着，页面会展示出非常自信但完全错误的信息。
+
+## 十二、状态渲染
 
 页面至少考虑四种状态：
 
@@ -643,7 +1076,7 @@ success
 
 这表示：刷新失败时，用户仍然能看到旧列表；首次加载失败时，页面再显示空状态或错误重试。状态设计越细，用户体验越不容易被一次失败击穿。
 
-## 十二、数据流排错顺序
+## 十三、数据流排错顺序
 
 接口数据异常时，不要直接怀疑组件。按顺序查：
 
@@ -654,7 +1087,7 @@ success
 
 越靠近源头的问题，越不该在页面组件里补丁式处理。否则组件会变成接口、状态和错误的混合垃圾场，虽然很常见，但常见不代表值得学习。
 
-## 十三、Pinia 使用检查清单
+## 十四、Pinia 使用检查清单
 
 写 store 时可以按下面顺序检查：
 
@@ -665,12 +1098,16 @@ success
 - 请求失败时是否保留旧数据，还是主动清空？
 - 是否处理了重复请求或过期响应？
 - 是否只有必要状态被持久化？
+- 是否区分了 store 的内存状态和 `localStorage` 的持久化副本？
+- 从 `localStorage` 读取对象时，是否处理了空值、坏数据和旧版本结构？
+- 登录、退出、切换账号时，是否会清理相关 store 和本地存储？
+- 权限、用户资料、菜单这类数据是否需要启动后重新向后端确认？
 - 组件是否通过 `storeToRefs` 解构 state 和 getter？
 - 页面是否仍然保留了只属于自己的局部 UI 状态？
 
 Pinia 不是为了让页面变空，而是为了让状态归属变清楚。页面可以有状态，组件可以有状态，组合函数也可以有状态。关键在于状态属于哪里，而不是它看起来放在哪里最“高级”。
 
-## 十四、练习讲解：实现文章 store
+## 十五、练习讲解：实现文章 store
 
 实现一个文章 store：
 

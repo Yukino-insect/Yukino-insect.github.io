@@ -1,0 +1,1274 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>内网穿透 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="内网穿透是一种让公网用户访问内网服务的技术。它常用于本地开发调试、临时演示、第三方回调测试、远程访问家中设备等场景。
+它解决的核心问题是：内网机器没有公网入口，外部用户无法直接连接它。
+一、为什么公网访问不到内网服务 大多数家庭网络、办公网络和云内私有网络都在 NAT 后面。内网机器通常使用私有 IP，例如：
+192.168.x.x 10.x.x.x 172.16.x.x ~ 172.31.x.x 这些地址只在内网中有效，公网用户无法直接访问。
+例如你在本机启动了一个服务：
+http://localhost:8080 这个地址只对你自己的电脑有效。即使你把电脑的内网 IP 发给别人：
+http://192.168.1.20:8080 对方也大概率访问不了，因为这个地址属于你的局域网，不在公网路由中。
+二、内网穿透的基本原理 内网机器虽然不能被公网主动连接，但它可以主动连接公网服务器。
+内网穿透正是利用这一点：
+外部用户 -&gt; 公网中转服务器 -&gt; 内网穿透客户端 -&gt; 内网服务 一般需要两部分：
+公网中转服务器：拥有公网 IP 或公网域名，负责接收外部请求。 内网穿透客户端：运行在内网机器上，主动连接公网中转服务器，并维持隧道。 当外部请求到达公网中转服务器后，中转服务器会通过已经建立好的隧道，把请求转发到内网服务。
+三、举个例子 假设本地启动了一个接口：
+http://127.0.0.1:8080/api/callback 第三方平台要求配置一个公网回调地址。此时可以通过内网穿透得到：
+https://demo.example.com/api/callback 访问链路变成：
+第三方平台 -&gt; https://demo.example.com/api/callback -&gt; 公网穿透服务器 -&gt; 本机穿透客户端 -&gt; http://127.0.0.1:8080/api/callback 这样第三方平台访问的是公网地址，但最终请求会到达你本机的服务。
+四、常见工具 常见内网穿透工具包括：
+工具 适合场景 特点 frp 自建长期使用 功能完整，可控性强 ngrok 临时调试和演示 上手简单，托管服务方便 ssh -R 简单远程端口转发 不需要额外复杂组件 云厂商隧道服务 云资源集成 配套云平台权限和审计 临时调试时，托管型工具更省事。长期暴露服务时，更推荐自建，并配置认证、TLS、访问控制和日志审计。
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/internet/%E5%86%85%E7%BD%91%E7%A9%BF%E9%80%8F/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/internet/%E5%86%85%E7%BD%91%E7%A9%BF%E9%80%8F/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="内网穿透">
+  <meta property="og:description" content="内网穿透是一种让公网用户访问内网服务的技术。它常用于本地开发调试、临时演示、第三方回调测试、远程访问家中设备等场景。
+它解决的核心问题是：内网机器没有公网入口，外部用户无法直接连接它。
+一、为什么公网访问不到内网服务 大多数家庭网络、办公网络和云内私有网络都在 NAT 后面。内网机器通常使用私有 IP，例如：
+192.168.x.x 10.x.x.x 172.16.x.x ~ 172.31.x.x 这些地址只在内网中有效，公网用户无法直接访问。
+例如你在本机启动了一个服务：
+http://localhost:8080 这个地址只对你自己的电脑有效。即使你把电脑的内网 IP 发给别人：
+http://192.168.1.20:8080 对方也大概率访问不了，因为这个地址属于你的局域网，不在公网路由中。
+二、内网穿透的基本原理 内网机器虽然不能被公网主动连接，但它可以主动连接公网服务器。
+内网穿透正是利用这一点：
+外部用户 -&gt; 公网中转服务器 -&gt; 内网穿透客户端 -&gt; 内网服务 一般需要两部分：
+公网中转服务器：拥有公网 IP 或公网域名，负责接收外部请求。 内网穿透客户端：运行在内网机器上，主动连接公网中转服务器，并维持隧道。 当外部请求到达公网中转服务器后，中转服务器会通过已经建立好的隧道，把请求转发到内网服务。
+三、举个例子 假设本地启动了一个接口：
+http://127.0.0.1:8080/api/callback 第三方平台要求配置一个公网回调地址。此时可以通过内网穿透得到：
+https://demo.example.com/api/callback 访问链路变成：
+第三方平台 -&gt; https://demo.example.com/api/callback -&gt; 公网穿透服务器 -&gt; 本机穿透客户端 -&gt; http://127.0.0.1:8080/api/callback 这样第三方平台访问的是公网地址，但最终请求会到达你本机的服务。
+四、常见工具 常见内网穿透工具包括：
+工具 适合场景 特点 frp 自建长期使用 功能完整，可控性强 ngrok 临时调试和演示 上手简单，托管服务方便 ssh -R 简单远程端口转发 不需要额外复杂组件 云厂商隧道服务 云资源集成 配套云平台权限和审计 临时调试时，托管型工具更省事。长期暴露服务时，更推荐自建，并配置认证、TLS、访问控制和日志审计。">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="internet">
+    <meta property="article:published_time" content="2026-02-06T13:26:28+08:00">
+    <meta property="article:modified_time" content="2026-02-06T13:26:28+08:00">
+
+  
+  <meta itemprop="name" content="内网穿透">
+  <meta itemprop="description" content="内网穿透是一种让公网用户访问内网服务的技术。它常用于本地开发调试、临时演示、第三方回调测试、远程访问家中设备等场景。
+它解决的核心问题是：内网机器没有公网入口，外部用户无法直接连接它。
+一、为什么公网访问不到内网服务 大多数家庭网络、办公网络和云内私有网络都在 NAT 后面。内网机器通常使用私有 IP，例如：
+192.168.x.x 10.x.x.x 172.16.x.x ~ 172.31.x.x 这些地址只在内网中有效，公网用户无法直接访问。
+例如你在本机启动了一个服务：
+http://localhost:8080 这个地址只对你自己的电脑有效。即使你把电脑的内网 IP 发给别人：
+http://192.168.1.20:8080 对方也大概率访问不了，因为这个地址属于你的局域网，不在公网路由中。
+二、内网穿透的基本原理 内网机器虽然不能被公网主动连接，但它可以主动连接公网服务器。
+内网穿透正是利用这一点：
+外部用户 -&gt; 公网中转服务器 -&gt; 内网穿透客户端 -&gt; 内网服务 一般需要两部分：
+公网中转服务器：拥有公网 IP 或公网域名，负责接收外部请求。 内网穿透客户端：运行在内网机器上，主动连接公网中转服务器，并维持隧道。 当外部请求到达公网中转服务器后，中转服务器会通过已经建立好的隧道，把请求转发到内网服务。
+三、举个例子 假设本地启动了一个接口：
+http://127.0.0.1:8080/api/callback 第三方平台要求配置一个公网回调地址。此时可以通过内网穿透得到：
+https://demo.example.com/api/callback 访问链路变成：
+第三方平台 -&gt; https://demo.example.com/api/callback -&gt; 公网穿透服务器 -&gt; 本机穿透客户端 -&gt; http://127.0.0.1:8080/api/callback 这样第三方平台访问的是公网地址，但最终请求会到达你本机的服务。
+四、常见工具 常见内网穿透工具包括：
+工具 适合场景 特点 frp 自建长期使用 功能完整，可控性强 ngrok 临时调试和演示 上手简单，托管服务方便 ssh -R 简单远程端口转发 不需要额外复杂组件 云厂商隧道服务 云资源集成 配套云平台权限和审计 临时调试时，托管型工具更省事。长期暴露服务时，更推荐自建，并配置认证、TLS、访问控制和日志审计。">
+  <meta itemprop="datePublished" content="2026-02-06T13:26:28+08:00">
+  <meta itemprop="dateModified" content="2026-02-06T13:26:28+08:00">
+  <meta itemprop="wordCount" content="113">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="内网穿透">
+  <meta name="twitter:description" content="内网穿透是一种让公网用户访问内网服务的技术。它常用于本地开发调试、临时演示、第三方回调测试、远程访问家中设备等场景。
+它解决的核心问题是：内网机器没有公网入口，外部用户无法直接连接它。
+一、为什么公网访问不到内网服务 大多数家庭网络、办公网络和云内私有网络都在 NAT 后面。内网机器通常使用私有 IP，例如：
+192.168.x.x 10.x.x.x 172.16.x.x ~ 172.31.x.x 这些地址只在内网中有效，公网用户无法直接访问。
+例如你在本机启动了一个服务：
+http://localhost:8080 这个地址只对你自己的电脑有效。即使你把电脑的内网 IP 发给别人：
+http://192.168.1.20:8080 对方也大概率访问不了，因为这个地址属于你的局域网，不在公网路由中。
+二、内网穿透的基本原理 内网机器虽然不能被公网主动连接，但它可以主动连接公网服务器。
+内网穿透正是利用这一点：
+外部用户 -&gt; 公网中转服务器 -&gt; 内网穿透客户端 -&gt; 内网服务 一般需要两部分：
+公网中转服务器：拥有公网 IP 或公网域名，负责接收外部请求。 内网穿透客户端：运行在内网机器上，主动连接公网中转服务器，并维持隧道。 当外部请求到达公网中转服务器后，中转服务器会通过已经建立好的隧道，把请求转发到内网服务。
+三、举个例子 假设本地启动了一个接口：
+http://127.0.0.1:8080/api/callback 第三方平台要求配置一个公网回调地址。此时可以通过内网穿透得到：
+https://demo.example.com/api/callback 访问链路变成：
+第三方平台 -&gt; https://demo.example.com/api/callback -&gt; 公网穿透服务器 -&gt; 本机穿透客户端 -&gt; http://127.0.0.1:8080/api/callback 这样第三方平台访问的是公网地址，但最终请求会到达你本机的服务。
+四、常见工具 常见内网穿透工具包括：
+工具 适合场景 特点 frp 自建长期使用 功能完整，可控性强 ngrok 临时调试和演示 上手简单，托管服务方便 ssh -R 简单远程端口转发 不需要额外复杂组件 云厂商隧道服务 云资源集成 配套云平台权限和审计 临时调试时，托管型工具更省事。长期暴露服务时，更推荐自建，并配置认证、TLS、访问控制和日志审计。">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">内网穿透</h1>
+
+    
+      <div class="post-date">February 6, 2026</div>
+    
+
+    <div class="post-content">
+      <p>内网穿透是一种让公网用户访问内网服务的技术。它常用于本地开发调试、临时演示、第三方回调测试、远程访问家中设备等场景。</p>
+<p>它解决的核心问题是：<strong>内网机器没有公网入口，外部用户无法直接连接它。</strong></p>
+<h2 id="一为什么公网访问不到内网服务">一、为什么公网访问不到内网服务</h2>
+<p>大多数家庭网络、办公网络和云内私有网络都在 NAT 后面。内网机器通常使用私有 IP，例如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">192.168.x.x
+</span></span><span class="line"><span class="cl">10.x.x.x
+</span></span><span class="line"><span class="cl">172.16.x.x ~ 172.31.x.x
+</span></span></code></pre></div><p>这些地址只在内网中有效，公网用户无法直接访问。</p>
+<p>例如你在本机启动了一个服务：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">http://localhost:8080
+</span></span></code></pre></div><p>这个地址只对你自己的电脑有效。即使你把电脑的内网 IP 发给别人：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">http://192.168.1.20:8080
+</span></span></code></pre></div><p>对方也大概率访问不了，因为这个地址属于你的局域网，不在公网路由中。</p>
+<h2 id="二内网穿透的基本原理">二、内网穿透的基本原理</h2>
+<p>内网机器虽然不能被公网主动连接，但它可以主动连接公网服务器。</p>
+<p>内网穿透正是利用这一点：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">外部用户
+</span></span><span class="line"><span class="cl">  -&gt; 公网中转服务器
+</span></span><span class="line"><span class="cl">  -&gt; 内网穿透客户端
+</span></span><span class="line"><span class="cl">  -&gt; 内网服务
+</span></span></code></pre></div><p>一般需要两部分：</p>
+<ol>
+<li>公网中转服务器：拥有公网 IP 或公网域名，负责接收外部请求。</li>
+<li>内网穿透客户端：运行在内网机器上，主动连接公网中转服务器，并维持隧道。</li>
+</ol>
+<p>当外部请求到达公网中转服务器后，中转服务器会通过已经建立好的隧道，把请求转发到内网服务。</p>
+<h2 id="三举个例子">三、举个例子</h2>
+<p>假设本地启动了一个接口：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">http://127.0.0.1:8080/api/callback
+</span></span></code></pre></div><p>第三方平台要求配置一个公网回调地址。此时可以通过内网穿透得到：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">https://demo.example.com/api/callback
+</span></span></code></pre></div><p>访问链路变成：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">第三方平台
+</span></span><span class="line"><span class="cl">  -&gt; https://demo.example.com/api/callback
+</span></span><span class="line"><span class="cl">  -&gt; 公网穿透服务器
+</span></span><span class="line"><span class="cl">  -&gt; 本机穿透客户端
+</span></span><span class="line"><span class="cl">  -&gt; http://127.0.0.1:8080/api/callback
+</span></span></code></pre></div><p>这样第三方平台访问的是公网地址，但最终请求会到达你本机的服务。</p>
+<h2 id="四常见工具">四、常见工具</h2>
+<p>常见内网穿透工具包括：</p>
+<table>
+  <thead>
+      <tr>
+          <th>工具</th>
+          <th>适合场景</th>
+          <th>特点</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>frp</code></td>
+          <td>自建长期使用</td>
+          <td>功能完整，可控性强</td>
+      </tr>
+      <tr>
+          <td><code>ngrok</code></td>
+          <td>临时调试和演示</td>
+          <td>上手简单，托管服务方便</td>
+      </tr>
+      <tr>
+          <td><code>ssh -R</code></td>
+          <td>简单远程端口转发</td>
+          <td>不需要额外复杂组件</td>
+      </tr>
+      <tr>
+          <td>云厂商隧道服务</td>
+          <td>云资源集成</td>
+          <td>配套云平台权限和审计</td>
+      </tr>
+  </tbody>
+</table>
+<p>临时调试时，托管型工具更省事。长期暴露服务时，更推荐自建，并配置认证、TLS、访问控制和日志审计。</p>
+<h2 id="五内网穿透和-vpn-的区别">五、内网穿透和 VPN 的区别</h2>
+<p>内网穿透和 VPN 都能让外部访问内部资源，但方向和边界不同。</p>
+<table>
+  <thead>
+      <tr>
+          <th>对比项</th>
+          <th>内网穿透</th>
+          <th>VPN 内网接入</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>核心目标</td>
+          <td>把某个内网服务暴露给外部</td>
+          <td>把外部终端接入内网</td>
+      </tr>
+      <tr>
+          <td>暴露范围</td>
+          <td>通常是指定端口或服务</td>
+          <td>按路由和权限访问内网资源</td>
+      </tr>
+      <tr>
+          <td>是否分配内网 IP</td>
+          <td>通常不分配</td>
+          <td>通常会分配</td>
+      </tr>
+      <tr>
+          <td>常见用途</td>
+          <td>本地调试、Webhook、临时演示</td>
+          <td>远程办公、运维、企业内网访问</td>
+      </tr>
+  </tbody>
+</table>
+<p>一句话区分：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">内网穿透：把服务拿出去。
+</span></span><span class="line"><span class="cl">VPN：把人接进来。
+</span></span></code></pre></div><h2 id="六安全注意事项">六、安全注意事项</h2>
+<p>内网穿透会改变服务的安全边界。原本只在本机或内网可见的服务，一旦通过公网入口暴露，就要按公网服务标准防护。</p>
+<p>至少要注意：</p>
+<ol>
+<li>不要暴露数据库、Redis、管理后台、Docker API 等高危端口。</li>
+<li>公网入口必须配置认证和访问控制。</li>
+<li>对外访问建议使用 HTTPS。</li>
+<li>测试完成后及时关闭隧道。</li>
+<li>不要在日志中打印 token、密码、Cookie 等敏感信息。</li>
+<li>对长期使用的隧道配置访问白名单和审计日志。</li>
+</ol>
+<h2 id="七一句话总结">七、一句话总结</h2>
+<p>内网穿透解决的是公网到内网服务的可达性问题，不解决服务本身的安全问题。只要服务被暴露到公网，就应该按公网服务来设计认证、权限、加密和审计。</p>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

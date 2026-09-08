@@ -1,0 +1,1334 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RocketMQ 架构设计 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="理解 RocketMQ，最好不要从 API 开始。API 只是入口，真正决定线上行为的是它的路由、队列、存储、消费进度和重平衡机制。
+RocketMQ 的核心架构可以先记成一句话：
+NameServer 管路由，Broker 管存储和投递，Producer 写消息，Consumer 拉消息。
+一、整体架构 RocketMQ 的主要组件如下：
+&#43;----------------&#43; | NameServer | &#43;----------------&#43; ^ ^ 查询路由 | | 注册路由和心跳 | | &#43;----------&#43; 发送消息 &#43;----------&#43; 拉取消息 &#43;----------&#43; | Producer | --------&gt; | Broker | &lt;-------- | Consumer | &#43;----------&#43; &#43;----------&#43; &#43;----------&#43; 一个完整流程通常是：
+Broker 启动后向所有 NameServer 注册自己的地址、Topic、Queue 等路由信息。 Producer 启动后从 NameServer 获取 Topic 的路由。 Producer 根据队列选择策略，把消息发送到某个 Broker 的某个 MessageQueue。 Consumer 从 NameServer 获取订阅 Topic 的路由。 Consumer 与 Broker 建立连接，从自己被分配到的队列拉取消息。 消费成功后提交消费结果，Broker 更新消费进度。 NameServer 不参与消息读写，这让它足够轻量。它像一份路由通讯录，告诉客户端“某个 Topic 目前在哪里”。
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/mq/rocketmq-%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/mq/rocketmq-%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="RocketMQ 架构设计">
+  <meta property="og:description" content="理解 RocketMQ，最好不要从 API 开始。API 只是入口，真正决定线上行为的是它的路由、队列、存储、消费进度和重平衡机制。
+RocketMQ 的核心架构可以先记成一句话：
+NameServer 管路由，Broker 管存储和投递，Producer 写消息，Consumer 拉消息。
+一、整体架构 RocketMQ 的主要组件如下：
+&#43;----------------&#43; | NameServer | &#43;----------------&#43; ^ ^ 查询路由 | | 注册路由和心跳 | | &#43;----------&#43; 发送消息 &#43;----------&#43; 拉取消息 &#43;----------&#43; | Producer | --------&gt; | Broker | &lt;-------- | Consumer | &#43;----------&#43; &#43;----------&#43; &#43;----------&#43; 一个完整流程通常是：
+Broker 启动后向所有 NameServer 注册自己的地址、Topic、Queue 等路由信息。 Producer 启动后从 NameServer 获取 Topic 的路由。 Producer 根据队列选择策略，把消息发送到某个 Broker 的某个 MessageQueue。 Consumer 从 NameServer 获取订阅 Topic 的路由。 Consumer 与 Broker 建立连接，从自己被分配到的队列拉取消息。 消费成功后提交消费结果，Broker 更新消费进度。 NameServer 不参与消息读写，这让它足够轻量。它像一份路由通讯录，告诉客户端“某个 Topic 目前在哪里”。">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="mq">
+    <meta property="article:published_time" content="2026-08-22T15:30:00+08:00">
+    <meta property="article:modified_time" content="2026-08-22T15:30:00+08:00">
+
+  
+  <meta itemprop="name" content="RocketMQ 架构设计">
+  <meta itemprop="description" content="理解 RocketMQ，最好不要从 API 开始。API 只是入口，真正决定线上行为的是它的路由、队列、存储、消费进度和重平衡机制。
+RocketMQ 的核心架构可以先记成一句话：
+NameServer 管路由，Broker 管存储和投递，Producer 写消息，Consumer 拉消息。
+一、整体架构 RocketMQ 的主要组件如下：
+&#43;----------------&#43; | NameServer | &#43;----------------&#43; ^ ^ 查询路由 | | 注册路由和心跳 | | &#43;----------&#43; 发送消息 &#43;----------&#43; 拉取消息 &#43;----------&#43; | Producer | --------&gt; | Broker | &lt;-------- | Consumer | &#43;----------&#43; &#43;----------&#43; &#43;----------&#43; 一个完整流程通常是：
+Broker 启动后向所有 NameServer 注册自己的地址、Topic、Queue 等路由信息。 Producer 启动后从 NameServer 获取 Topic 的路由。 Producer 根据队列选择策略，把消息发送到某个 Broker 的某个 MessageQueue。 Consumer 从 NameServer 获取订阅 Topic 的路由。 Consumer 与 Broker 建立连接，从自己被分配到的队列拉取消息。 消费成功后提交消费结果，Broker 更新消费进度。 NameServer 不参与消息读写，这让它足够轻量。它像一份路由通讯录，告诉客户端“某个 Topic 目前在哪里”。">
+  <meta itemprop="datePublished" content="2026-08-22T15:30:00+08:00">
+  <meta itemprop="dateModified" content="2026-08-22T15:30:00+08:00">
+  <meta itemprop="wordCount" content="435">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="RocketMQ 架构设计">
+  <meta name="twitter:description" content="理解 RocketMQ，最好不要从 API 开始。API 只是入口，真正决定线上行为的是它的路由、队列、存储、消费进度和重平衡机制。
+RocketMQ 的核心架构可以先记成一句话：
+NameServer 管路由，Broker 管存储和投递，Producer 写消息，Consumer 拉消息。
+一、整体架构 RocketMQ 的主要组件如下：
+&#43;----------------&#43; | NameServer | &#43;----------------&#43; ^ ^ 查询路由 | | 注册路由和心跳 | | &#43;----------&#43; 发送消息 &#43;----------&#43; 拉取消息 &#43;----------&#43; | Producer | --------&gt; | Broker | &lt;-------- | Consumer | &#43;----------&#43; &#43;----------&#43; &#43;----------&#43; 一个完整流程通常是：
+Broker 启动后向所有 NameServer 注册自己的地址、Topic、Queue 等路由信息。 Producer 启动后从 NameServer 获取 Topic 的路由。 Producer 根据队列选择策略，把消息发送到某个 Broker 的某个 MessageQueue。 Consumer 从 NameServer 获取订阅 Topic 的路由。 Consumer 与 Broker 建立连接，从自己被分配到的队列拉取消息。 消费成功后提交消费结果，Broker 更新消费进度。 NameServer 不参与消息读写，这让它足够轻量。它像一份路由通讯录，告诉客户端“某个 Topic 目前在哪里”。">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">RocketMQ 架构设计</h1>
+
+    
+      <div class="post-date">August 22, 2026</div>
+    
+
+    <div class="post-content">
+      <p>理解 RocketMQ，最好不要从 API 开始。API 只是入口，真正决定线上行为的是它的路由、队列、存储、消费进度和重平衡机制。</p>
+<p>RocketMQ 的核心架构可以先记成一句话：</p>
+<blockquote>
+<p>NameServer 管路由，Broker 管存储和投递，Producer 写消息，Consumer 拉消息。</p></blockquote>
+<h2 id="一整体架构">一、整体架构</h2>
+<p>RocketMQ 的主要组件如下：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">              +----------------+
+</span></span><span class="line"><span class="cl">              |   NameServer   |
+</span></span><span class="line"><span class="cl">              +----------------+
+</span></span><span class="line"><span class="cl">                ^            ^
+</span></span><span class="line"><span class="cl">       查询路由 |            | 注册路由和心跳
+</span></span><span class="line"><span class="cl">                |            |
+</span></span><span class="line"><span class="cl">+----------+  发送消息  +----------+  拉取消息  +----------+
+</span></span><span class="line"><span class="cl">| Producer | --------&gt; |  Broker  | &lt;-------- | Consumer |
+</span></span><span class="line"><span class="cl">+----------+           +----------+           +----------+
+</span></span></code></pre></div><p>一个完整流程通常是：</p>
+<ol>
+<li>Broker 启动后向所有 NameServer 注册自己的地址、Topic、Queue 等路由信息。</li>
+<li>Producer 启动后从 NameServer 获取 Topic 的路由。</li>
+<li>Producer 根据队列选择策略，把消息发送到某个 Broker 的某个 MessageQueue。</li>
+<li>Consumer 从 NameServer 获取订阅 Topic 的路由。</li>
+<li>Consumer 与 Broker 建立连接，从自己被分配到的队列拉取消息。</li>
+<li>消费成功后提交消费结果，Broker 更新消费进度。</li>
+</ol>
+<p>NameServer 不参与消息读写，这让它足够轻量。它像一份路由通讯录，告诉客户端“某个 Topic 目前在哪里”。</p>
+<h2 id="二nameserver">二、NameServer</h2>
+<p>NameServer 是路由注册中心，保存 Topic、Broker、Queue 之间的映射关系。</p>
+<p>它有几个特点：</p>
+<ul>
+<li>无状态：NameServer 节点之间不互相同步。</li>
+<li>可水平扩展：多个 NameServer 保存完整路由信息。</li>
+<li>不参与消息传输：Producer 和 Consumer 拿到路由后直接访问 Broker。</li>
+<li>依赖 Broker 心跳：Broker 周期性向 NameServer 上报自身状态。</li>
+</ul>
+<p>为什么 NameServer 节点之间不通信也能工作？</p>
+<p>因为每个 Broker 会向所有 NameServer 注册信息，客户端也会配置多个 NameServer 地址。只要客户端能连到其中一个可用 NameServer，就能查询到完整路由。</p>
+<h2 id="三broker">三、Broker</h2>
+<p>Broker 是 RocketMQ 的核心节点，主要负责：</p>
+<ul>
+<li>接收 Producer 发送的消息。</li>
+<li>将消息写入磁盘。</li>
+<li>维护 Topic 下的 MessageQueue。</li>
+<li>响应 Consumer 的拉取请求。</li>
+<li>管理消费进度、消费重试、死信队列。</li>
+<li>在主从部署下承担数据复制和高可用能力。</li>
+</ul>
+<p>Broker 常见部署形态是 Master-Slave：</p>
+<ul>
+<li>Master：负责读写请求。</li>
+<li>Slave：从 Master 复制数据，用于容灾和读扩展。</li>
+</ul>
+<p>在 Broker 配置中，<code>brokerId = 0</code> 通常表示 Master，非 0 表示 Slave。生产环境不要只部署单 Broker，否则 NameServer 再怎么轻量，也挡不住存储节点本身的单点风险。</p>
+<h2 id="四topic-与-messagequeue">四、Topic 与 MessageQueue</h2>
+<p>Topic 是业务维度的消息主题，MessageQueue 是 Topic 下的物理队列分片。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Topic: order-topic
+</span></span><span class="line"><span class="cl">  - queue 0 on broker-a
+</span></span><span class="line"><span class="cl">  - queue 1 on broker-a
+</span></span><span class="line"><span class="cl">  - queue 2 on broker-b
+</span></span><span class="line"><span class="cl">  - queue 3 on broker-b
+</span></span></code></pre></div><p>Queue 的作用有两个：</p>
+<ul>
+<li>提升并发：多个队列可以分布在多个 Broker 上。</li>
+<li>提供顺序边界：同一个队列内的消息天然按 offset 有序。</li>
+</ul>
+<p>所以 RocketMQ 的顺序消息不是“整个 Topic 全局有序”，而是“同一个 MessageQueue 内有序”。如果要让同一个订单的状态消息有序，就要让相同订单号的消息进入同一个队列。</p>
+<p>示例：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">producer</span><span class="p">.</span><span class="na">send</span><span class="p">(</span><span class="n">message</span><span class="p">,</span><span class="w"> </span><span class="p">(</span><span class="n">mqs</span><span class="p">,</span><span class="w"> </span><span class="n">msg</span><span class="p">,</span><span class="w"> </span><span class="n">arg</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">String</span><span class="w"> </span><span class="n">orderId</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">String</span><span class="p">)</span><span class="w"> </span><span class="n">arg</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">index</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Math</span><span class="p">.</span><span class="na">abs</span><span class="p">(</span><span class="n">orderId</span><span class="p">.</span><span class="na">hashCode</span><span class="p">())</span><span class="w"> </span><span class="o">%</span><span class="w"> </span><span class="n">mqs</span><span class="p">.</span><span class="na">size</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">mqs</span><span class="p">.</span><span class="na">get</span><span class="p">(</span><span class="n">index</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">},</span><span class="w"> </span><span class="n">orderId</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><h2 id="五producer-路由与队列选择">五、Producer 路由与队列选择</h2>
+<p>Producer 发送消息前会先拿到 Topic 的路由信息，然后选择一个队列发送。</p>
+<p>普通消息默认通常使用轮询策略，让消息大致均匀分布到多个队列。顺序消息则需要自定义队列选择策略，让同一个业务 Key 固定到同一个队列。</p>
+<p>发送方式可以分为：</p>
+<table>
+  <thead>
+      <tr>
+          <th>方式</th>
+          <th>特点</th>
+          <th>适用场景</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>同步发送</td>
+          <td>等待发送结果</td>
+          <td>订单、支付、积分等关键消息</td>
+      </tr>
+      <tr>
+          <td>异步发送</td>
+          <td>回调接收结果</td>
+          <td>主流程不想阻塞但仍关心成功失败</td>
+      </tr>
+      <tr>
+          <td>单向发送</td>
+          <td>不等待结果</td>
+          <td>日志、监控、埋点等可容忍丢失的消息</td>
+      </tr>
+  </tbody>
+</table>
+<p>同步和异步发送失败时可以重试；单向发送没有可靠的失败反馈，不要用于关键业务。</p>
+<h2 id="六consumergroup-与消费模型">六、ConsumerGroup 与消费模型</h2>
+<p>ConsumerGroup 是消费负载均衡的基本单位。</p>
+<p>同一个 ConsumerGroup 内的多个实例会分摊 Topic 的队列：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">order-topic: queue0 queue1 queue2 queue3
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">consumer-a -&gt; queue0 queue1
+</span></span><span class="line"><span class="cl">consumer-b -&gt; queue2 queue3
+</span></span></code></pre></div><p>不同 ConsumerGroup 之间互不影响。比如订单消息可以同时被库存系统和积分系统消费：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">order-topic
+</span></span><span class="line"><span class="cl">  -&gt; inventory-consumer-group
+</span></span><span class="line"><span class="cl">  -&gt; points-consumer-group
+</span></span></code></pre></div><p>这两个组各自维护消费进度，各自消费一份消息。</p>
+<h3 id="集群消费">集群消费</h3>
+<p>集群消费是默认也是最常见的模式。同一 ConsumerGroup 内，每条消息只会被其中一个消费者实例处理。</p>
+<p>适合：</p>
+<ul>
+<li>订单处理。</li>
+<li>库存扣减。</li>
+<li>积分发放。</li>
+<li>需要水平扩展吞吐的业务。</li>
+</ul>
+<h3 id="广播消费">广播消费</h3>
+<p>广播消费下，同一 ConsumerGroup 内每个消费者实例都会收到全量消息。</p>
+<p>适合：</p>
+<ul>
+<li>本地缓存刷新。</li>
+<li>配置变更通知。</li>
+<li>每个节点都必须执行一次的任务。</li>
+</ul>
+<p>广播消费不适合作为普通业务消费模式，因为它没有“分摊压力”的效果。</p>
+<h2 id="七rebalance">七、Rebalance</h2>
+<p>Rebalance 是 ConsumerGroup 内队列重新分配的过程。</p>
+<p>触发场景包括：</p>
+<ul>
+<li>消费者实例上线。</li>
+<li>消费者实例下线。</li>
+<li>Topic 队列数量变化。</li>
+<li>Broker 变化。</li>
+</ul>
+<p>Rebalance 让集群消费具备横向扩容能力，但它也会带来两个副作用：</p>
+<ul>
+<li>短时间内部分队列暂停消费。</li>
+<li>如果旧消费者处理成功但 offset 尚未提交，新消费者接手后可能重复消费。</li>
+</ul>
+<p>所以消息消费必须做幂等。这里没有什么浪漫可言，线上系统会用重复投递提醒你：侥幸心理并不是架构设计。</p>
+<h2 id="八offset">八、Offset</h2>
+<p>Offset 是队列内的消费位置。</p>
+<p>RocketMQ 控制台里常见的几个指标可以这样理解：</p>
+<table>
+  <thead>
+      <tr>
+          <th>指标</th>
+          <th>含义</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Broker offset</td>
+          <td>队列当前最大写入位置</td>
+      </tr>
+      <tr>
+          <td>Consumer offset</td>
+          <td>消费者组已经消费到的位置</td>
+      </tr>
+      <tr>
+          <td>Diff</td>
+          <td>未消费积压量</td>
+      </tr>
+  </tbody>
+</table>
+<p>如果 <code>Diff</code> 持续升高，说明消费速度小于生产速度。常见原因有：</p>
+<ul>
+<li>消费者实例太少。</li>
+<li>单条消息处理太慢。</li>
+<li>消费者不断失败重试。</li>
+<li>下游数据库或接口成为瓶颈。</li>
+</ul>
+<p>处理积压时，不要只盯着 MQ。MQ 很多时候只是把下游处理能力不足暴露出来。</p>
+<h2 id="九存储模型">九、存储模型</h2>
+<p>RocketMQ 的存储可以简化理解为两层：</p>
+<ul>
+<li>CommitLog：顺序写入所有消息的物理文件。</li>
+<li>ConsumeQueue：按 Topic 和 Queue 建立的逻辑索引。</li>
+</ul>
+<p>消息先顺序写入 CommitLog，再为每个 Topic 的队列生成 ConsumeQueue 索引。Consumer 拉取时主要按 ConsumeQueue 定位消息，再到 CommitLog 读取真实消息内容。</p>
+<p>这种设计的好处是：</p>
+<ul>
+<li>写入是顺序写，吞吐高。</li>
+<li>同一份消息数据可以被多个 ConsumerGroup 消费，不需要重复存储。</li>
+<li>Topic/Queue 维度的消费查询可以通过索引加速。</li>
+</ul>
+<h2 id="十pull-与-push">十、Pull 与 Push</h2>
+<p>RocketMQ 的 Push 模式本质仍然是 Consumer 长轮询 Broker。</p>
+<p>它的过程大致是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Consumer 发起拉取请求
+</span></span><span class="line"><span class="cl">  -&gt; Broker 有消息则立即返回
+</span></span><span class="line"><span class="cl">  -&gt; Broker 暂时无消息则挂起请求
+</span></span><span class="line"><span class="cl">  -&gt; 有新消息或超时后返回
+</span></span><span class="line"><span class="cl">  -&gt; Consumer 回调业务监听器
+</span></span></code></pre></div><p>所以 Push 更准确地说是“框架帮你持续拉取并回调”。它降低了使用成本，但并没有改变 Broker 被动响应的事实。</p>
+<h2 id="十一架构排查清单">十一、架构排查清单</h2>
+<p>线上排查 RocketMQ 问题时，可以按下面顺序看：</p>
+<ol>
+<li>NameServer 地址是否正确，客户端是否能查询到 Topic 路由。</li>
+<li>Topic 是否已创建，队列数是否符合预期。</li>
+<li>Producer 是否发送成功，是否有超时、重试、无可用 Broker。</li>
+<li>ConsumerGroup 是否写错，订阅 Topic 和 Tag 是否一致。</li>
+<li>消费模式是集群还是广播。</li>
+<li>Consumer offset 是否推进。</li>
+<li>Diff 是否持续升高。</li>
+<li>是否发生大量 Rebalance。</li>
+<li>是否有消息进入重试队列或死信队列。</li>
+<li>消费逻辑是否幂等。</li>
+</ol>
+<h2 id="十二一句话总结">十二、一句话总结</h2>
+<p>RocketMQ 的架构重点不是“会不会发消息”，而是能否理解消息从 Producer 到 Broker、再到 Consumer 的每个状态边界。边界清楚了，重试、重复消费、积压、顺序和事务消息才不会显得像玄学。</p>
+<h2 id="参考资料">参考资料</h2>
+<ul>
+<li><a href="https://rocketmq.apache.org/docs/4.x/introduction/02whatis/">Apache RocketMQ：What is RocketMQ</a>
+</li>
+<li><a href="https://rocketmq.apache.org/docs/domainModel/01main/">Apache RocketMQ：Domain Model</a>
+</li>
+</ul>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

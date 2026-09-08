@@ -1,0 +1,1351 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Elasticsearch 并发问题 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="Elasticsearch 的并发问题主要分两类：
+多个客户端同时修改 ES 中的同一个文档。 外部数据同步消息乱序，导致旧数据覆盖新数据。 这两类问题经常被混在一起讲，但它们的处理方式并不完全相同。前者更多依赖 ES 自身的乐观并发控制；后者通常还要结合 MySQL 版本号、消息队列分区、回查事实源和对账补偿。
+一、ES 为什么使用乐观并发控制 ES 的底层存储来自 Lucene，而 Lucene 的 Segment 是不可变的。一次更新并不是在原位置修改文档，而是近似于：
+旧文档标记删除 ↓ 写入新文档 ↓ 等待 refresh 后对搜索可见 ↓ 后续 merge 清理旧数据 在高并发场景下，两个客户端可能同时读到同一份旧数据，然后分别提交修改。
+例如：
+文档 count = 1 客户端 A 读取 count = 1 客户端 B 读取 count = 1 A 修改为 count = 2 B 修改为 count = 3 如果没有并发控制，后提交的请求会覆盖先提交的请求。至于谁赢，并不一定是业务上更正确的那个。工程系统并不会因为某个请求更有道理就自动偏袒它。
+二、_seq_no 与 _primary_term ES 7.x 以后，推荐使用 _seq_no 和 _primary_term 做乐观并发控制。
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/elasticsearch/elasticsearch%E5%B9%B6%E5%8F%91%E9%97%AE%E9%A2%98/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/elasticsearch/elasticsearch%E5%B9%B6%E5%8F%91%E9%97%AE%E9%A2%98/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="Elasticsearch 并发问题">
+  <meta property="og:description" content="Elasticsearch 的并发问题主要分两类：
+多个客户端同时修改 ES 中的同一个文档。 外部数据同步消息乱序，导致旧数据覆盖新数据。 这两类问题经常被混在一起讲，但它们的处理方式并不完全相同。前者更多依赖 ES 自身的乐观并发控制；后者通常还要结合 MySQL 版本号、消息队列分区、回查事实源和对账补偿。
+一、ES 为什么使用乐观并发控制 ES 的底层存储来自 Lucene，而 Lucene 的 Segment 是不可变的。一次更新并不是在原位置修改文档，而是近似于：
+旧文档标记删除 ↓ 写入新文档 ↓ 等待 refresh 后对搜索可见 ↓ 后续 merge 清理旧数据 在高并发场景下，两个客户端可能同时读到同一份旧数据，然后分别提交修改。
+例如：
+文档 count = 1 客户端 A 读取 count = 1 客户端 B 读取 count = 1 A 修改为 count = 2 B 修改为 count = 3 如果没有并发控制，后提交的请求会覆盖先提交的请求。至于谁赢，并不一定是业务上更正确的那个。工程系统并不会因为某个请求更有道理就自动偏袒它。
+二、_seq_no 与 _primary_term ES 7.x 以后，推荐使用 _seq_no 和 _primary_term 做乐观并发控制。">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="elasticsearch">
+    <meta property="article:published_time" content="2026-03-22T15:37:57+08:00">
+    <meta property="article:modified_time" content="2026-03-22T15:37:57+08:00">
+
+  
+  <meta itemprop="name" content="Elasticsearch 并发问题">
+  <meta itemprop="description" content="Elasticsearch 的并发问题主要分两类：
+多个客户端同时修改 ES 中的同一个文档。 外部数据同步消息乱序，导致旧数据覆盖新数据。 这两类问题经常被混在一起讲，但它们的处理方式并不完全相同。前者更多依赖 ES 自身的乐观并发控制；后者通常还要结合 MySQL 版本号、消息队列分区、回查事实源和对账补偿。
+一、ES 为什么使用乐观并发控制 ES 的底层存储来自 Lucene，而 Lucene 的 Segment 是不可变的。一次更新并不是在原位置修改文档，而是近似于：
+旧文档标记删除 ↓ 写入新文档 ↓ 等待 refresh 后对搜索可见 ↓ 后续 merge 清理旧数据 在高并发场景下，两个客户端可能同时读到同一份旧数据，然后分别提交修改。
+例如：
+文档 count = 1 客户端 A 读取 count = 1 客户端 B 读取 count = 1 A 修改为 count = 2 B 修改为 count = 3 如果没有并发控制，后提交的请求会覆盖先提交的请求。至于谁赢，并不一定是业务上更正确的那个。工程系统并不会因为某个请求更有道理就自动偏袒它。
+二、_seq_no 与 _primary_term ES 7.x 以后，推荐使用 _seq_no 和 _primary_term 做乐观并发控制。">
+  <meta itemprop="datePublished" content="2026-03-22T15:37:57+08:00">
+  <meta itemprop="dateModified" content="2026-03-22T15:37:57+08:00">
+  <meta itemprop="wordCount" content="462">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Elasticsearch 并发问题">
+  <meta name="twitter:description" content="Elasticsearch 的并发问题主要分两类：
+多个客户端同时修改 ES 中的同一个文档。 外部数据同步消息乱序，导致旧数据覆盖新数据。 这两类问题经常被混在一起讲，但它们的处理方式并不完全相同。前者更多依赖 ES 自身的乐观并发控制；后者通常还要结合 MySQL 版本号、消息队列分区、回查事实源和对账补偿。
+一、ES 为什么使用乐观并发控制 ES 的底层存储来自 Lucene，而 Lucene 的 Segment 是不可变的。一次更新并不是在原位置修改文档，而是近似于：
+旧文档标记删除 ↓ 写入新文档 ↓ 等待 refresh 后对搜索可见 ↓ 后续 merge 清理旧数据 在高并发场景下，两个客户端可能同时读到同一份旧数据，然后分别提交修改。
+例如：
+文档 count = 1 客户端 A 读取 count = 1 客户端 B 读取 count = 1 A 修改为 count = 2 B 修改为 count = 3 如果没有并发控制，后提交的请求会覆盖先提交的请求。至于谁赢，并不一定是业务上更正确的那个。工程系统并不会因为某个请求更有道理就自动偏袒它。
+二、_seq_no 与 _primary_term ES 7.x 以后，推荐使用 _seq_no 和 _primary_term 做乐观并发控制。">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">Elasticsearch 并发问题</h1>
+
+    
+      <div class="post-date">March 22, 2026</div>
+    
+
+    <div class="post-content">
+      <p>Elasticsearch 的并发问题主要分两类：</p>
+<ol>
+<li><strong>多个客户端同时修改 ES 中的同一个文档</strong>。</li>
+<li><strong>外部数据同步消息乱序，导致旧数据覆盖新数据</strong>。</li>
+</ol>
+<p>这两类问题经常被混在一起讲，但它们的处理方式并不完全相同。前者更多依赖 ES 自身的乐观并发控制；后者通常还要结合 MySQL 版本号、消息队列分区、回查事实源和对账补偿。</p>
+<h2 id="一es-为什么使用乐观并发控制">一、ES 为什么使用乐观并发控制</h2>
+<p>ES 的底层存储来自 Lucene，而 Lucene 的 Segment 是不可变的。一次更新并不是在原位置修改文档，而是近似于：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">旧文档标记删除
+</span></span><span class="line"><span class="cl">  ↓
+</span></span><span class="line"><span class="cl">写入新文档
+</span></span><span class="line"><span class="cl">  ↓
+</span></span><span class="line"><span class="cl">等待 refresh 后对搜索可见
+</span></span><span class="line"><span class="cl">  ↓
+</span></span><span class="line"><span class="cl">后续 merge 清理旧数据
+</span></span></code></pre></div><p>在高并发场景下，两个客户端可能同时读到同一份旧数据，然后分别提交修改。</p>
+<p>例如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">文档 count = 1
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">客户端 A 读取 count = 1
+</span></span><span class="line"><span class="cl">客户端 B 读取 count = 1
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">A 修改为 count = 2
+</span></span><span class="line"><span class="cl">B 修改为 count = 3
+</span></span></code></pre></div><p>如果没有并发控制，后提交的请求会覆盖先提交的请求。至于谁赢，并不一定是业务上更正确的那个。工程系统并不会因为某个请求更有道理就自动偏袒它。</p>
+<h2 id="二_seq_no-与-_primary_term">二、<code>_seq_no</code> 与 <code>_primary_term</code></h2>
+<p>ES 7.x 以后，推荐使用 <code>_seq_no</code> 和 <code>_primary_term</code> 做乐观并发控制。</p>
+<p>查询一条文档时，可以看到类似字段：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;_index&#34;</span><span class="p">:</span> <span class="s2">&#34;product_index&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;_id&#34;</span><span class="p">:</span> <span class="s2">&#34;10001&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;_seq_no&#34;</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;_primary_term&#34;</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;_source&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;name&#34;</span><span class="p">:</span> <span class="s2">&#34;iPhone 15 Pro&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;stock&#34;</span><span class="p">:</span> <span class="mi">100</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>两个字段的含义：</p>
+<ul>
+<li><code>_seq_no</code>：主分片上每一次写操作都会分配一个递增序列号，用来标识操作顺序。</li>
+<li><code>_primary_term</code>：主分片任期。主分片发生切换时会增加，用来避免旧主分片上的写入覆盖新主分片。</li>
+</ul>
+<p>可以把它们合起来理解为：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">只有当“我读到的版本”仍然是当前版本时，才允许写入。
+</span></span></code></pre></div><h2 id="三如何使用乐观锁更新">三、如何使用乐观锁更新</h2>
+<h3 id="1-先读取版本信息">1. 先读取版本信息</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">GET /product_index/_doc/10001
+</span></span></span></code></pre></div><p>返回：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;_seq_no&#34;</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;_primary_term&#34;</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;_source&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;stock&#34;</span><span class="p">:</span> <span class="mi">100</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><h3 id="2-更新时携带条件">2. 更新时携带条件</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">POST /product_index/_update/10001?if_seq_no=10&amp;if_primary_term=3
+</span></span></span><span class="line"><span class="cl"><span class="err">{
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;doc&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;stock&#34;: 99
+</span></span></span><span class="line"><span class="cl"><span class="err">  }
+</span></span></span><span class="line"><span class="cl"><span class="err">}
+</span></span></span></code></pre></div><p>如果文档在这期间没有被别人修改，更新成功。</p>
+<p>如果已经被修改，ES 会返回版本冲突：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;error&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;type&#34;</span><span class="p">:</span> <span class="s2">&#34;version_conflict_engine_exception&#34;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">},</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;status&#34;</span><span class="p">:</span> <span class="mi">409</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>此时业务应该重新读取最新文档，再决定是否重试。</p>
+<h2 id="四retry_on_conflict-适合什么场景">四、<code>retry_on_conflict</code> 适合什么场景</h2>
+<p>ES 的 update API 支持 <code>retry_on_conflict</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">POST /product_index/_update/10001?retry_on_conflict=3
+</span></span></span><span class="line"><span class="cl"><span class="err">{
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;script&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;source&#34;: &#34;ctx._source.stock -= params.count&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;params&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;count&#34;: 1
+</span></span></span><span class="line"><span class="cl"><span class="err">    }
+</span></span></span><span class="line"><span class="cl"><span class="err">  }
+</span></span></span><span class="line"><span class="cl"><span class="err">}
+</span></span></span></code></pre></div><p>它的含义是：如果内部更新时遇到版本冲突，ES 自动重新读取并重试。</p>
+<p>适合：</p>
+<ul>
+<li>计数器递增。</li>
+<li>轻量字段累加。</li>
+<li>冲突后可以安全重放的脚本更新。</li>
+</ul>
+<p>不适合：</p>
+<ul>
+<li>依赖用户之前看到的旧状态。</li>
+<li>强业务校验。</li>
+<li>复杂状态机流转。</li>
+</ul>
+<p>例如订单状态从 <code>PAID</code> 改成 <code>SHIPPED</code>，就不应该简单依赖自动重试。因为状态变更需要业务层明确判断，而不是让 ES 帮你“试试看”。</p>
+<h2 id="五index-覆盖写与-update-局部更新">五、<code>index</code> 覆盖写与 <code>update</code> 局部更新</h2>
+<p>无论是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">PUT /product_index/_doc/10001
+</span></span></span><span class="line"><span class="cl"><span class="err">{
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;name&#34;: &#34;iPhone 15 Pro&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;stock&#34;: 99
+</span></span></span><span class="line"><span class="cl"><span class="err">}
+</span></span></span></code></pre></div><p>还是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">POST /product_index/_update/10001
+</span></span></span><span class="line"><span class="cl"><span class="err">{
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;doc&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;stock&#34;: 99
+</span></span></span><span class="line"><span class="cl"><span class="err">  }
+</span></span></span><span class="line"><span class="cl"><span class="err">}
+</span></span></span></code></pre></div><p>只要文档发生变化，ES 都会产生新的版本信息。</p>
+<p>区别在于：</p>
+<ul>
+<li><code>index</code> 是整体覆盖文档。</li>
+<li><code>update</code> 是读取旧文档、合并局部字段、再写入新文档。</li>
+</ul>
+<p>如果 ES 文档是由 MySQL 宽表组装出来的，数据同步中通常更推荐整体覆盖写。因为同步服务可以回查 MySQL 最新状态，然后用稳定 <code>_id</code> 覆盖 ES 文档，逻辑更简单。</p>
+<h2 id="六外部消息乱序">六、外部消息乱序</h2>
+<p>如果 MySQL 是事实源，ES 只是检索视图，那么更常见的问题不是多个客户端同时改 ES，而是同步消息乱序。</p>
+<p>例如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">T1：商品价格 699900
+</span></span><span class="line"><span class="cl">T2：商品价格 649900
+</span></span></code></pre></div><p>正常顺序应该是 T1 后 T2。可是经过 MQ、重试、多线程消费后，可能变成：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">T2 先写入 ES
+</span></span><span class="line"><span class="cl">T1 后写入 ES
+</span></span></code></pre></div><p>最终 ES 价格被旧消息覆盖成 699900。</p>
+<p>这里使用 ES 的 <code>_seq_no</code> 并不一定合适。因为 <code>_seq_no</code> 管的是 ES 内部写入顺序，而业务真正关心的是 MySQL 变更顺序。</p>
+<h2 id="七解决外部乱序的几种方式">七、解决外部乱序的几种方式</h2>
+<h3 id="1-消息只传-id消费者回查-mysql">1. 消息只传 ID，消费者回查 MySQL</h3>
+<p>这是最常用、也最稳的方案之一。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">MQ 消息：productId = 10001
+</span></span><span class="line"><span class="cl">  ↓
+</span></span><span class="line"><span class="cl">消费者查询 MySQL 当前最新商品
+</span></span><span class="line"><span class="cl">  ↓
+</span></span><span class="line"><span class="cl">覆盖写 ES
+</span></span></code></pre></div><p>即使旧消息后到，它回查到的也是 MySQL 当前最新状态，因此不容易把 ES 写旧。</p>
+<p>缺点是会增加 MySQL 查询压力，需要缓存、批量查询或读库来配合。</p>
+<h3 id="2-同一业务-id-固定到同一分区">2. 同一业务 ID 固定到同一分区</h3>
+<p>发送 MQ 时使用业务 ID 作为 sharding key：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">String</span><span class="w"> </span><span class="n">shardingKey</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">String</span><span class="p">.</span><span class="na">valueOf</span><span class="p">(</span><span class="n">productId</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">mqProducer</span><span class="p">.</span><span class="na">send</span><span class="p">(</span><span class="s">&#34;product-sync&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">shardingKey</span><span class="p">,</span><span class="w"> </span><span class="n">productId</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><p>这样同一个商品的消息进入同一个队列或分区，由单个消费者顺序处理。</p>
+<p>它能减少乱序，但不能解决所有问题。例如重试、死信回放、人工补偿时仍然可能打破顺序。</p>
+<h3 id="3-使用-mysql-版本号">3. 使用 MySQL 版本号</h3>
+<p>在业务表中维护单调递增版本：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">product.version = 128
+</span></span></code></pre></div><p>ES 文档中也保存该版本：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;id&#34;</span><span class="p">:</span> <span class="mi">10001</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;name&#34;</span><span class="p">:</span> <span class="s2">&#34;iPhone 15 Pro&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;price&#34;</span><span class="p">:</span> <span class="mi">649900</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;version&#34;</span><span class="p">:</span> <span class="mi">128</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>写入时，如果事件版本小于 ES 当前版本，就拒绝覆盖。</p>
+<p>可以使用脚本更新表达这个逻辑：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">POST /product_index/_update/10001
+</span></span></span><span class="line"><span class="cl"><span class="err">{
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;scripted_upsert&#34;: true,
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;script&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;source&#34;: &#34;&#34;&#34;
+</span></span></span><span class="line"><span class="cl"><span class="err">      if (ctx._source.version == null || params.version &gt;= ctx._source.version) {
+</span></span></span><span class="line"><span class="cl"><span class="err">        ctx._source.putAll(params.doc);
+</span></span></span><span class="line"><span class="cl"><span class="err">      } else {
+</span></span></span><span class="line"><span class="cl"><span class="err">        ctx.op = &#39;none&#39;;
+</span></span></span><span class="line"><span class="cl"><span class="err">      }
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;&#34;&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;params&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;version&#34;: 128,
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;doc&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">        &#34;name&#34;: &#34;iPhone 15 Pro&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">        &#34;price&#34;: 649900,
+</span></span></span><span class="line"><span class="cl"><span class="err">        &#34;version&#34;: 128
+</span></span></span><span class="line"><span class="cl"><span class="err">      }
+</span></span></span><span class="line"><span class="cl"><span class="err">    }
+</span></span></span><span class="line"><span class="cl"><span class="err">  },
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;upsert&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;name&#34;: &#34;iPhone 15 Pro&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;price&#34;: 649900,
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;version&#34;: 128
+</span></span></span><span class="line"><span class="cl"><span class="err">  }
+</span></span></span><span class="line"><span class="cl"><span class="err">}
+</span></span></span></code></pre></div><p>这个方案的关键在于：版本必须来自事实源，而不是来自消费者本地时间。</p>
+<h3 id="4-使用外部版本控制">4. 使用外部版本控制</h3>
+<p>ES 支持外部版本号语义。写入时由外部系统提供版本，旧版本不能覆盖新版本。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">PUT /product_index/_doc/10001?version=128&amp;version_type=external
+</span></span></span><span class="line"><span class="cl"><span class="err">{
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;id&#34;: 10001,
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;name&#34;: &#34;iPhone 15 Pro&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;price&#34;: 649900
+</span></span></span><span class="line"><span class="cl"><span class="err">}
+</span></span></span></code></pre></div><p>如果之后来了版本 127 的写入，会被拒绝。</p>
+<p>这种方式适合你已经有严格递增的业务版本号、binlog 版本号或时间戳版本。需要注意的是，版本语义必须设计清楚，否则它只会让问题看起来更高级。</p>
+<h2 id="八并发控制策略怎么选">八、并发控制策略怎么选</h2>
+<table>
+  <thead>
+      <tr>
+          <th>场景</th>
+          <th>推荐方案</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>用户编辑同一份 ES 文档</td>
+          <td><code>_seq_no</code> + <code>_primary_term</code></td>
+      </tr>
+      <tr>
+          <td>简单计数累加</td>
+          <td><code>retry_on_conflict</code> + 脚本</td>
+      </tr>
+      <tr>
+          <td>MySQL 同步 ES</td>
+          <td>业务主键作为 <code>_id</code>，覆盖写</td>
+      </tr>
+      <tr>
+          <td>MQ 消息可能乱序</td>
+          <td>回查 MySQL 或业务版本号</td>
+      </tr>
+      <tr>
+          <td>同一 ID 高频更新</td>
+          <td>MQ 分区有序 + 版本控制</td>
+      </tr>
+      <tr>
+          <td>强一致业务状态机</td>
+          <td>回到 MySQL 事务中处理，ES 只同步结果</td>
+      </tr>
+  </tbody>
+</table>
+<h2 id="九总结">九、总结</h2>
+<p>ES 并发问题可以这样记：</p>
+<ul>
+<li><code>_seq_no</code> 和 <code>_primary_term</code> 解决的是 ES 内部文档并发写。</li>
+<li><code>retry_on_conflict</code> 只适合可安全重试的更新。</li>
+<li>MySQL 同步 ES 时，业务版本顺序比 ES 内部版本更重要。</li>
+<li>外部乱序消息优先通过回查事实源、分区有序、业务版本号解决。</li>
+<li>ES 是检索视图，不应该承担强事务状态判断。</li>
+</ul>
+<p>把“ES 内部并发”和“外部同步乱序”分开看，很多问题就会清楚得多。混在一起当然也能讲，只是那样比较适合制造面试恐慌，不太适合写可靠系统。</p>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

@@ -1,0 +1,1551 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>虚拟内存 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="操作系统给每个进程“伪造”出来的一套独立、连续、很大的内存视图。
+程序以为自己在直接操作一大片连续内存， 但实际上它访问的是虚拟地址，最后由硬件和操作系统把它映射到真正的物理内存，必要时甚至映射到磁盘。
+一、虚拟内存是什么 假设机器只有 8GB 物理内存，但你开了很多进程。 如果没有虚拟内存，程序就得直接操作真实物理地址，比如“0x12345678 这个物理位置”。
+这会有几个大问题：
+不同进程会互相踩内存 程序必须关心自己被装载到哪个物理位置，很麻烦 物理内存不连续时，分配会很难 程序能用的内存大小，完全被真实 RAM 直接限制 所以 OS 引入了虚拟内存：
+每个进程都看到自己的地址空间 看起来像一整块连续内存 不同进程的同一个虚拟地址，实际上可以映射到不同物理地址 某些暂时不用的数据，还可以先不放进物理内存 所以：
+虚拟内存 = 虚拟地址空间 &#43; 地址映射机制 &#43; 缺页调页机制
+二、虚拟内存解决了什么问题 1）进程隔离 进程 A 和进程 B 都可以有地址 0x1000，但它们实际对应的物理地址完全不同。
+所以：
+A 不能直接访问 B 的内存 一个进程崩了，不会随便把别的进程内存写坏 这就是内存隔离。
+2）让程序看到“连续内存” 程序申请一段 100MB 内存时，它看到的是连续虚拟地址。 但底层物理内存完全可以是零散的几块页，不需要真的连续。
+这大大降低了内存管理难度。
+3）让“可用内存”看起来比物理内存更大 虚拟内存允许：
+一部分页面在 RAM 一部分页面暂时在磁盘（swap / page file / 文件映射） 所以进程可以拥有一个很大的虚拟地址空间，哪怕物理内存没那么大。
+注意这不是“凭空变大”，而是：
+不常用的内容先放磁盘，需要时再换回来。
+4）支持共享 多个进程可以把不同虚拟地址映射到同一个物理页。
+典型例子：
+多个进程共享同一份动态链接库代码段 父子进程 fork 后先共享页，写时再复制（COW） 三、虚拟内存是如何实现的（核心机制） 实现虚拟内存，靠的是三样东西：
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/computerorganization/%E8%99%9A%E6%8B%9F%E5%86%85%E5%AD%98/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/computerorganization/%E8%99%9A%E6%8B%9F%E5%86%85%E5%AD%98/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="虚拟内存">
+  <meta property="og:description" content="操作系统给每个进程“伪造”出来的一套独立、连续、很大的内存视图。
+程序以为自己在直接操作一大片连续内存， 但实际上它访问的是虚拟地址，最后由硬件和操作系统把它映射到真正的物理内存，必要时甚至映射到磁盘。
+一、虚拟内存是什么 假设机器只有 8GB 物理内存，但你开了很多进程。 如果没有虚拟内存，程序就得直接操作真实物理地址，比如“0x12345678 这个物理位置”。
+这会有几个大问题：
+不同进程会互相踩内存 程序必须关心自己被装载到哪个物理位置，很麻烦 物理内存不连续时，分配会很难 程序能用的内存大小，完全被真实 RAM 直接限制 所以 OS 引入了虚拟内存：
+每个进程都看到自己的地址空间 看起来像一整块连续内存 不同进程的同一个虚拟地址，实际上可以映射到不同物理地址 某些暂时不用的数据，还可以先不放进物理内存 所以：
+虚拟内存 = 虚拟地址空间 &#43; 地址映射机制 &#43; 缺页调页机制
+二、虚拟内存解决了什么问题 1）进程隔离 进程 A 和进程 B 都可以有地址 0x1000，但它们实际对应的物理地址完全不同。
+所以：
+A 不能直接访问 B 的内存 一个进程崩了，不会随便把别的进程内存写坏 这就是内存隔离。
+2）让程序看到“连续内存” 程序申请一段 100MB 内存时，它看到的是连续虚拟地址。 但底层物理内存完全可以是零散的几块页，不需要真的连续。
+这大大降低了内存管理难度。
+3）让“可用内存”看起来比物理内存更大 虚拟内存允许：
+一部分页面在 RAM 一部分页面暂时在磁盘（swap / page file / 文件映射） 所以进程可以拥有一个很大的虚拟地址空间，哪怕物理内存没那么大。
+注意这不是“凭空变大”，而是：
+不常用的内容先放磁盘，需要时再换回来。
+4）支持共享 多个进程可以把不同虚拟地址映射到同一个物理页。
+典型例子：
+多个进程共享同一份动态链接库代码段 父子进程 fork 后先共享页，写时再复制（COW） 三、虚拟内存是如何实现的（核心机制） 实现虚拟内存，靠的是三样东西：">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="computerorganization">
+    <meta property="article:published_time" content="2026-03-05T11:51:45+08:00">
+    <meta property="article:modified_time" content="2026-03-05T11:51:45+08:00">
+
+  
+  <meta itemprop="name" content="虚拟内存">
+  <meta itemprop="description" content="操作系统给每个进程“伪造”出来的一套独立、连续、很大的内存视图。
+程序以为自己在直接操作一大片连续内存， 但实际上它访问的是虚拟地址，最后由硬件和操作系统把它映射到真正的物理内存，必要时甚至映射到磁盘。
+一、虚拟内存是什么 假设机器只有 8GB 物理内存，但你开了很多进程。 如果没有虚拟内存，程序就得直接操作真实物理地址，比如“0x12345678 这个物理位置”。
+这会有几个大问题：
+不同进程会互相踩内存 程序必须关心自己被装载到哪个物理位置，很麻烦 物理内存不连续时，分配会很难 程序能用的内存大小，完全被真实 RAM 直接限制 所以 OS 引入了虚拟内存：
+每个进程都看到自己的地址空间 看起来像一整块连续内存 不同进程的同一个虚拟地址，实际上可以映射到不同物理地址 某些暂时不用的数据，还可以先不放进物理内存 所以：
+虚拟内存 = 虚拟地址空间 &#43; 地址映射机制 &#43; 缺页调页机制
+二、虚拟内存解决了什么问题 1）进程隔离 进程 A 和进程 B 都可以有地址 0x1000，但它们实际对应的物理地址完全不同。
+所以：
+A 不能直接访问 B 的内存 一个进程崩了，不会随便把别的进程内存写坏 这就是内存隔离。
+2）让程序看到“连续内存” 程序申请一段 100MB 内存时，它看到的是连续虚拟地址。 但底层物理内存完全可以是零散的几块页，不需要真的连续。
+这大大降低了内存管理难度。
+3）让“可用内存”看起来比物理内存更大 虚拟内存允许：
+一部分页面在 RAM 一部分页面暂时在磁盘（swap / page file / 文件映射） 所以进程可以拥有一个很大的虚拟地址空间，哪怕物理内存没那么大。
+注意这不是“凭空变大”，而是：
+不常用的内容先放磁盘，需要时再换回来。
+4）支持共享 多个进程可以把不同虚拟地址映射到同一个物理页。
+典型例子：
+多个进程共享同一份动态链接库代码段 父子进程 fork 后先共享页，写时再复制（COW） 三、虚拟内存是如何实现的（核心机制） 实现虚拟内存，靠的是三样东西：">
+  <meta itemprop="datePublished" content="2026-03-05T11:51:45+08:00">
+  <meta itemprop="dateModified" content="2026-03-05T11:51:45+08:00">
+  <meta itemprop="wordCount" content="400">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="虚拟内存">
+  <meta name="twitter:description" content="操作系统给每个进程“伪造”出来的一套独立、连续、很大的内存视图。
+程序以为自己在直接操作一大片连续内存， 但实际上它访问的是虚拟地址，最后由硬件和操作系统把它映射到真正的物理内存，必要时甚至映射到磁盘。
+一、虚拟内存是什么 假设机器只有 8GB 物理内存，但你开了很多进程。 如果没有虚拟内存，程序就得直接操作真实物理地址，比如“0x12345678 这个物理位置”。
+这会有几个大问题：
+不同进程会互相踩内存 程序必须关心自己被装载到哪个物理位置，很麻烦 物理内存不连续时，分配会很难 程序能用的内存大小，完全被真实 RAM 直接限制 所以 OS 引入了虚拟内存：
+每个进程都看到自己的地址空间 看起来像一整块连续内存 不同进程的同一个虚拟地址，实际上可以映射到不同物理地址 某些暂时不用的数据，还可以先不放进物理内存 所以：
+虚拟内存 = 虚拟地址空间 &#43; 地址映射机制 &#43; 缺页调页机制
+二、虚拟内存解决了什么问题 1）进程隔离 进程 A 和进程 B 都可以有地址 0x1000，但它们实际对应的物理地址完全不同。
+所以：
+A 不能直接访问 B 的内存 一个进程崩了，不会随便把别的进程内存写坏 这就是内存隔离。
+2）让程序看到“连续内存” 程序申请一段 100MB 内存时，它看到的是连续虚拟地址。 但底层物理内存完全可以是零散的几块页，不需要真的连续。
+这大大降低了内存管理难度。
+3）让“可用内存”看起来比物理内存更大 虚拟内存允许：
+一部分页面在 RAM 一部分页面暂时在磁盘（swap / page file / 文件映射） 所以进程可以拥有一个很大的虚拟地址空间，哪怕物理内存没那么大。
+注意这不是“凭空变大”，而是：
+不常用的内容先放磁盘，需要时再换回来。
+4）支持共享 多个进程可以把不同虚拟地址映射到同一个物理页。
+典型例子：
+多个进程共享同一份动态链接库代码段 父子进程 fork 后先共享页，写时再复制（COW） 三、虚拟内存是如何实现的（核心机制） 实现虚拟内存，靠的是三样东西：">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">虚拟内存</h1>
+
+    
+      <div class="post-date">March 5, 2026</div>
+    
+
+    <div class="post-content">
+      <p><strong>操作系统给每个进程“伪造”出来的一套独立、连续、很大的内存视图。</strong></p>
+<p>程序以为自己在直接操作一大片连续内存，
+但实际上它访问的是<strong>虚拟地址</strong>，最后由硬件和操作系统把它映射到真正的<strong>物理内存</strong>，必要时甚至映射到磁盘。</p>
+<hr>
+<h2 id="一虚拟内存是什么">一、虚拟内存是什么</h2>
+<p>假设机器只有 8GB 物理内存，但你开了很多进程。
+如果没有虚拟内存，程序就得直接操作真实物理地址，比如“0x12345678 这个物理位置”。</p>
+<p>这会有几个大问题：</p>
+<ol>
+<li><strong>不同进程会互相踩内存</strong></li>
+<li>程序必须关心自己被装载到哪个物理位置，很麻烦</li>
+<li>物理内存不连续时，分配会很难</li>
+<li>程序能用的内存大小，完全被真实 RAM 直接限制</li>
+</ol>
+<p>所以 OS 引入了虚拟内存：</p>
+<ul>
+<li>每个进程都看到自己的地址空间</li>
+<li>看起来像一整块连续内存</li>
+<li>不同进程的同一个虚拟地址，实际上可以映射到不同物理地址</li>
+<li>某些暂时不用的数据，还可以先不放进物理内存</li>
+</ul>
+<p>所以：</p>
+<p><strong>虚拟内存 = 虚拟地址空间 + 地址映射机制 + 缺页调页机制</strong></p>
+<hr>
+<h2 id="二虚拟内存解决了什么问题">二、虚拟内存解决了什么问题</h2>
+<h3 id="1进程隔离">1）进程隔离</h3>
+<p>进程 A 和进程 B 都可以有地址 <code>0x1000</code>，但它们实际对应的物理地址完全不同。</p>
+<p>所以：</p>
+<ul>
+<li>A 不能直接访问 B 的内存</li>
+<li>一个进程崩了，不会随便把别的进程内存写坏</li>
+</ul>
+<p>这就是内存隔离。</p>
+<hr>
+<h3 id="2让程序看到连续内存">2）让程序看到“连续内存”</h3>
+<p>程序申请一段 100MB 内存时，它看到的是连续虚拟地址。
+但底层物理内存完全可以是零散的几块页，不需要真的连续。</p>
+<p>这大大降低了内存管理难度。</p>
+<hr>
+<h3 id="3让可用内存看起来比物理内存更大">3）让“可用内存”看起来比物理内存更大</h3>
+<p>虚拟内存允许：</p>
+<ul>
+<li>一部分页面在 RAM</li>
+<li>一部分页面暂时在磁盘（swap / page file / 文件映射）</li>
+</ul>
+<p>所以进程可以拥有一个很大的虚拟地址空间，哪怕物理内存没那么大。</p>
+<p>注意这不是“凭空变大”，而是：</p>
+<p><strong>不常用的内容先放磁盘，需要时再换回来。</strong></p>
+<hr>
+<h3 id="4支持共享">4）支持共享</h3>
+<p>多个进程可以把不同虚拟地址映射到同一个物理页。</p>
+<p>典型例子：</p>
+<ul>
+<li>多个进程共享同一份动态链接库代码段</li>
+<li>父子进程 <code>fork</code> 后先共享页，写时再复制（COW）</li>
+</ul>
+<hr>
+<h2 id="三虚拟内存是如何实现的核心机制">三、虚拟内存是如何实现的（核心机制）</h2>
+<p>实现虚拟内存，靠的是三样东西：</p>
+<ol>
+<li><strong>CPU 硬件（MMU）</strong></li>
+<li><strong>页表（Page Table）</strong></li>
+<li><strong>操作系统内核</strong></li>
+</ol>
+<hr>
+<h3 id="1虚拟地址和物理地址">1）虚拟地址和物理地址</h3>
+<p>程序里写的地址是<strong>虚拟地址</strong>。
+真正访问内存芯片时，用的是<strong>物理地址</strong>。</p>
+<p>中间需要做一次转换：</p>
+<p><strong>虚拟地址 -&gt; 物理地址</strong></p>
+<p>这个转换由 CPU 里的 <strong>MMU（内存管理单元）</strong> 负责。</p>
+<hr>
+<h3 id="2分页paging">2）分页（Paging）</h3>
+<p>现代系统基本都用“页”来管理虚拟内存。</p>
+<p>把内存分成固定大小的小块：</p>
+<ul>
+<li>虚拟内存分成：<strong>虚拟页</strong></li>
+<li>物理内存分成：<strong>物理页框（page frame）</strong></li>
+</ul>
+<p>常见页大小：</p>
+<ul>
+<li>4KB（最常见）</li>
+<li>2MB / 1GB（大页）</li>
+</ul>
+<hr>
+<h4 id="地址怎么拆">地址怎么拆</h4>
+<p>例如一个虚拟地址：</p>
+<ul>
+<li>高位：表示它属于哪个<strong>页</strong></li>
+<li>低位：表示页内的<strong>偏移量</strong></li>
+</ul>
+<p>举例（假设页大小 4KB）：</p>
+<ul>
+<li>4KB = 2^12</li>
+<li>那么虚拟地址的低 12 位就是页内偏移</li>
+<li>剩下高位就是虚拟页号</li>
+</ul>
+<p>MMU 做的事就是：</p>
+<ol>
+<li>先拿虚拟页号查页表</li>
+<li>找到对应物理页框号</li>
+<li>再加上原来的页内偏移</li>
+<li>得到最终物理地址</li>
+</ol>
+<p>所以本质上：</p>
+<p><strong>物理地址 = 物理页框基址 + 页内偏移</strong></p>
+<hr>
+<h3 id="3页表page-table">3）页表（Page Table）</h3>
+<p>页表就是“映射关系表”。</p>
+<p>它记录：</p>
+<ul>
+<li>某个虚拟页，对应哪个物理页框</li>
+<li>这个页是否存在</li>
+<li>是否可读/可写/可执行</li>
+<li>是否被访问过</li>
+<li>是否被修改过（脏页）</li>
+</ul>
+<p>你可以把它理解成：</p>
+<table>
+  <thead>
+      <tr>
+          <th>虚拟页号</th>
+          <th>物理页框号</th>
+          <th>权限</th>
+          <th>是否在内存</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>0x123</td>
+          <td>0x88A</td>
+          <td>R/W</td>
+          <td>是</td>
+      </tr>
+      <tr>
+          <td>0x124</td>
+          <td>-</td>
+          <td>-</td>
+          <td>否（缺页）</td>
+      </tr>
+  </tbody>
+</table>
+<hr>
+<h3 id="4mmu地址翻译的执行者">4）MMU：地址翻译的执行者</h3>
+<p>程序执行一条指令，比如访问：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">*0x7fff12345678
+</span></span></code></pre></div><p>CPU 不会直接把这个当成物理地址打到内存总线上。
+它会先交给 MMU 翻译。</p>
+<p>流程大致是：</p>
+<ol>
+<li>CPU 产生虚拟地址</li>
+<li>MMU 查页表</li>
+<li>若找到有效映射 -&gt; 得到物理地址</li>
+<li>去访问真正的物理内存</li>
+</ol>
+<hr>
+<h3 id="5tlb加速页表查询">5）TLB：加速页表查询</h3>
+<p>如果每次内存访问都去查页表，那会很慢。
+因为你访问一个变量都要先多查一次甚至多次内存。</p>
+<p>所以 CPU 里有个缓存，叫：</p>
+<p><strong>TLB（Translation Lookaside Buffer）</strong></p>
+<p>它缓存最近用过的“虚拟页 -&gt; 物理页框”的映射。</p>
+<p>所以平时流程通常是：</p>
+<ol>
+<li>先查 TLB</li>
+<li>命中：直接拿到物理地址，快</li>
+<li>未命中：再去查页表</li>
+<li>查到后把结果写回 TLB</li>
+</ol>
+<p>这就是为什么 TLB 很重要。</p>
+<hr>
+<h2 id="四如果页不在内存里会发生什么缺页">四、如果页不在内存里，会发生什么（缺页）</h2>
+<p>这是虚拟内存最关键的一步。</p>
+<p>如果程序访问一个虚拟页，但这个页当前<strong>不在物理内存</strong>：</p>
+<ul>
+<li>MMU 查页表发现该页无效 / 不在内存</li>
+<li>CPU 会触发一个异常：<strong>缺页异常（page fault）</strong></li>
+<li>然后陷入内核</li>
+</ul>
+<hr>
+<h3 id="缺页后的流程">缺页后的流程</h3>
+<p>操作系统接手后会做这些事：</p>
+<h4 id="1判断这次访问是否合法">1）判断这次访问是否合法</h4>
+<p>比如：</p>
+<ul>
+<li>这个地址是否属于进程的合法虚拟空间？</li>
+<li>是否越界？</li>
+<li>是否访问了无权限的页？</li>
+</ul>
+<p>如果不合法：</p>
+<ul>
+<li>直接给进程一个错误（如段错误）</li>
+</ul>
+<p>如果合法：</p>
+<ul>
+<li>继续调页</li>
+</ul>
+<hr>
+<h4 id="2找到这个页的数据来源">2）找到这个页的数据来源</h4>
+<p>页的数据可能来自：</p>
+<ul>
+<li>可执行文件 / 动态库</li>
+<li>内存映射文件（mmap）</li>
+<li>交换区（swap）</li>
+<li>新申请的匿名页（初始清零）</li>
+</ul>
+<hr>
+<h4 id="3找一个空闲物理页框">3）找一个空闲物理页框</h4>
+<p>如果有空闲页框，直接用。
+如果没有，就得先淘汰一个已有页面。</p>
+<p>这就涉及<strong>页面置换算法</strong>，比如近似 LRU。</p>
+<hr>
+<h4 id="4必要时把旧页写回磁盘">4）必要时把旧页写回磁盘</h4>
+<p>如果被淘汰页是脏页（被修改过）：</p>
+<ul>
+<li>需要先写回磁盘</li>
+</ul>
+<p>如果没修改过：</p>
+<ul>
+<li>可以直接丢掉</li>
+</ul>
+<hr>
+<h4 id="5把目标页从磁盘读入物理内存">5）把目标页从磁盘读入物理内存</h4>
+<p>把真正需要的那一页读到物理页框中。</p>
+<hr>
+<h4 id="6更新页表">6）更新页表</h4>
+<p>告诉 MMU：</p>
+<ul>
+<li>这个虚拟页现在对应哪个物理页框</li>
+<li>标记为“在内存中”</li>
+<li>设置权限位</li>
+</ul>
+<hr>
+<h4 id="7重新执行刚才那条指令">7）重新执行刚才那条指令</h4>
+<p>CPU 回到用户态，再执行刚才访问那块内存的指令。
+这次因为页已经进来了，就能成功访问。</p>
+<hr>
+<h2 id="五这就是按需加载demand-paging">五、这就是“按需加载”（Demand Paging）</h2>
+<p>程序启动时，并不会把它所有代码、数据、堆都一次性全装入内存。
+否则太慢也太浪费。</p>
+<p>而是：</p>
+<ul>
+<li>先建立虚拟地址空间</li>
+<li>真正访问到哪一页，再把哪一页调进来</li>
+</ul>
+<p>这叫：</p>
+<p><strong>按需分页 / 请求分页（Demand Paging）</strong></p>
+<p>所以很多程序看起来“占用内存很大”，其实只是虚拟地址空间大，未必都真的进了物理内存。</p>
+<hr>
+<h2 id="六一个具体例子程序访问变量时发生了什么">六、一个具体例子：程序访问变量时发生了什么</h2>
+<p>假设你的程序访问一个变量，虚拟地址是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">0x12345678
+</span></span></code></pre></div><p>假设页大小是 4KB。</p>
+<hr>
+<h3 id="第一步拆地址">第一步：拆地址</h3>
+<ul>
+<li>虚拟页号 = 高 20 位（简化理解）</li>
+<li>页内偏移 = 低 12 位</li>
+</ul>
+<hr>
+<h3 id="第二步查-tlb">第二步：查 TLB</h3>
+<ul>
+<li>如果 TLB 里有这页映射，直接得到物理页框号</li>
+<li>如果没有，查页表</li>
+</ul>
+<hr>
+<h3 id="第三步查页表">第三步：查页表</h3>
+<p>假设查到：</p>
+<ul>
+<li>虚拟页 <code>0x12345</code></li>
+<li>对应物理页框 <code>0x9AB</code></li>
+</ul>
+<hr>
+<h3 id="第四步拼出物理地址">第四步：拼出物理地址</h3>
+<p>物理地址 = 物理页框基址 + 偏移</p>
+<p>于是最终可能变成：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">0x9AB678
+</span></span></code></pre></div><p>CPU 再去访问真正的 RAM。</p>
+<hr>
+<h2 id="如果页表说不在内存">如果页表说“不在内存”</h2>
+<p>那就触发缺页，交给内核处理，调页后再重试。</p>
+<hr>
+<h2 id="七页表本身怎么组织">七、页表本身怎么组织</h2>
+<p>如果虚拟地址空间很大，页表会非常大。
+所以现代系统不会只用一张简单的“大数组页表”，而是常用：</p>
+<p><strong>多级页表</strong></p>
+<p>比如：</p>
+<ul>
+<li>一级页表</li>
+<li>二级页表</li>
+<li>三级页表</li>
+<li>四级页表</li>
+</ul>
+<p>64 位系统里常见四级页表甚至更多层次。</p>
+<p>这样做的原因是：</p>
+<ul>
+<li>虚拟空间很大，但并不是每一段都真的用到了</li>
+<li>多级页表可以按需分配，节省内存</li>
+</ul>
+<p>代价是：</p>
+<ul>
+<li>TLB 未命中时，页表遍历更复杂</li>
+<li>但整体更省空间</li>
+</ul>
+<hr>
+<h2 id="八虚拟内存不只是分页还包括权限控制">八、虚拟内存不只是“分页”，还包括权限控制</h2>
+<p>页表项里不只有地址映射，还有权限位：</p>
+<ul>
+<li>可读（R）</li>
+<li>可写（W）</li>
+<li>可执行（X）</li>
+<li>用户态可访问 / 仅内核可访问</li>
+</ul>
+<p>所以虚拟内存还承担了<strong>保护</strong>作用。</p>
+<p>例如：</p>
+<ul>
+<li>代码段通常可读可执行，不可写</li>
+<li>数据段可读可写</li>
+<li>内核页用户态不可访问</li>
+</ul>
+<p>这就是为什么非法访问内存会崩。</p>
+<hr>
+<h2 id="九写时复制cow也是虚拟内存的重要应用">九、写时复制（COW）也是虚拟内存的重要应用</h2>
+<p>比如 <code>fork()</code> 创建子进程时，
+父子进程一开始看起来像有一份完整拷贝。</p>
+<p>但 OS 不会立刻真的把所有物理页复制一遍，那太贵了。</p>
+<p>它会：</p>
+<ol>
+<li>父子进程先共享同一批物理页</li>
+<li>都标记成只读</li>
+<li>谁先写某一页，谁触发缺页异常</li>
+<li>内核再真正复制该页</li>
+<li>让写的一方使用新页</li>
+</ol>
+<p>这叫：</p>
+<p><strong>Copy-On-Write（写时复制）</strong></p>
+<p>这本质上也是虚拟内存机制在发挥作用。</p>
+<hr>
+<h2 id="十为什么虚拟内存会有性能开销">十、为什么虚拟内存会有性能开销</h2>
+<p>虚拟内存很强大，但不是免费的。</p>
+<hr>
+<h3 id="1地址翻译开销">1）地址翻译开销</h3>
+<p>每次访问内存都要做地址翻译。
+虽然有 TLB 缓存，但 TLB miss 仍然贵。</p>
+<hr>
+<h3 id="2缺页异常很贵">2）缺页异常很贵</h3>
+<p>如果页不在内存：</p>
+<ul>
+<li>进入内核</li>
+<li>可能磁盘 I/O</li>
+<li>更新页表</li>
+<li>再返回</li>
+</ul>
+<p>这会非常慢，比普通内存访问慢几个数量级都不止。</p>
+<hr>
+<h3 id="3频繁换页会抖动thrashing">3）频繁换页会抖动（Thrashing）</h3>
+<p>如果物理内存太小、进程工作集太大，系统可能不断：</p>
+<ul>
+<li>换出页</li>
+<li>再换入页</li>
+<li>再换出别的页</li>
+</ul>
+<p>CPU 大量时间耗在调页，而不是做真正业务。</p>
+<p>这就是“抖动”。</p>
+<hr>
+<h2 id="十一虚拟内存和内存不够是什么关系">十一、虚拟内存和“内存不够”是什么关系</h2>
+<p>很多人会误解成：</p>
+<blockquote>
+<p>虚拟内存 = 把磁盘当内存，所以内存就无限了</p></blockquote>
+<p>这是不对的。</p>
+<p>更准确地说：</p>
+<ul>
+<li>虚拟内存让程序拥有大地址空间</li>
+<li>磁盘只是“后备存储”</li>
+<li>当 RAM 不够时，系统可以把不常用页挪到磁盘</li>
+</ul>
+<p>但磁盘远慢于内存，所以：</p>
+<p><strong>虚拟内存让程序“能跑”，不代表“跑得快”。</strong></p>
+<hr>
+<h2 id="十二你可以这样记住它的本质">十二、你可以这样记住它的本质</h2>
+<p>虚拟内存本质上做了三件事：</p>
+<h3 id="1欺骗程序">1）欺骗程序</h3>
+<p>让每个程序都觉得自己有一套独立、连续的大内存。</p>
+<h3 id="2映射地址">2）映射地址</h3>
+<p>通过页表和 MMU，把虚拟地址翻译成物理地址。</p>
+<h3 id="3按需调页">3）按需调页</h3>
+<p>不常用的页可以不放在 RAM，访问时再调入。</p>
+<hr>
+<h2 id="十三一句话总结">十三、一句话总结</h2>
+<p><strong>虚拟内存就是操作系统和硬件共同实现的一套“地址映射 + 内存隔离 + 按需调页”机制：程序使用虚拟地址，MMU 通过页表把它映射到物理内存；如果目标页不在内存，就触发缺页异常，由操作系统把页面调入。</strong></p>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

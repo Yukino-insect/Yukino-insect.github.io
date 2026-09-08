@@ -1,0 +1,1500 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MinIO | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="MinIO 是一个高性能对象存储服务，兼容 Amazon S3 API。它常用来保存图片、视频、文档、日志、备份包等非结构化数据。
+在业务系统里，MinIO 通常不直接替代数据库。数据库负责结构化业务数据，MinIO 负责保存文件本体，数据库里只保存对象路径、文件名、大小、类型、业务归属等元数据。把大文件硬塞进数据库，当然也不是不能做，只是多数时候都像是在用餐刀挖地基，姿势很努力，结果很难看。
+核心概念 对象存储最重要的是三个概念：
+概念 说明 Bucket 桶，用来存放一类对象，类似顶层目录 Object 对象，真正保存的文件，例如图片、视频、PDF Policy 访问策略，用来控制桶或对象的读写权限 MinIO 启动后通常提供两个入口：
+端口 作用 9000 S3 API 端口，应用程序通过它上传、下载和管理对象 9001 Console 控制台端口，用于在浏览器中管理桶和对象 一次典型的文件访问流程如下：
+客户端 -&gt; 后端服务 -&gt; MinIO API -&gt; Bucket / Object 如果文件是公开资源，可以直接返回公开访问地址。如果文件是私有资源，更常见的做法是由后端生成一个有过期时间的预签名 URL，客户端在有效期内通过这个 URL 访问文件。
+客户端请求文件 -&gt; 后端校验权限 -&gt; 后端生成预签名 URL -&gt; 客户端使用 URL 下载对象 这样客户端不需要知道 MinIO 的账号密钥，也不会拿到永久有效的访问入口。
+适用场景 MinIO 适合保存不需要关系型查询的文件数据：
+用户头像、商品图片、文章封面。 视频、音频、附件、合同文件。 日志归档、数据库备份、导出文件。 机器学习数据集或大文件中间结果。 不适合放入 MinIO 的内容：
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/oss/minio/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/oss/minio/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="MinIO">
+  <meta property="og:description" content="MinIO 是一个高性能对象存储服务，兼容 Amazon S3 API。它常用来保存图片、视频、文档、日志、备份包等非结构化数据。
+在业务系统里，MinIO 通常不直接替代数据库。数据库负责结构化业务数据，MinIO 负责保存文件本体，数据库里只保存对象路径、文件名、大小、类型、业务归属等元数据。把大文件硬塞进数据库，当然也不是不能做，只是多数时候都像是在用餐刀挖地基，姿势很努力，结果很难看。
+核心概念 对象存储最重要的是三个概念：
+概念 说明 Bucket 桶，用来存放一类对象，类似顶层目录 Object 对象，真正保存的文件，例如图片、视频、PDF Policy 访问策略，用来控制桶或对象的读写权限 MinIO 启动后通常提供两个入口：
+端口 作用 9000 S3 API 端口，应用程序通过它上传、下载和管理对象 9001 Console 控制台端口，用于在浏览器中管理桶和对象 一次典型的文件访问流程如下：
+客户端 -&gt; 后端服务 -&gt; MinIO API -&gt; Bucket / Object 如果文件是公开资源，可以直接返回公开访问地址。如果文件是私有资源，更常见的做法是由后端生成一个有过期时间的预签名 URL，客户端在有效期内通过这个 URL 访问文件。
+客户端请求文件 -&gt; 后端校验权限 -&gt; 后端生成预签名 URL -&gt; 客户端使用 URL 下载对象 这样客户端不需要知道 MinIO 的账号密钥，也不会拿到永久有效的访问入口。
+适用场景 MinIO 适合保存不需要关系型查询的文件数据：
+用户头像、商品图片、文章封面。 视频、音频、附件、合同文件。 日志归档、数据库备份、导出文件。 机器学习数据集或大文件中间结果。 不适合放入 MinIO 的内容：">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="oss">
+    <meta property="article:published_time" content="2025-10-02T22:25:43+08:00">
+    <meta property="article:modified_time" content="2025-10-02T22:25:43+08:00">
+
+  
+  <meta itemprop="name" content="MinIO">
+  <meta itemprop="description" content="MinIO 是一个高性能对象存储服务，兼容 Amazon S3 API。它常用来保存图片、视频、文档、日志、备份包等非结构化数据。
+在业务系统里，MinIO 通常不直接替代数据库。数据库负责结构化业务数据，MinIO 负责保存文件本体，数据库里只保存对象路径、文件名、大小、类型、业务归属等元数据。把大文件硬塞进数据库，当然也不是不能做，只是多数时候都像是在用餐刀挖地基，姿势很努力，结果很难看。
+核心概念 对象存储最重要的是三个概念：
+概念 说明 Bucket 桶，用来存放一类对象，类似顶层目录 Object 对象，真正保存的文件，例如图片、视频、PDF Policy 访问策略，用来控制桶或对象的读写权限 MinIO 启动后通常提供两个入口：
+端口 作用 9000 S3 API 端口，应用程序通过它上传、下载和管理对象 9001 Console 控制台端口，用于在浏览器中管理桶和对象 一次典型的文件访问流程如下：
+客户端 -&gt; 后端服务 -&gt; MinIO API -&gt; Bucket / Object 如果文件是公开资源，可以直接返回公开访问地址。如果文件是私有资源，更常见的做法是由后端生成一个有过期时间的预签名 URL，客户端在有效期内通过这个 URL 访问文件。
+客户端请求文件 -&gt; 后端校验权限 -&gt; 后端生成预签名 URL -&gt; 客户端使用 URL 下载对象 这样客户端不需要知道 MinIO 的账号密钥，也不会拿到永久有效的访问入口。
+适用场景 MinIO 适合保存不需要关系型查询的文件数据：
+用户头像、商品图片、文章封面。 视频、音频、附件、合同文件。 日志归档、数据库备份、导出文件。 机器学习数据集或大文件中间结果。 不适合放入 MinIO 的内容：">
+  <meta itemprop="datePublished" content="2025-10-02T22:25:43+08:00">
+  <meta itemprop="dateModified" content="2025-10-02T22:25:43+08:00">
+  <meta itemprop="wordCount" content="609">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="MinIO">
+  <meta name="twitter:description" content="MinIO 是一个高性能对象存储服务，兼容 Amazon S3 API。它常用来保存图片、视频、文档、日志、备份包等非结构化数据。
+在业务系统里，MinIO 通常不直接替代数据库。数据库负责结构化业务数据，MinIO 负责保存文件本体，数据库里只保存对象路径、文件名、大小、类型、业务归属等元数据。把大文件硬塞进数据库，当然也不是不能做，只是多数时候都像是在用餐刀挖地基，姿势很努力，结果很难看。
+核心概念 对象存储最重要的是三个概念：
+概念 说明 Bucket 桶，用来存放一类对象，类似顶层目录 Object 对象，真正保存的文件，例如图片、视频、PDF Policy 访问策略，用来控制桶或对象的读写权限 MinIO 启动后通常提供两个入口：
+端口 作用 9000 S3 API 端口，应用程序通过它上传、下载和管理对象 9001 Console 控制台端口，用于在浏览器中管理桶和对象 一次典型的文件访问流程如下：
+客户端 -&gt; 后端服务 -&gt; MinIO API -&gt; Bucket / Object 如果文件是公开资源，可以直接返回公开访问地址。如果文件是私有资源，更常见的做法是由后端生成一个有过期时间的预签名 URL，客户端在有效期内通过这个 URL 访问文件。
+客户端请求文件 -&gt; 后端校验权限 -&gt; 后端生成预签名 URL -&gt; 客户端使用 URL 下载对象 这样客户端不需要知道 MinIO 的账号密钥，也不会拿到永久有效的访问入口。
+适用场景 MinIO 适合保存不需要关系型查询的文件数据：
+用户头像、商品图片、文章封面。 视频、音频、附件、合同文件。 日志归档、数据库备份、导出文件。 机器学习数据集或大文件中间结果。 不适合放入 MinIO 的内容：">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">MinIO</h1>
+
+    
+      <div class="post-date">October 2, 2025</div>
+    
+
+    <div class="post-content">
+      <p>MinIO 是一个高性能对象存储服务，兼容 Amazon S3 API。它常用来保存图片、视频、文档、日志、备份包等<strong>非结构化数据</strong>。</p>
+<p>在业务系统里，MinIO 通常不直接替代数据库。数据库负责结构化业务数据，MinIO 负责保存文件本体，数据库里只保存对象路径、文件名、大小、类型、业务归属等元数据。把大文件硬塞进数据库，当然也不是不能做，只是多数时候都像是在用餐刀挖地基，姿势很努力，结果很难看。</p>
+<h2 id="核心概念">核心概念</h2>
+<p>对象存储最重要的是三个概念：</p>
+<table>
+  <thead>
+      <tr>
+          <th>概念</th>
+          <th>说明</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Bucket</td>
+          <td>桶，用来存放一类对象，类似顶层目录</td>
+      </tr>
+      <tr>
+          <td>Object</td>
+          <td>对象，真正保存的文件，例如图片、视频、PDF</td>
+      </tr>
+      <tr>
+          <td>Policy</td>
+          <td>访问策略，用来控制桶或对象的读写权限</td>
+      </tr>
+  </tbody>
+</table>
+<p>MinIO 启动后通常提供两个入口：</p>
+<table>
+  <thead>
+      <tr>
+          <th>端口</th>
+          <th>作用</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>9000</code></td>
+          <td>S3 API 端口，应用程序通过它上传、下载和管理对象</td>
+      </tr>
+      <tr>
+          <td><code>9001</code></td>
+          <td>Console 控制台端口，用于在浏览器中管理桶和对象</td>
+      </tr>
+  </tbody>
+</table>
+<p>一次典型的文件访问流程如下：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">客户端
+</span></span><span class="line"><span class="cl">  -&gt; 后端服务
+</span></span><span class="line"><span class="cl">  -&gt; MinIO API
+</span></span><span class="line"><span class="cl">  -&gt; Bucket / Object
+</span></span></code></pre></div><p>如果文件是公开资源，可以直接返回公开访问地址。如果文件是私有资源，更常见的做法是由后端生成一个有过期时间的<strong>预签名 URL</strong>，客户端在有效期内通过这个 URL 访问文件。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">客户端请求文件
+</span></span><span class="line"><span class="cl">  -&gt; 后端校验权限
+</span></span><span class="line"><span class="cl">  -&gt; 后端生成预签名 URL
+</span></span><span class="line"><span class="cl">  -&gt; 客户端使用 URL 下载对象
+</span></span></code></pre></div><p>这样客户端不需要知道 MinIO 的账号密钥，也不会拿到永久有效的访问入口。</p>
+<h2 id="适用场景">适用场景</h2>
+<p>MinIO 适合保存不需要关系型查询的文件数据：</p>
+<ul>
+<li>用户头像、商品图片、文章封面。</li>
+<li>视频、音频、附件、合同文件。</li>
+<li>日志归档、数据库备份、导出文件。</li>
+<li>机器学习数据集或大文件中间结果。</li>
+</ul>
+<p>不适合放入 MinIO 的内容：</p>
+<ul>
+<li>需要复杂事务的业务记录。</li>
+<li>需要频繁按字段查询和关联的数据。</li>
+<li>高频修改的小片段状态数据。</li>
+<li>没有访问控制设计的敏感文件。</li>
+</ul>
+<p>对象存储擅长的是“按对象名读写文件”。如果你希望它像 MySQL 一样 <code>where status = 1</code>，那只能说明你需要的不是对象存储。</p>
+<h2 id="本地部署">本地部署</h2>
+<p>开发环境可以用 Docker 启动一个单节点 MinIO：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">docker run -d <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>  --name minio <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>  -p 9000:9000 <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>  -p 9001:9001 <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>  -e <span class="nv">MINIO_ROOT_USER</span><span class="o">=</span>minioadmin <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>  -e <span class="nv">MINIO_ROOT_PASSWORD</span><span class="o">=</span>minioadmin123 <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>  -v /data/minio:/data <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>  minio/minio server /data --console-address <span class="s2">&#34;:9001&#34;</span>
+</span></span></code></pre></div><p>启动后访问控制台：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">http://127.0.0.1:9001
+</span></span></code></pre></div><p>应用程序连接 API 地址：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">http://127.0.0.1:9000
+</span></span></code></pre></div><p>开发环境可以使用简单账号，生产环境不要继续使用 <code>minioadmin</code> 这类默认凭据。默认账号留在生产环境里，和把门钥匙插在门上差不多，只是表达方式更云原生一点。</p>
+<h2 id="java-sdk-集成">Java SDK 集成</h2>
+<p>引入 MinIO Java SDK：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-xml" data-lang="xml"><span class="line"><span class="cl"><span class="nt">&lt;dependency&gt;</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&lt;groupId&gt;</span>io.minio<span class="nt">&lt;/groupId&gt;</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&lt;artifactId&gt;</span>minio<span class="nt">&lt;/artifactId&gt;</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&lt;version&gt;</span>8.5.2<span class="nt">&lt;/version&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="nt">&lt;/dependency&gt;</span>
+</span></span></code></pre></div><p>初始化客户端：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">MinioClient</span><span class="w"> </span><span class="n">minioClient</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">MinioClient</span><span class="p">.</span><span class="na">builder</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">.</span><span class="na">endpoint</span><span class="p">(</span><span class="s">&#34;http://127.0.0.1:9000&#34;</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">.</span><span class="na">credentials</span><span class="p">(</span><span class="s">&#34;minioadmin&#34;</span><span class="p">,</span><span class="w"> </span><span class="s">&#34;minioadmin123&#34;</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">.</span><span class="na">build</span><span class="p">();</span><span class="w">
+</span></span></span></code></pre></div><p>创建桶：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">String</span><span class="w"> </span><span class="n">bucketName</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&#34;demo&#34;</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kt">boolean</span><span class="w"> </span><span class="n">exists</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">minioClient</span><span class="p">.</span><span class="na">bucketExists</span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">BucketExistsArgs</span><span class="p">.</span><span class="na">builder</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="na">bucket</span><span class="p">(</span><span class="n">bucketName</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="na">build</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">exists</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">minioClient</span><span class="p">.</span><span class="na">makeBucket</span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">MakeBucketArgs</span><span class="p">.</span><span class="na">builder</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                    </span><span class="p">.</span><span class="na">bucket</span><span class="p">(</span><span class="n">bucketName</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                    </span><span class="p">.</span><span class="na">build</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>上传本地文件：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">minioClient</span><span class="p">.</span><span class="na">uploadObject</span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">UploadObjectArgs</span><span class="p">.</span><span class="na">builder</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="na">bucket</span><span class="p">(</span><span class="s">&#34;demo&#34;</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="na">object</span><span class="p">(</span><span class="s">&#34;avatar/user-1.jpg&#34;</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="na">filename</span><span class="p">(</span><span class="s">&#34;D:/upload/avatar.jpg&#34;</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="na">contentType</span><span class="p">(</span><span class="s">&#34;image/jpeg&#34;</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="na">build</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><p>下载文件：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">minioClient</span><span class="p">.</span><span class="na">downloadObject</span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">DownloadObjectArgs</span><span class="p">.</span><span class="na">builder</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="na">bucket</span><span class="p">(</span><span class="s">&#34;demo&#34;</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="na">object</span><span class="p">(</span><span class="s">&#34;avatar/user-1.jpg&#34;</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="na">filename</span><span class="p">(</span><span class="s">&#34;D:/download/user-1.jpg&#34;</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="na">build</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><p>生成临时访问链接：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">String</span><span class="w"> </span><span class="n">url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">minioClient</span><span class="p">.</span><span class="na">getPresignedObjectUrl</span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">GetPresignedObjectUrlArgs</span><span class="p">.</span><span class="na">builder</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="na">method</span><span class="p">(</span><span class="n">Method</span><span class="p">.</span><span class="na">GET</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="na">bucket</span><span class="p">(</span><span class="s">&#34;demo&#34;</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="na">object</span><span class="p">(</span><span class="s">&#34;avatar/user-1.jpg&#34;</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="na">expiry</span><span class="p">(</span><span class="n">60</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">60</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="na">build</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><p>预签名 URL 的过期时间应该按业务场景控制。头像、公开图片可以走公开读或 CDN；合同、证件、私有附件应该使用短时间有效的预签名 URL。</p>
+<h2 id="spring-boot-集成">Spring Boot 集成</h2>
+<p>先在 <code>application.yml</code> 中配置 MinIO 连接信息：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-yaml" data-lang="yaml"><span class="line"><span class="cl"><span class="nt">minio</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">endpoint</span><span class="p">:</span><span class="w"> </span><span class="l">http://127.0.0.1:9000</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">access-key</span><span class="p">:</span><span class="w"> </span><span class="l">minioadmin</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">secret-key</span><span class="p">:</span><span class="w"> </span><span class="l">minioadmin123</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">bucket-name</span><span class="p">:</span><span class="w"> </span><span class="l">demo</span><span class="w">
+</span></span></span></code></pre></div><p>定义配置属性类：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="nd">@ConfigurationProperties</span><span class="p">(</span><span class="n">prefix</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&#34;minio&#34;</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">MinioProperties</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="n">String</span><span class="w"> </span><span class="n">endpoint</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="n">String</span><span class="w"> </span><span class="n">accessKey</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="n">String</span><span class="w"> </span><span class="n">secretKey</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="n">String</span><span class="w"> </span><span class="n">bucketName</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="n">String</span><span class="w"> </span><span class="nf">getEndpoint</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">endpoint</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">setEndpoint</span><span class="p">(</span><span class="n">String</span><span class="w"> </span><span class="n">endpoint</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">this</span><span class="p">.</span><span class="na">endpoint</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">endpoint</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="n">String</span><span class="w"> </span><span class="nf">getAccessKey</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">accessKey</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">setAccessKey</span><span class="p">(</span><span class="n">String</span><span class="w"> </span><span class="n">accessKey</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">this</span><span class="p">.</span><span class="na">accessKey</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">accessKey</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="n">String</span><span class="w"> </span><span class="nf">getSecretKey</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">secretKey</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">setSecretKey</span><span class="p">(</span><span class="n">String</span><span class="w"> </span><span class="n">secretKey</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">this</span><span class="p">.</span><span class="na">secretKey</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">secretKey</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="n">String</span><span class="w"> </span><span class="nf">getBucketName</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">bucketName</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">setBucketName</span><span class="p">(</span><span class="n">String</span><span class="w"> </span><span class="n">bucketName</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">this</span><span class="p">.</span><span class="na">bucketName</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">bucketName</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>注册 <code>MinioClient</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="nd">@Configuration</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nd">@EnableConfigurationProperties</span><span class="p">(</span><span class="n">MinioProperties</span><span class="p">.</span><span class="na">class</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">MinioConfig</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nd">@Bean</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="n">MinioClient</span><span class="w"> </span><span class="nf">minioClient</span><span class="p">(</span><span class="n">MinioProperties</span><span class="w"> </span><span class="n">properties</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">MinioClient</span><span class="p">.</span><span class="na">builder</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="na">endpoint</span><span class="p">(</span><span class="n">properties</span><span class="p">.</span><span class="na">getEndpoint</span><span class="p">())</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="na">credentials</span><span class="p">(</span><span class="n">properties</span><span class="p">.</span><span class="na">getAccessKey</span><span class="p">(),</span><span class="w"> </span><span class="n">properties</span><span class="p">.</span><span class="na">getSecretKey</span><span class="p">())</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="na">build</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>封装文件服务：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="nd">@Service</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">MinioService</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="kd">final</span><span class="w"> </span><span class="n">MinioClient</span><span class="w"> </span><span class="n">minioClient</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="kd">final</span><span class="w"> </span><span class="n">MinioProperties</span><span class="w"> </span><span class="n">properties</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="nf">MinioService</span><span class="p">(</span><span class="n">MinioClient</span><span class="w"> </span><span class="n">minioClient</span><span class="p">,</span><span class="w"> </span><span class="n">MinioProperties</span><span class="w"> </span><span class="n">properties</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">this</span><span class="p">.</span><span class="na">minioClient</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">minioClient</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">this</span><span class="p">.</span><span class="na">properties</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">properties</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">upload</span><span class="p">(</span><span class="n">MultipartFile</span><span class="w"> </span><span class="n">file</span><span class="p">,</span><span class="w"> </span><span class="n">String</span><span class="w"> </span><span class="n">objectName</span><span class="p">)</span><span class="w"> </span><span class="kd">throws</span><span class="w"> </span><span class="n">Exception</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">createBucketIfAbsent</span><span class="p">(</span><span class="n">properties</span><span class="p">.</span><span class="na">getBucketName</span><span class="p">());</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">try</span><span class="w"> </span><span class="p">(</span><span class="n">InputStream</span><span class="w"> </span><span class="n">inputStream</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">file</span><span class="p">.</span><span class="na">getInputStream</span><span class="p">())</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">minioClient</span><span class="p">.</span><span class="na">putObject</span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                    </span><span class="n">PutObjectArgs</span><span class="p">.</span><span class="na">builder</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                            </span><span class="p">.</span><span class="na">bucket</span><span class="p">(</span><span class="n">properties</span><span class="p">.</span><span class="na">getBucketName</span><span class="p">())</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                            </span><span class="p">.</span><span class="na">object</span><span class="p">(</span><span class="n">objectName</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                            </span><span class="p">.</span><span class="na">stream</span><span class="p">(</span><span class="n">inputStream</span><span class="p">,</span><span class="w"> </span><span class="n">file</span><span class="p">.</span><span class="na">getSize</span><span class="p">(),</span><span class="w"> </span><span class="o">-</span><span class="n">1</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                            </span><span class="p">.</span><span class="na">contentType</span><span class="p">(</span><span class="n">resolveContentType</span><span class="p">(</span><span class="n">file</span><span class="p">))</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                            </span><span class="p">.</span><span class="na">build</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="n">String</span><span class="w"> </span><span class="nf">getPresignedUrl</span><span class="p">(</span><span class="n">String</span><span class="w"> </span><span class="n">objectName</span><span class="p">)</span><span class="w"> </span><span class="kd">throws</span><span class="w"> </span><span class="n">Exception</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">minioClient</span><span class="p">.</span><span class="na">getPresignedObjectUrl</span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="n">GetPresignedObjectUrlArgs</span><span class="p">.</span><span class="na">builder</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                        </span><span class="p">.</span><span class="na">method</span><span class="p">(</span><span class="n">Method</span><span class="p">.</span><span class="na">GET</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                        </span><span class="p">.</span><span class="na">bucket</span><span class="p">(</span><span class="n">properties</span><span class="p">.</span><span class="na">getBucketName</span><span class="p">())</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                        </span><span class="p">.</span><span class="na">object</span><span class="p">(</span><span class="n">objectName</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                        </span><span class="p">.</span><span class="na">expiry</span><span class="p">(</span><span class="n">60</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">60</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                        </span><span class="p">.</span><span class="na">build</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">createBucketIfAbsent</span><span class="p">(</span><span class="n">String</span><span class="w"> </span><span class="n">bucketName</span><span class="p">)</span><span class="w"> </span><span class="kd">throws</span><span class="w"> </span><span class="n">Exception</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kt">boolean</span><span class="w"> </span><span class="n">exists</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">minioClient</span><span class="p">.</span><span class="na">bucketExists</span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="n">BucketExistsArgs</span><span class="p">.</span><span class="na">builder</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                        </span><span class="p">.</span><span class="na">bucket</span><span class="p">(</span><span class="n">bucketName</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                        </span><span class="p">.</span><span class="na">build</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">exists</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">minioClient</span><span class="p">.</span><span class="na">makeBucket</span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                    </span><span class="n">MakeBucketArgs</span><span class="p">.</span><span class="na">builder</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                            </span><span class="p">.</span><span class="na">bucket</span><span class="p">(</span><span class="n">bucketName</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                            </span><span class="p">.</span><span class="na">build</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="n">String</span><span class="w"> </span><span class="nf">resolveContentType</span><span class="p">(</span><span class="n">MultipartFile</span><span class="w"> </span><span class="n">file</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">String</span><span class="w"> </span><span class="n">contentType</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">file</span><span class="p">.</span><span class="na">getContentType</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">contentType</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="kc">null</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">contentType</span><span class="p">.</span><span class="na">isBlank</span><span class="p">())</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="s">&#34;application/octet-stream&#34;</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">contentType</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>控制器示例：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="nd">@RestController</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nd">@RequestMapping</span><span class="p">(</span><span class="s">&#34;/files&#34;</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">FileController</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="kd">final</span><span class="w"> </span><span class="n">MinioService</span><span class="w"> </span><span class="n">minioService</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="nf">FileController</span><span class="p">(</span><span class="n">MinioService</span><span class="w"> </span><span class="n">minioService</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">this</span><span class="p">.</span><span class="na">minioService</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">minioService</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nd">@PostMapping</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">upload</span><span class="p">(</span><span class="nd">@RequestParam</span><span class="p">(</span><span class="s">&#34;file&#34;</span><span class="p">)</span><span class="w"> </span><span class="n">MultipartFile</span><span class="w"> </span><span class="n">file</span><span class="p">)</span><span class="w"> </span><span class="kd">throws</span><span class="w"> </span><span class="n">Exception</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">String</span><span class="w"> </span><span class="n">objectName</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&#34;upload/&#34;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">UUID</span><span class="p">.</span><span class="na">randomUUID</span><span class="p">()</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="s">&#34;-&#34;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">file</span><span class="p">.</span><span class="na">getOriginalFilename</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">minioService</span><span class="p">.</span><span class="na">upload</span><span class="p">(</span><span class="n">file</span><span class="p">,</span><span class="w"> </span><span class="n">objectName</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nd">@GetMapping</span><span class="p">(</span><span class="s">&#34;/url&#34;</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="n">String</span><span class="w"> </span><span class="nf">getUrl</span><span class="p">(</span><span class="nd">@RequestParam</span><span class="w"> </span><span class="n">String</span><span class="w"> </span><span class="n">objectName</span><span class="p">)</span><span class="w"> </span><span class="kd">throws</span><span class="w"> </span><span class="n">Exception</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">minioService</span><span class="p">.</span><span class="na">getPresignedUrl</span><span class="p">(</span><span class="n">objectName</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>这个示例只展示接入方式。真实项目里不建议直接使用原始文件名作为对象名，也不建议把异常原样抛给前端。</p>
+<h2 id="对象命名">对象命名</h2>
+<p>对象名不是普通文件名，它更像一个全局访问路径。常见命名方式：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">业务类型/日期/业务ID/随机ID.扩展名
+</span></span></code></pre></div><p>例如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">avatar/2026/08/22/user-10001-a8f3.jpg
+</span></span><span class="line"><span class="cl">contract/2026/08/22/order-90001.pdf
+</span></span><span class="line"><span class="cl">export/2026/08/22/report-6d21.xlsx
+</span></span></code></pre></div><p>命名时要注意：</p>
+<ul>
+<li>避免直接使用用户上传的原始文件名。</li>
+<li>保留扩展名，方便浏览器识别和下载。</li>
+<li>对象名要能表达业务归属，方便排查。</li>
+<li>不要把敏感业务信息暴露在公开 URL 里。</li>
+</ul>
+<p>如果对象名只叫 <code>1.jpg</code>、<code>2.jpg</code>，短期很清爽，长期会让排查问题的人体验到一种朴素的绝望。</p>
+<h2 id="访问控制">访问控制</h2>
+<p>MinIO 常见访问方式有三种：</p>
+<table>
+  <thead>
+      <tr>
+          <th>方式</th>
+          <th>适用场景</th>
+          <th>说明</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>私有桶</td>
+          <td>默认推荐</td>
+          <td>后端校验权限后生成预签名 URL</td>
+      </tr>
+      <tr>
+          <td>公开读</td>
+          <td>头像、商品图、公开附件</td>
+          <td>任何人拿到地址都可以访问</td>
+      </tr>
+      <tr>
+          <td>反向代理</td>
+          <td>统一域名、HTTPS、缓存</td>
+          <td>通过 Nginx、网关或 CDN 对外暴露</td>
+      </tr>
+  </tbody>
+</table>
+<p>推荐策略：</p>
+<ul>
+<li>私有文件使用私有桶和预签名 URL。</li>
+<li>公开静态资源可以使用公开读，再配合 CDN。</li>
+<li>上传接口必须经过业务鉴权和文件校验。</li>
+<li>管理控制台不要暴露到公网。</li>
+<li>访问密钥不要写死在代码仓库里。</li>
+</ul>
+<h2 id="生产注意事项">生产注意事项</h2>
+<p>生产环境使用 MinIO 时，需要重点关注：</p>
+<ul>
+<li><strong>高可用</strong>：生产环境通常需要多节点和多磁盘部署。</li>
+<li><strong>数据可靠性</strong>：关注纠删码、磁盘故障、节点故障和备份策略。</li>
+<li><strong>网络入口</strong>：API 和 Console 分开暴露，Console 应限制访问来源。</li>
+<li><strong>HTTPS</strong>：公网访问必须使用 HTTPS，避免预签名 URL 被窃听。</li>
+<li><strong>生命周期</strong>：临时导出文件、日志归档文件可以配置过期清理。</li>
+<li><strong>监控告警</strong>：关注磁盘容量、节点状态、请求错误率和延迟。</li>
+<li><strong>权限治理</strong>：不同应用使用不同账号，按桶或路径控制权限。</li>
+</ul>
+<p>MinIO 能把文件存起来，但它不会替你决定哪些文件应该被谁访问、保留多久、出了故障由谁负责。对象存储只是工具，治理才是系统。</p>
+<h2 id="常见问题">常见问题</h2>
+<h3 id="控制台能打开但程序连不上">控制台能打开，但程序连不上</h3>
+<p>检查应用连接的是 API 端口 <code>9000</code>，不是 Console 端口 <code>9001</code>。</p>
+<h3 id="上传成功但浏览器无法访问">上传成功，但浏览器无法访问</h3>
+<p>检查桶策略是否允许公开读。如果桶是私有的，需要通过后端生成预签名 URL。</p>
+<h3 id="预签名-url-访问失败">预签名 URL 访问失败</h3>
+<p>检查：</p>
+<ul>
+<li>URL 是否已过期。</li>
+<li>对象名是否完全一致。</li>
+<li>MinIO 服务端时间和应用服务器时间是否偏差过大。</li>
+<li>客户端访问的域名是否和签名时使用的 endpoint 一致。</li>
+</ul>
+<h3 id="文件下载时类型不正确">文件下载时类型不正确</h3>
+<p>上传时设置正确的 <code>contentType</code>。如果不设置，浏览器可能按二进制流处理。</p>
+<h3 id="对象覆盖了旧文件">对象覆盖了旧文件</h3>
+<p>同一个 Bucket 下对象名相同会覆盖原对象。上传前应该生成足够唯一的对象名，或者按业务规则明确允许覆盖。</p>
+<h2 id="使用建议">使用建议</h2>
+<ul>
+<li>数据库保存文件元数据，MinIO 保存文件本体。</li>
+<li>私有文件优先使用预签名 URL。</li>
+<li>对象名按业务维度规划，不要直接使用原始文件名。</li>
+<li>生产环境不要使用默认账号和弱密码。</li>
+<li>Console 和 API 分开治理，Console 不要直接暴露公网。</li>
+<li>上传接口要限制文件大小、文件类型和用户权限。</li>
+<li>重要文件要有备份、生命周期和删除恢复策略。</li>
+</ul>
+<p>MinIO 的定位很清楚：它负责可靠地保存和访问对象。把数据库、业务权限、对象命名、访问策略和运维治理搭好，它就是一个很好用的文件底座；这些边界没有想清楚，它也只会诚实地放大混乱。倒也公平，软件通常不会替人类承担设计偷懒的后果。</p>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

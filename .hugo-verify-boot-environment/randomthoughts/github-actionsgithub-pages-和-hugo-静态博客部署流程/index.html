@@ -1,0 +1,1620 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GitHub Actions、GitHub Pages 和 Hugo 静态博客部署流程 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="我们平时说“把博客部署到 GitHub 上”，这句话其实有一点偷懒。
+严格来说，GitHub 并不是在帮你运行一个博客程序。它做的是另一件事：先用 GitHub Actions 自动执行构建命令，把 Hugo 项目生成成一堆静态文件，然后用 GitHub Pages 把这些静态文件发布出去。
+如果把这个过程说得更朴素一点，就是：
+Markdown 文章 &#43; Hugo 模板 &#43; 图片资源 -&gt; Hugo 构建 -&gt; 生成 public 目录 -&gt; GitHub Pages 托管 public 里的静态网页 所以，这不是一个后端服务部署流程，而是一个静态网站发布流程。两者差别很大。后端服务需要长期运行进程，静态网站只需要把文件放到能被浏览器访问的地方。这个区别如果没弄明白，后面就会把很多问题想复杂。虽然计算机并不会因为你想复杂而心软就是了。
+三个工具分别负责什么 部署一个 Hugo 静态博客时，通常会同时看到三个名字：
+Hugo GitHub Actions GitHub Pages 它们不是同一个东西，也不是互相替代的关系。它们各自负责一段流程。
+Hugo 是生成器 Hugo 是一个静态网站生成器。
+它的作用是把你写的 Markdown 文章、页面模板、主题、图片、配置文件整合起来，生成浏览器可以直接打开的静态页面。
+比如一个 Hugo 项目里通常会有这些目录：
+content/ 存放 Markdown 文章 layouts/ 存放页面模板 static/ 存放图片、CSS、favicon 等静态资源 themes/ 存放主题 data/ 存放结构化配置数据 hugo.toml Hugo 项目配置 当你执行：
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/randomthoughts/github-actionsgithub-pages-%E5%92%8C-hugo-%E9%9D%99%E6%80%81%E5%8D%9A%E5%AE%A2%E9%83%A8%E7%BD%B2%E6%B5%81%E7%A8%8B/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/randomthoughts/github-actionsgithub-pages-%E5%92%8C-hugo-%E9%9D%99%E6%80%81%E5%8D%9A%E5%AE%A2%E9%83%A8%E7%BD%B2%E6%B5%81%E7%A8%8B/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="GitHub Actions、GitHub Pages 和 Hugo 静态博客部署流程">
+  <meta property="og:description" content="我们平时说“把博客部署到 GitHub 上”，这句话其实有一点偷懒。
+严格来说，GitHub 并不是在帮你运行一个博客程序。它做的是另一件事：先用 GitHub Actions 自动执行构建命令，把 Hugo 项目生成成一堆静态文件，然后用 GitHub Pages 把这些静态文件发布出去。
+如果把这个过程说得更朴素一点，就是：
+Markdown 文章 &#43; Hugo 模板 &#43; 图片资源 -&gt; Hugo 构建 -&gt; 生成 public 目录 -&gt; GitHub Pages 托管 public 里的静态网页 所以，这不是一个后端服务部署流程，而是一个静态网站发布流程。两者差别很大。后端服务需要长期运行进程，静态网站只需要把文件放到能被浏览器访问的地方。这个区别如果没弄明白，后面就会把很多问题想复杂。虽然计算机并不会因为你想复杂而心软就是了。
+三个工具分别负责什么 部署一个 Hugo 静态博客时，通常会同时看到三个名字：
+Hugo GitHub Actions GitHub Pages 它们不是同一个东西，也不是互相替代的关系。它们各自负责一段流程。
+Hugo 是生成器 Hugo 是一个静态网站生成器。
+它的作用是把你写的 Markdown 文章、页面模板、主题、图片、配置文件整合起来，生成浏览器可以直接打开的静态页面。
+比如一个 Hugo 项目里通常会有这些目录：
+content/ 存放 Markdown 文章 layouts/ 存放页面模板 static/ 存放图片、CSS、favicon 等静态资源 themes/ 存放主题 data/ 存放结构化配置数据 hugo.toml Hugo 项目配置 当你执行：">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="randomthoughts">
+    <meta property="article:published_time" content="2026-08-17T22:07:12+08:00">
+    <meta property="article:modified_time" content="2026-08-17T22:07:12+08:00">
+
+  
+  <meta itemprop="name" content="GitHub Actions、GitHub Pages 和 Hugo 静态博客部署流程">
+  <meta itemprop="description" content="我们平时说“把博客部署到 GitHub 上”，这句话其实有一点偷懒。
+严格来说，GitHub 并不是在帮你运行一个博客程序。它做的是另一件事：先用 GitHub Actions 自动执行构建命令，把 Hugo 项目生成成一堆静态文件，然后用 GitHub Pages 把这些静态文件发布出去。
+如果把这个过程说得更朴素一点，就是：
+Markdown 文章 &#43; Hugo 模板 &#43; 图片资源 -&gt; Hugo 构建 -&gt; 生成 public 目录 -&gt; GitHub Pages 托管 public 里的静态网页 所以，这不是一个后端服务部署流程，而是一个静态网站发布流程。两者差别很大。后端服务需要长期运行进程，静态网站只需要把文件放到能被浏览器访问的地方。这个区别如果没弄明白，后面就会把很多问题想复杂。虽然计算机并不会因为你想复杂而心软就是了。
+三个工具分别负责什么 部署一个 Hugo 静态博客时，通常会同时看到三个名字：
+Hugo GitHub Actions GitHub Pages 它们不是同一个东西，也不是互相替代的关系。它们各自负责一段流程。
+Hugo 是生成器 Hugo 是一个静态网站生成器。
+它的作用是把你写的 Markdown 文章、页面模板、主题、图片、配置文件整合起来，生成浏览器可以直接打开的静态页面。
+比如一个 Hugo 项目里通常会有这些目录：
+content/ 存放 Markdown 文章 layouts/ 存放页面模板 static/ 存放图片、CSS、favicon 等静态资源 themes/ 存放主题 data/ 存放结构化配置数据 hugo.toml Hugo 项目配置 当你执行：">
+  <meta itemprop="datePublished" content="2026-08-17T22:07:12+08:00">
+  <meta itemprop="dateModified" content="2026-08-17T22:07:12+08:00">
+  <meta itemprop="wordCount" content="1017">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="GitHub Actions、GitHub Pages 和 Hugo 静态博客部署流程">
+  <meta name="twitter:description" content="我们平时说“把博客部署到 GitHub 上”，这句话其实有一点偷懒。
+严格来说，GitHub 并不是在帮你运行一个博客程序。它做的是另一件事：先用 GitHub Actions 自动执行构建命令，把 Hugo 项目生成成一堆静态文件，然后用 GitHub Pages 把这些静态文件发布出去。
+如果把这个过程说得更朴素一点，就是：
+Markdown 文章 &#43; Hugo 模板 &#43; 图片资源 -&gt; Hugo 构建 -&gt; 生成 public 目录 -&gt; GitHub Pages 托管 public 里的静态网页 所以，这不是一个后端服务部署流程，而是一个静态网站发布流程。两者差别很大。后端服务需要长期运行进程，静态网站只需要把文件放到能被浏览器访问的地方。这个区别如果没弄明白，后面就会把很多问题想复杂。虽然计算机并不会因为你想复杂而心软就是了。
+三个工具分别负责什么 部署一个 Hugo 静态博客时，通常会同时看到三个名字：
+Hugo GitHub Actions GitHub Pages 它们不是同一个东西，也不是互相替代的关系。它们各自负责一段流程。
+Hugo 是生成器 Hugo 是一个静态网站生成器。
+它的作用是把你写的 Markdown 文章、页面模板、主题、图片、配置文件整合起来，生成浏览器可以直接打开的静态页面。
+比如一个 Hugo 项目里通常会有这些目录：
+content/ 存放 Markdown 文章 layouts/ 存放页面模板 static/ 存放图片、CSS、favicon 等静态资源 themes/ 存放主题 data/ 存放结构化配置数据 hugo.toml Hugo 项目配置 当你执行：">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">GitHub Actions、GitHub Pages 和 Hugo 静态博客部署流程</h1>
+
+    
+      <div class="post-date">August 17, 2026</div>
+    
+
+    <div class="post-content">
+      <p>我们平时说“把博客部署到 GitHub 上”，这句话其实有一点偷懒。</p>
+<p>严格来说，GitHub 并不是在帮你运行一个博客程序。它做的是另一件事：先用 <code>GitHub Actions</code> 自动执行构建命令，把 Hugo 项目生成成一堆静态文件，然后用 <code>GitHub Pages</code> 把这些静态文件发布出去。</p>
+<p>如果把这个过程说得更朴素一点，就是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Markdown 文章 + Hugo 模板 + 图片资源
+</span></span><span class="line"><span class="cl">    -&gt; Hugo 构建
+</span></span><span class="line"><span class="cl">    -&gt; 生成 public 目录
+</span></span><span class="line"><span class="cl">    -&gt; GitHub Pages 托管 public 里的静态网页
+</span></span></code></pre></div><p>所以，这不是一个后端服务部署流程，而是一个静态网站发布流程。两者差别很大。后端服务需要长期运行进程，静态网站只需要把文件放到能被浏览器访问的地方。这个区别如果没弄明白，后面就会把很多问题想复杂。虽然计算机并不会因为你想复杂而心软就是了。</p>
+<h2 id="三个工具分别负责什么">三个工具分别负责什么</h2>
+<p>部署一个 Hugo 静态博客时，通常会同时看到三个名字：</p>
+<ul>
+<li><code>Hugo</code></li>
+<li><code>GitHub Actions</code></li>
+<li><code>GitHub Pages</code></li>
+</ul>
+<p>它们不是同一个东西，也不是互相替代的关系。它们各自负责一段流程。</p>
+<h2 id="hugo-是生成器">Hugo 是生成器</h2>
+<p><code>Hugo</code> 是一个静态网站生成器。</p>
+<p>它的作用是把你写的 Markdown 文章、页面模板、主题、图片、配置文件整合起来，生成浏览器可以直接打开的静态页面。</p>
+<p>比如一个 Hugo 项目里通常会有这些目录：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">content/     存放 Markdown 文章
+</span></span><span class="line"><span class="cl">layouts/     存放页面模板
+</span></span><span class="line"><span class="cl">static/      存放图片、CSS、favicon 等静态资源
+</span></span><span class="line"><span class="cl">themes/      存放主题
+</span></span><span class="line"><span class="cl">data/        存放结构化配置数据
+</span></span><span class="line"><span class="cl">hugo.toml    Hugo 项目配置
+</span></span></code></pre></div><p>当你执行：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-powershell" data-lang="powershell"><span class="line"><span class="cl"><span class="n">hugo</span>
+</span></span></code></pre></div><p>Hugo 会读取这些内容，然后生成：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">public/
+</span></span></code></pre></div><p><code>public/</code> 目录里就是最终网站。</p>
+<p>里面一般会有：</p>
+<ul>
+<li><code>index.html</code></li>
+<li>各个文章页面的 <code>index.html</code></li>
+<li>CSS 文件</li>
+<li>JavaScript 文件</li>
+<li>图片资源</li>
+<li>RSS、sitemap 等辅助文件</li>
+</ul>
+<p>也就是说，Hugo 本身不是线上服务器。它只是一个“构建工具”。它在部署流程中的职责是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">把源码变成静态网站文件
+</span></span></code></pre></div><h2 id="github-pages-是静态文件托管服务">GitHub Pages 是静态文件托管服务</h2>
+<p><code>GitHub Pages</code> 是 GitHub 提供的静态网站托管服务。</p>
+<p>它能托管这些文件：</p>
+<ul>
+<li>HTML</li>
+<li>CSS</li>
+<li>JavaScript</li>
+<li>图片</li>
+<li>字体</li>
+<li>JSON</li>
+<li>其他静态资源</li>
+</ul>
+<p>但是它不能运行这些东西：</p>
+<ul>
+<li>Java 后端服务</li>
+<li>Spring Boot 项目</li>
+<li>Node.js 服务端程序</li>
+<li>Python Flask、Django 服务</li>
+<li>MySQL、Redis 等数据库</li>
+<li>需要服务器常驻进程的任务</li>
+</ul>
+<p>所以 GitHub Pages 适合托管 Hugo、Hexo、VuePress、VitePress、纯 HTML 网站这类静态站点。</p>
+<p>它不负责把 Markdown 变成 HTML。它只负责把已经生成好的静态文件发布出去。</p>
+<p>GitHub Pages 在这个流程中的职责是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">把构建后的静态文件发布成可以访问的网站
+</span></span></code></pre></div><h2 id="github-actions-是自动化流水线">GitHub Actions 是自动化流水线</h2>
+<p><code>GitHub Actions</code> 是 GitHub 提供的自动化执行环境。</p>
+<p>你可以把它理解成 GitHub 仓库里的一个自动工人。只要你告诉它：</p>
+<ul>
+<li>什么时候执行</li>
+<li>在什么系统上执行</li>
+<li>执行哪些命令</li>
+<li>执行完把结果交给谁</li>
+</ul>
+<p>它就会在云端帮你跑这些步骤。</p>
+<p>比如你可以配置：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">当我 push 到 master 分支时：
+</span></span><span class="line"><span class="cl">1. 拉取代码
+</span></span><span class="line"><span class="cl">2. 安装 Hugo
+</span></span><span class="line"><span class="cl">3. 执行 hugo --minify
+</span></span><span class="line"><span class="cl">4. 上传 public 目录
+</span></span><span class="line"><span class="cl">5. 部署到 GitHub Pages
+</span></span></code></pre></div><p>这就是 <code>GitHub Actions</code> 的工作。</p>
+<p>它在这个流程中的职责是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">自动构建和自动部署
+</span></span></code></pre></div><h2 id="三者之间的关系">三者之间的关系</h2>
+<p>把三者放到一起看，就清楚了：</p>
+<table>
+  <thead>
+      <tr>
+          <th>工具</th>
+          <th>职责</th>
+          <th>类比</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Hugo</td>
+          <td>把 Markdown 和模板生成静态网站</td>
+          <td>工厂</td>
+      </tr>
+      <tr>
+          <td>GitHub Actions</td>
+          <td>自动执行构建和部署步骤</td>
+          <td>流水线</td>
+      </tr>
+      <tr>
+          <td>GitHub Pages</td>
+          <td>托管最终生成的静态网页</td>
+          <td>展厅</td>
+      </tr>
+  </tbody>
+</table>
+<p>完整流程如下：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">开发者写文章
+</span></span><span class="line"><span class="cl">    -&gt; git push 到 GitHub
+</span></span><span class="line"><span class="cl">    -&gt; GitHub Actions 被触发
+</span></span><span class="line"><span class="cl">    -&gt; Actions 安装 Hugo
+</span></span><span class="line"><span class="cl">    -&gt; Actions 执行 hugo --minify
+</span></span><span class="line"><span class="cl">    -&gt; Hugo 生成 public/
+</span></span><span class="line"><span class="cl">    -&gt; Actions 上传 public/
+</span></span><span class="line"><span class="cl">    -&gt; GitHub Pages 发布 public/
+</span></span><span class="line"><span class="cl">    -&gt; 用户通过浏览器访问网站
+</span></span></code></pre></div><p>浏览器最终访问到的不是你的 Markdown 文件，也不是 Hugo 程序，而是 Hugo 生成后的 HTML 页面。</p>
+<h2 id="从零部署一个-hugo-静态博客">从零部署一个 Hugo 静态博客</h2>
+<p>下面从一个小白视角讲完整流程。</p>
+<p>目标是：你在本地写 Markdown，推送到 GitHub 后，GitHub 自动帮你发布成一个博客网站。</p>
+<h2 id="准备工作">准备工作</h2>
+<p>你需要准备：</p>
+<ul>
+<li>一个 GitHub 账号</li>
+<li>本地安装 Git</li>
+<li>本地安装 Hugo</li>
+<li>一个 GitHub 仓库</li>
+<li>一点点命令行基础</li>
+</ul>
+<p>如果只是使用 GitHub Actions 自动构建，严格来说本地不安装 Hugo 也能部署。但本地安装 Hugo 会方便预览和排查问题。所以，建议安装。是的，建议。不是因为它优雅，而是因为出问题时你不会只能盯着 Actions 日志发呆。</p>
+<h2 id="创建-hugo-项目">创建 Hugo 项目</h2>
+<p>在本地选择一个目录，执行：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-powershell" data-lang="powershell"><span class="line"><span class="cl"><span class="n">hugo</span> <span class="n">new</span> <span class="n">site</span> <span class="n">blog</span>
+</span></span></code></pre></div><p>进入项目：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-powershell" data-lang="powershell"><span class="line"><span class="cl"><span class="nb">cd </span><span class="n">blog</span>
+</span></span></code></pre></div><p>初始化 Git 仓库：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-powershell" data-lang="powershell"><span class="line"><span class="cl"><span class="n">git</span> <span class="n">init</span>
+</span></span></code></pre></div><p>添加一个主题。以 <code>ananke</code> 为例：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-powershell" data-lang="powershell"><span class="line"><span class="cl"><span class="n">git</span> <span class="n">submodule</span> <span class="n">add</span> <span class="n">https</span><span class="err">:</span><span class="p">//</span><span class="n">github</span><span class="p">.</span><span class="n">com</span><span class="p">/</span><span class="n">theNewDynamic</span><span class="p">/</span><span class="nb">gohugo-theme</span><span class="n">-ananke</span> <span class="n">themes</span><span class="p">/</span><span class="n">ananke</span>
+</span></span></code></pre></div><p>然后在 <code>hugo.toml</code> 中配置主题：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-toml" data-lang="toml"><span class="line"><span class="cl"><span class="nx">baseURL</span> <span class="p">=</span> <span class="s1">&#39;https://你的用户名.github.io/&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="nx">languageCode</span> <span class="p">=</span> <span class="s1">&#39;zh-cn&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="nx">title</span> <span class="p">=</span> <span class="s1">&#39;我的博客&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="nx">theme</span> <span class="p">=</span> <span class="s1">&#39;ananke&#39;</span>
+</span></span></code></pre></div><p>如果你的仓库是用户主页仓库，仓库名通常是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">你的用户名.github.io
+</span></span></code></pre></div><p>那么 <code>baseURL</code> 可以写：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-toml" data-lang="toml"><span class="line"><span class="cl"><span class="nx">baseURL</span> <span class="p">=</span> <span class="s1">&#39;https://你的用户名.github.io/&#39;</span>
+</span></span></code></pre></div><p>如果你的仓库是普通项目仓库，比如仓库名叫：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">blog
+</span></span></code></pre></div><p>那么 Pages 地址通常是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">https://你的用户名.github.io/blog/
+</span></span></code></pre></div><p>这时 <code>baseURL</code> 应该写：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-toml" data-lang="toml"><span class="line"><span class="cl"><span class="nx">baseURL</span> <span class="p">=</span> <span class="s1">&#39;https://你的用户名.github.io/blog/&#39;</span>
+</span></span></code></pre></div><p>这个地方很重要。很多静态资源 404、页面样式丢失、文章链接跳错，都是 <code>baseURL</code> 没写对造成的。</p>
+<h2 id="写一篇文章">写一篇文章</h2>
+<p>创建一篇文章：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-powershell" data-lang="powershell"><span class="line"><span class="cl"><span class="n">hugo</span> <span class="n">new</span> <span class="n">posts</span><span class="p">/</span><span class="n">hello</span><span class="p">.</span><span class="nb">md
+</span></span></span></code></pre></div><p>打开生成的文件，内容大概是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-toml" data-lang="toml"><span class="line"><span class="cl"><span class="err">+++</span>
+</span></span><span class="line"><span class="cl"><span class="nx">date</span> <span class="p">=</span> <span class="s1">&#39;2026-08-17T20:00:00+08:00&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="nx">draft</span> <span class="p">=</span> <span class="kc">true</span>
+</span></span><span class="line"><span class="cl"><span class="nx">title</span> <span class="p">=</span> <span class="s1">&#39;Hello&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="err">+++</span>
+</span></span></code></pre></div><p>如果要发布，需要把：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-toml" data-lang="toml"><span class="line"><span class="cl"><span class="nx">draft</span> <span class="p">=</span> <span class="kc">true</span>
+</span></span></code></pre></div><p>改成：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-toml" data-lang="toml"><span class="line"><span class="cl"><span class="nx">draft</span> <span class="p">=</span> <span class="kc">false</span>
+</span></span></code></pre></div><p>然后在下面写正文：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-md" data-lang="md"><span class="line"><span class="cl"><span class="gu">## 第一篇文章
+</span></span></span><span class="line"><span class="cl"><span class="gu"></span>
+</span></span><span class="line"><span class="cl">这是我的第一篇 Hugo 博客。
+</span></span></code></pre></div><h2 id="本地预览">本地预览</h2>
+<p>执行：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-powershell" data-lang="powershell"><span class="line"><span class="cl"><span class="n">hugo</span> <span class="n">server</span>
+</span></span></code></pre></div><p>默认访问地址通常是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">http://localhost:1313/
+</span></span></code></pre></div><p>如果能在本地看到页面，说明 Hugo 项目本身基本没问题。</p>
+<p>也可以只构建，不启动预览服务：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-powershell" data-lang="powershell"><span class="line"><span class="cl"><span class="n">hugo</span>
+</span></span></code></pre></div><p>执行后会生成：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">public/
+</span></span></code></pre></div><p>这个目录就是最终静态网站。</p>
+<p>一般不建议把 <code>public/</code> 提交到 Git，因为它是构建产物，可以由 GitHub Actions 自动生成。</p>
+<p>可以在 <code>.gitignore</code> 中加入：</p>
+<pre tabindex="0"><code class="language-gitignore" data-lang="gitignore">/public/
+/resources/_gen/
+/.hugo_build.lock
+</code></pre><h2 id="创建-github-仓库">创建 GitHub 仓库</h2>
+<p>接下来在 GitHub 上创建一个仓库。</p>
+<p>有两种常见选择。</p>
+<p>第一种是用户主页仓库：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">你的用户名.github.io
+</span></span></code></pre></div><p>这种仓库部署后的地址通常是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">https://你的用户名.github.io/
+</span></span></code></pre></div><p>第二种是普通项目仓库：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">blog
+</span></span></code></pre></div><p>这种仓库部署后的地址通常是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">https://你的用户名.github.io/blog/
+</span></span></code></pre></div><p>如果你只是想做一个个人博客首页，用户主页仓库更直观。如果你以后还会做多个项目页面，普通项目仓库也可以。</p>
+<h2 id="推送代码到-github">推送代码到 GitHub</h2>
+<p>假设你的远程仓库地址是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">https://github.com/你的用户名/你的仓库名.git
+</span></span></code></pre></div><p>执行：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-powershell" data-lang="powershell"><span class="line"><span class="cl"><span class="n">git</span> <span class="n">remote</span> <span class="n">add</span> <span class="n">origin</span> <span class="n">https</span><span class="err">:</span><span class="p">//</span><span class="n">github</span><span class="p">.</span><span class="n">com</span><span class="p">/</span><span class="n">你的用户名</span><span class="p">/</span><span class="n">你的仓库名</span><span class="p">.</span><span class="py">git</span>
+</span></span><span class="line"><span class="cl"><span class="n">git</span> <span class="n">add</span> <span class="p">.</span>
+</span></span><span class="line"><span class="cl"><span class="n">git</span> <span class="n">commit</span> <span class="n">-m</span> <span class="s2">&#34;init hugo blog&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="n">git</span> <span class="n">branch</span> <span class="n">-M</span> <span class="n">master</span>
+</span></span><span class="line"><span class="cl"><span class="n">git</span> <span class="n">push</span> <span class="n">-u</span> <span class="n">origin</span> <span class="n">master</span>
+</span></span></code></pre></div><p>这里使用 <code>master</code> 是因为后面的 Actions 配置会监听 <code>master</code> 分支。</p>
+<p>如果你想使用 <code>main</code> 分支，也可以，但要把 workflow 里的分支名一起改成 <code>main</code>。分支名不是装饰品，写错了就不会触发部署。</p>
+<h2 id="配置-github-actions">配置 GitHub Actions</h2>
+<p>在项目中创建文件：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">.github/workflows/hugo.yml
+</span></span></code></pre></div><p>内容如下：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-yaml" data-lang="yaml"><span class="line"><span class="cl"><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l">Deploy Hugo site to GitHub Pages</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nt">on</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">push</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nt">branches</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">      </span>- <span class="l">master</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nt">permissions</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">contents</span><span class="p">:</span><span class="w"> </span><span class="l">read</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">pages</span><span class="p">:</span><span class="w"> </span><span class="l">write</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">id-token</span><span class="p">:</span><span class="w"> </span><span class="l">write</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nt">concurrency</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">group</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;pages&#34;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">cancel-in-progress</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nt">jobs</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">build</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nt">runs-on</span><span class="p">:</span><span class="w"> </span><span class="l">ubuntu-latest</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nt">steps</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">      </span>- <span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l">Checkout</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l">actions/checkout@v5</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="nt">with</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">          </span><span class="nt">submodules</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">          </span><span class="nt">fetch-depth</span><span class="p">:</span><span class="w"> </span><span class="m">0</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">      </span>- <span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l">Setup Hugo</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l">peaceiris/actions-hugo@v3</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="nt">with</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">          </span><span class="nt">hugo-version</span><span class="p">:</span><span class="w"> </span><span class="s1">&#39;latest&#39;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">          </span><span class="nt">extended</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">      </span>- <span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l">Build</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="l">hugo --minify</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">      </span>- <span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l">Upload artifact</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l">actions/upload-pages-artifact@v5</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="nt">with</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">          </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l">./public</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">deploy</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nt">environment</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l">github-pages</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">      </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="l">${{ steps.deployment.outputs.page_url }}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nt">runs-on</span><span class="p">:</span><span class="w"> </span><span class="l">ubuntu-latest</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nt">needs</span><span class="p">:</span><span class="w"> </span><span class="l">build</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nt">steps</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">      </span>- <span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l">Deploy to GitHub Pages</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l">deployment</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l">actions/deploy-pages@v5</span><span class="w">
+</span></span></span></code></pre></div><p>这份配置可以拆开理解。</p>
+<h2 id="触发条件">触发条件</h2>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-yaml" data-lang="yaml"><span class="line"><span class="cl"><span class="nt">on</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">push</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nt">branches</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">      </span>- <span class="l">master</span><span class="w">
+</span></span></span></code></pre></div><p>意思是：当代码推送到 <code>master</code> 分支时，执行这个 workflow。</p>
+<p>如果你推送到别的分支，它不会执行。</p>
+<h2 id="权限">权限</h2>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-yaml" data-lang="yaml"><span class="line"><span class="cl"><span class="nt">permissions</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">contents</span><span class="p">:</span><span class="w"> </span><span class="l">read</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">pages</span><span class="p">:</span><span class="w"> </span><span class="l">write</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">id-token</span><span class="p">:</span><span class="w"> </span><span class="l">write</span><span class="w">
+</span></span></span></code></pre></div><p>这几行是在告诉 GitHub Actions：</p>
+<ul>
+<li>可以读取仓库内容</li>
+<li>可以写入 GitHub Pages</li>
+<li>可以使用身份令牌完成部署认证</li>
+</ul>
+<p>如果权限不足，构建可能成功，但部署会失败。</p>
+<h2 id="拉取代码">拉取代码</h2>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-yaml" data-lang="yaml"><span class="line"><span class="cl">- <span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l">Checkout</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l">actions/checkout@v5</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">with</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nt">submodules</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nt">fetch-depth</span><span class="p">:</span><span class="w"> </span><span class="m">0</span><span class="w">
+</span></span></span></code></pre></div><p><code>actions/checkout</code> 负责把你的仓库代码拉到 GitHub 的构建机器上。</p>
+<p>其中：</p>
+<ul>
+<li><code>submodules: true</code> 表示同时拉取 Git 子模块</li>
+<li><code>fetch-depth: 0</code> 表示拉取完整 Git 历史</li>
+</ul>
+<p>如果主题是用 Git submodule 添加的，这里的 <code>submodules: true</code> 非常重要。否则 GitHub Actions 构建时可能找不到主题。</p>
+<h2 id="安装-hugo">安装 Hugo</h2>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-yaml" data-lang="yaml"><span class="line"><span class="cl">- <span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l">Setup Hugo</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l">peaceiris/actions-hugo@v3</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">with</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nt">hugo-version</span><span class="p">:</span><span class="w"> </span><span class="s1">&#39;latest&#39;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nt">extended</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="w">
+</span></span></span></code></pre></div><p>这一步会在 GitHub Actions 的运行环境里安装 Hugo。</p>
+<p><code>extended: true</code> 表示安装 Hugo Extended 版本。有些主题需要 Extended 版本处理 SCSS、Sass 等资源，所以通常建议打开。</p>
+<h2 id="构建网站">构建网站</h2>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-yaml" data-lang="yaml"><span class="line"><span class="cl">- <span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l">Build</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="l">hugo --minify</span><span class="w">
+</span></span></span></code></pre></div><p>这一步是真正把 Hugo 项目构建成静态网站。</p>
+<p><code>--minify</code> 表示压缩生成结果，让 HTML、CSS、JS 更小一些。</p>
+<p>执行完成后，会生成：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">public/
+</span></span></code></pre></div><h2 id="上传构建产物">上传构建产物</h2>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-yaml" data-lang="yaml"><span class="line"><span class="cl">- <span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l">Upload artifact</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l">actions/upload-pages-artifact@v5</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">with</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l">./public</span><span class="w">
+</span></span></span></code></pre></div><p>这一步把 <code>public/</code> 目录作为 GitHub Pages 的发布产物上传。</p>
+<p>注意，上传的是 <code>public/</code>，不是整个项目源码。</p>
+<h2 id="部署到-pages">部署到 Pages</h2>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-yaml" data-lang="yaml"><span class="line"><span class="cl">- <span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l">Deploy to GitHub Pages</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l">deployment</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l">actions/deploy-pages@v5</span><span class="w">
+</span></span></span></code></pre></div><p>这一步把前面上传的静态文件部署到 GitHub Pages。</p>
+<p>部署成功后，GitHub Actions 页面里会显示访问地址。</p>
+<h2 id="配置-github-pages-来源">配置 GitHub Pages 来源</h2>
+<p>进入 GitHub 仓库页面：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Settings -&gt; Pages
+</span></span></code></pre></div><p>在 Build and deployment 里，把 Source 选择为：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">GitHub Actions
+</span></span></code></pre></div><p>这样 GitHub Pages 就会使用你的 workflow 部署结果。</p>
+<p>如果这里还选着从某个分支发布，比如 <code>main</code> 或 <code>gh-pages</code>，那它就不会按上面的 Actions 流程来部署。配置不是心灵感应，必须让它们说的是同一种语言。</p>
+<h2 id="再次推送并观察部署">再次推送并观察部署</h2>
+<p>添加 workflow 后，提交并推送：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-powershell" data-lang="powershell"><span class="line"><span class="cl"><span class="n">git</span> <span class="n">add</span> <span class="p">.</span>
+</span></span><span class="line"><span class="cl"><span class="n">git</span> <span class="n">commit</span> <span class="n">-m</span> <span class="s2">&#34;add github pages deployment&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="n">git</span> <span class="n">push</span>
+</span></span></code></pre></div><p>然后打开 GitHub 仓库的：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Actions
+</span></span></code></pre></div><p>你应该能看到一个名为：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Deploy Hugo site to GitHub Pages
+</span></span></code></pre></div><p>的 workflow 正在执行。</p>
+<p>执行过程通常包括两个 job：</p>
+<ul>
+<li><code>build</code></li>
+<li><code>deploy</code></li>
+</ul>
+<p><code>build</code> 成功说明 Hugo 构建通过。<br>
+<code>deploy</code> 成功说明 GitHub Pages 发布成功。</p>
+<h2 id="部署完成后访问网站">部署完成后访问网站</h2>
+<p>如果是用户主页仓库：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">https://你的用户名.github.io/
+</span></span></code></pre></div><p>如果是普通项目仓库：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">https://你的用户名.github.io/仓库名/
+</span></span></code></pre></div><p>第一次部署可能需要等一会儿。不要看到页面没立刻出现就马上重写配置。部署系统不是即时泡面，虽然它偶尔也会表现得像没加热成功。</p>
+<h2 id="这套流程的原理">这套流程的原理</h2>
+<p>部署流程可以分成两个阶段。</p>
+<h2 id="阶段一构建">阶段一：构建</h2>
+<p>构建发生在 GitHub Actions 里。</p>
+<p>GitHub 会临时分配一台机器，通常是 Ubuntu 环境，然后按 <code>.github/workflows/hugo.yml</code> 执行步骤。</p>
+<p>这台机器会：</p>
+<ol>
+<li>拉取你的仓库代码</li>
+<li>拉取主题子模块</li>
+<li>安装 Hugo</li>
+<li>执行 <code>hugo --minify</code></li>
+<li>得到 <code>public/</code></li>
+</ol>
+<p>构建结束后，这台临时机器会被释放。</p>
+<p>所以 GitHub 并不会一直运行 Hugo。Hugo 只在构建时短暂执行一次。</p>
+<h2 id="阶段二托管">阶段二：托管</h2>
+<p>托管发生在 GitHub Pages 里。</p>
+<p>GitHub Pages 拿到 <code>public/</code> 后，只需要把里面的静态文件暴露给浏览器访问。</p>
+<p>用户访问你的博客时，过程大概是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">用户打开浏览器
+</span></span><span class="line"><span class="cl">    -&gt; 请求 https://你的用户名.github.io/
+</span></span><span class="line"><span class="cl">    -&gt; GitHub Pages 返回 index.html
+</span></span><span class="line"><span class="cl">    -&gt; 浏览器继续加载 CSS、JS、图片
+</span></span><span class="line"><span class="cl">    -&gt; 页面显示出来
+</span></span></code></pre></div><p>这个过程中没有数据库查询，没有服务端模板渲染，也没有后端接口参与。</p>
+<p>所以静态博客通常有这些优点：</p>
+<ul>
+<li>部署简单</li>
+<li>成本低</li>
+<li>访问速度快</li>
+<li>安全风险相对小</li>
+<li>很适合文章、文档、作品集</li>
+</ul>
+<p>但它也有明显限制：</p>
+<ul>
+<li>不能直接写服务端登录逻辑</li>
+<li>不能直接连接数据库</li>
+<li>不能直接在 GitHub Pages 上运行后台任务</li>
+<li>动态评论、搜索、统计等功能通常要依赖第三方服务或前端方案</li>
+</ul>
+<h2 id="常见问题">常见问题</h2>
+<p>下面这些问题很常见。提前知道它们，可以少浪费很多时间。</p>
+<h2 id="actions-没有触发">Actions 没有触发</h2>
+<p>先检查 workflow 里的分支：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-yaml" data-lang="yaml"><span class="line"><span class="cl"><span class="nt">on</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">push</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nt">branches</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">      </span>- <span class="l">master</span><span class="w">
+</span></span></span></code></pre></div><p>如果这里写的是 <code>master</code>，但你推送到 <code>main</code>，它就不会触发。</p>
+<p>解决方式有两个：</p>
+<ul>
+<li>把代码推送到 <code>master</code></li>
+<li>把 workflow 里的 <code>master</code> 改成 <code>main</code></li>
+</ul>
+<p>二选一即可，不要两个都改到一半。</p>
+<h2 id="hugo-构建失败">Hugo 构建失败</h2>
+<p>常见原因包括：</p>
+<ul>
+<li>Markdown front matter 写错</li>
+<li>主题没有拉下来</li>
+<li>模板语法错误</li>
+<li>配置文件格式错误</li>
+<li>某些文章引用了不存在的资源</li>
+</ul>
+<p>如果报错里出现 theme 相关内容，优先检查：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-yaml" data-lang="yaml"><span class="line"><span class="cl"><span class="nt">with</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">submodules</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="w">
+</span></span></span></code></pre></div><p>以及 <code>.gitmodules</code> 是否正确。</p>
+<h2 id="页面打开了但没有样式">页面打开了，但没有样式</h2>
+<p>这通常是 <code>baseURL</code> 或部署路径不对。</p>
+<p>如果网站实际地址是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">https://你的用户名.github.io/blog/
+</span></span></code></pre></div><p>但 <code>baseURL</code> 写成：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-toml" data-lang="toml"><span class="line"><span class="cl"><span class="nx">baseURL</span> <span class="p">=</span> <span class="s1">&#39;https://你的用户名.github.io/&#39;</span>
+</span></span></code></pre></div><p>就可能导致 CSS、图片、链接路径错误。</p>
+<p>普通项目仓库一般要带仓库名：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-toml" data-lang="toml"><span class="line"><span class="cl"><span class="nx">baseURL</span> <span class="p">=</span> <span class="s1">&#39;https://你的用户名.github.io/blog/&#39;</span>
+</span></span></code></pre></div><p>用户主页仓库一般不带仓库名：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-toml" data-lang="toml"><span class="line"><span class="cl"><span class="nx">baseURL</span> <span class="p">=</span> <span class="s1">&#39;https://你的用户名.github.io/&#39;</span>
+</span></span></code></pre></div><h2 id="文章没有显示">文章没有显示</h2>
+<p>检查文章 front matter：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-toml" data-lang="toml"><span class="line"><span class="cl"><span class="err">+++</span>
+</span></span><span class="line"><span class="cl"><span class="nx">date</span> <span class="p">=</span> <span class="s1">&#39;2026-08-17T20:00:00+08:00&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="nx">draft</span> <span class="p">=</span> <span class="kc">false</span>
+</span></span><span class="line"><span class="cl"><span class="nx">title</span> <span class="p">=</span> <span class="s1">&#39;文章标题&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="err">+++</span>
+</span></span></code></pre></div><p>如果是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-toml" data-lang="toml"><span class="line"><span class="cl"><span class="nx">draft</span> <span class="p">=</span> <span class="kc">true</span>
+</span></span></code></pre></div><p>正式构建时默认不会发布这篇文章。</p>
+<p>本地 <code>hugo server</code> 有时会使用额外参数显示草稿，但线上构建通常不会。不要让草稿状态偷偷替你决定文章是否存在。</p>
+<h2 id="图片路径错误">图片路径错误</h2>
+<p>Hugo 中，放在 <code>static/</code> 下的文件会原样复制到站点根路径。</p>
+<p>比如图片在：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">static/images/demo.png
+</span></span></code></pre></div><p>Markdown 中通常这样引用：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-md" data-lang="md"><span class="line"><span class="cl">![<span class="nt">示例图片</span>](<span class="na">/images/demo.png</span>)
+</span></span></code></pre></div><p>不要写成本地磁盘路径：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-md" data-lang="md"><span class="line"><span class="cl">![<span class="nt">示例图片</span>](<span class="na">D:/Project/blog/static/images/demo.png</span>)
+</span></span></code></pre></div><p>浏览器访问的是网站路径，不认识你的本地磁盘。</p>
+<h2 id="是否需要提交-public-目录">是否需要提交 public 目录</h2>
+<p>通常不需要。</p>
+<p>推荐做法是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">源码提交到 GitHub
+</span></span><span class="line"><span class="cl">GitHub Actions 生成 public
+</span></span><span class="line"><span class="cl">GitHub Pages 发布 public
+</span></span></code></pre></div><p><code>public/</code> 是构建产物，不是源代码。把它提交进去，容易导致仓库混乱，也容易出现“本地构建结果”和“线上构建结果”不一致的问题。</p>
+<h2 id="小结">小结</h2>
+<p>部署 Hugo 静态博客时，真正要理解的是这条链路：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Hugo 负责生成
+</span></span><span class="line"><span class="cl">GitHub Actions 负责自动执行
+</span></span><span class="line"><span class="cl">GitHub Pages 负责托管结果
+</span></span></code></pre></div><p>再展开就是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">写 Markdown
+</span></span><span class="line"><span class="cl">    -&gt; push 到 GitHub
+</span></span><span class="line"><span class="cl">    -&gt; Actions 拉代码
+</span></span><span class="line"><span class="cl">    -&gt; Actions 安装 Hugo
+</span></span><span class="line"><span class="cl">    -&gt; Hugo 生成 public
+</span></span><span class="line"><span class="cl">    -&gt; Actions 上传 public
+</span></span><span class="line"><span class="cl">    -&gt; Pages 发布网站
+</span></span></code></pre></div><p>只要明白这一点，很多问题就不再神秘：</p>
+<ul>
+<li>样式丢了，多半看 <code>baseURL</code></li>
+<li>Actions 没跑，多半看分支触发条件</li>
+<li>主题找不到，多半看 submodule</li>
+<li>文章不显示，多半看 <code>draft</code></li>
+<li>GitHub Pages 不能跑后端，因为它只托管静态文件</li>
+</ul>
+<p>所谓部署静态网站，本质不是“让 GitHub 运行你的项目”，而是“让 GitHub 自动生成并托管你的静态文件”。这个说法虽然不那么热血，但准确。技术问题上，准确通常比热血有用。</p>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

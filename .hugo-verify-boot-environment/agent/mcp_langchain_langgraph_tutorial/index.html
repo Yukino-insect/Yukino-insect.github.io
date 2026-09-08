@@ -1,0 +1,2123 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MCP 教程：从协议基础到 LangChain / LangGraph 调用 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="本文面向已经会写一点 Python、并且正在学习 LangChain / LangGraph 的开发者。目标很朴素：你应该能理解 MCP 是什么，能写一个最小 MCP Server，并且知道怎样在 LangChain 和 LangGraph 中调用 MCP 暴露出来的工具、资源和提示词。若只会背概念而不能把工具接进 agent，那未免太像考试前夜的幻觉了。
+1. MCP 是什么 MCP，全称 Model Context Protocol，模型上下文协议。它是一个开放协议，用来标准化 AI 应用如何连接外部上下文、工具和数据源。
+可以把它理解为三层关系：
+角色 含义 例子 Host 用户实际使用的 AI 应用 Claude Desktop、IDE 插件、你写的 LangGraph Agent Client Host 内部负责连接某个 MCP Server 的客户端 MultiServerMCPClient 创建的连接 Server 对外暴露能力的服务进程 文件系统服务、数据库服务、天气 API 服务、搜索服务 MCP Server 通常向客户端暴露三类能力：
+能力 英文 作用 LangChain 中的常见映射 工具 Tools 让模型调用函数执行动作 转成 LangChain Tool 资源 Resources 让客户端读取数据或上下文 转成 Blob / 文档上下文 提示词 Prompts 提供可复用的提示词模板或消息 转成 LangChain messages MCP 底层使用 JSON-RPC 2.0 风格的消息通信。开发应用时，你通常不需要手写 JSON-RPC 请求；用 MCP SDK、FastMCP、langchain-mcp-adapters 这样的库即可。
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/agent/mcp_langchain_langgraph_tutorial/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/agent/mcp_langchain_langgraph_tutorial/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="MCP 教程：从协议基础到 LangChain / LangGraph 调用">
+  <meta property="og:description" content="本文面向已经会写一点 Python、并且正在学习 LangChain / LangGraph 的开发者。目标很朴素：你应该能理解 MCP 是什么，能写一个最小 MCP Server，并且知道怎样在 LangChain 和 LangGraph 中调用 MCP 暴露出来的工具、资源和提示词。若只会背概念而不能把工具接进 agent，那未免太像考试前夜的幻觉了。
+1. MCP 是什么 MCP，全称 Model Context Protocol，模型上下文协议。它是一个开放协议，用来标准化 AI 应用如何连接外部上下文、工具和数据源。
+可以把它理解为三层关系：
+角色 含义 例子 Host 用户实际使用的 AI 应用 Claude Desktop、IDE 插件、你写的 LangGraph Agent Client Host 内部负责连接某个 MCP Server 的客户端 MultiServerMCPClient 创建的连接 Server 对外暴露能力的服务进程 文件系统服务、数据库服务、天气 API 服务、搜索服务 MCP Server 通常向客户端暴露三类能力：
+能力 英文 作用 LangChain 中的常见映射 工具 Tools 让模型调用函数执行动作 转成 LangChain Tool 资源 Resources 让客户端读取数据或上下文 转成 Blob / 文档上下文 提示词 Prompts 提供可复用的提示词模板或消息 转成 LangChain messages MCP 底层使用 JSON-RPC 2.0 风格的消息通信。开发应用时，你通常不需要手写 JSON-RPC 请求；用 MCP SDK、FastMCP、langchain-mcp-adapters 这样的库即可。">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="agent">
+    <meta property="article:published_time" content="2026-08-18T17:33:36+08:00">
+    <meta property="article:modified_time" content="2026-08-18T17:33:36+08:00">
+
+  
+  <meta itemprop="name" content="MCP 教程：从协议基础到 LangChain / LangGraph 调用">
+  <meta itemprop="description" content="本文面向已经会写一点 Python、并且正在学习 LangChain / LangGraph 的开发者。目标很朴素：你应该能理解 MCP 是什么，能写一个最小 MCP Server，并且知道怎样在 LangChain 和 LangGraph 中调用 MCP 暴露出来的工具、资源和提示词。若只会背概念而不能把工具接进 agent，那未免太像考试前夜的幻觉了。
+1. MCP 是什么 MCP，全称 Model Context Protocol，模型上下文协议。它是一个开放协议，用来标准化 AI 应用如何连接外部上下文、工具和数据源。
+可以把它理解为三层关系：
+角色 含义 例子 Host 用户实际使用的 AI 应用 Claude Desktop、IDE 插件、你写的 LangGraph Agent Client Host 内部负责连接某个 MCP Server 的客户端 MultiServerMCPClient 创建的连接 Server 对外暴露能力的服务进程 文件系统服务、数据库服务、天气 API 服务、搜索服务 MCP Server 通常向客户端暴露三类能力：
+能力 英文 作用 LangChain 中的常见映射 工具 Tools 让模型调用函数执行动作 转成 LangChain Tool 资源 Resources 让客户端读取数据或上下文 转成 Blob / 文档上下文 提示词 Prompts 提供可复用的提示词模板或消息 转成 LangChain messages MCP 底层使用 JSON-RPC 2.0 风格的消息通信。开发应用时，你通常不需要手写 JSON-RPC 请求；用 MCP SDK、FastMCP、langchain-mcp-adapters 这样的库即可。">
+  <meta itemprop="datePublished" content="2026-08-18T17:33:36+08:00">
+  <meta itemprop="dateModified" content="2026-08-18T17:33:36+08:00">
+  <meta itemprop="wordCount" content="1935">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="MCP 教程：从协议基础到 LangChain / LangGraph 调用">
+  <meta name="twitter:description" content="本文面向已经会写一点 Python、并且正在学习 LangChain / LangGraph 的开发者。目标很朴素：你应该能理解 MCP 是什么，能写一个最小 MCP Server，并且知道怎样在 LangChain 和 LangGraph 中调用 MCP 暴露出来的工具、资源和提示词。若只会背概念而不能把工具接进 agent，那未免太像考试前夜的幻觉了。
+1. MCP 是什么 MCP，全称 Model Context Protocol，模型上下文协议。它是一个开放协议，用来标准化 AI 应用如何连接外部上下文、工具和数据源。
+可以把它理解为三层关系：
+角色 含义 例子 Host 用户实际使用的 AI 应用 Claude Desktop、IDE 插件、你写的 LangGraph Agent Client Host 内部负责连接某个 MCP Server 的客户端 MultiServerMCPClient 创建的连接 Server 对外暴露能力的服务进程 文件系统服务、数据库服务、天气 API 服务、搜索服务 MCP Server 通常向客户端暴露三类能力：
+能力 英文 作用 LangChain 中的常见映射 工具 Tools 让模型调用函数执行动作 转成 LangChain Tool 资源 Resources 让客户端读取数据或上下文 转成 Blob / 文档上下文 提示词 Prompts 提供可复用的提示词模板或消息 转成 LangChain messages MCP 底层使用 JSON-RPC 2.0 风格的消息通信。开发应用时，你通常不需要手写 JSON-RPC 请求；用 MCP SDK、FastMCP、langchain-mcp-adapters 这样的库即可。">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">MCP 教程：从协议基础到 LangChain / LangGraph 调用</h1>
+
+    
+      <div class="post-date">August 18, 2026</div>
+    
+
+    <div class="post-content">
+      <p>本文面向已经会写一点 Python、并且正在学习 LangChain / LangGraph 的开发者。目标很朴素：你应该能理解 MCP 是什么，能写一个最小 MCP Server，并且知道怎样在 LangChain 和 LangGraph 中调用 MCP 暴露出来的工具、资源和提示词。若只会背概念而不能把工具接进 agent，那未免太像考试前夜的幻觉了。</p>
+<hr>
+<h2 id="1-mcp-是什么">1. MCP 是什么</h2>
+<p>MCP，全称 Model Context Protocol，模型上下文协议。它是一个开放协议，用来标准化 AI 应用如何连接外部上下文、工具和数据源。</p>
+<p>可以把它理解为三层关系：</p>
+<table>
+  <thead>
+      <tr>
+          <th>角色</th>
+          <th>含义</th>
+          <th>例子</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Host</td>
+          <td>用户实际使用的 AI 应用</td>
+          <td>Claude Desktop、IDE 插件、你写的 LangGraph Agent</td>
+      </tr>
+      <tr>
+          <td>Client</td>
+          <td>Host 内部负责连接某个 MCP Server 的客户端</td>
+          <td><code>MultiServerMCPClient</code> 创建的连接</td>
+      </tr>
+      <tr>
+          <td>Server</td>
+          <td>对外暴露能力的服务进程</td>
+          <td>文件系统服务、数据库服务、天气 API 服务、搜索服务</td>
+      </tr>
+  </tbody>
+</table>
+<p>MCP Server 通常向客户端暴露三类能力：</p>
+<table>
+  <thead>
+      <tr>
+          <th>能力</th>
+          <th>英文</th>
+          <th>作用</th>
+          <th>LangChain 中的常见映射</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>工具</td>
+          <td>Tools</td>
+          <td>让模型调用函数执行动作</td>
+          <td>转成 LangChain Tool</td>
+      </tr>
+      <tr>
+          <td>资源</td>
+          <td>Resources</td>
+          <td>让客户端读取数据或上下文</td>
+          <td>转成 Blob / 文档上下文</td>
+      </tr>
+      <tr>
+          <td>提示词</td>
+          <td>Prompts</td>
+          <td>提供可复用的提示词模板或消息</td>
+          <td>转成 LangChain messages</td>
+      </tr>
+  </tbody>
+</table>
+<p>MCP 底层使用 JSON-RPC 2.0 风格的消息通信。开发应用时，你通常不需要手写 JSON-RPC 请求；用 MCP SDK、FastMCP、<code>langchain-mcp-adapters</code> 这样的库即可。</p>
+<hr>
+<h2 id="2-mcp-解决了什么问题">2. MCP 解决了什么问题</h2>
+<p>没有 MCP 时，每个 agent 框架都要为数据库、浏览器、GitHub、文件系统、内部 API 各写一套工具适配逻辑。今天你给 LangChain 写一版，明天给 Claude Desktop 写一版，后天换成另一个 agent 框架又写一版。这样当然也能活，只是不太体面。</p>
+<p>MCP 的核心价值是把“工具提供方”和“工具使用方”解耦：</p>
+<ol>
+<li>工具提供方只要实现 MCP Server。</li>
+<li>工具使用方只要实现 MCP Client。</li>
+<li>中间通过统一协议发现工具、描述参数、调用工具、读取结果。</li>
+</ol>
+<p>也就是说，MCP 更像“工具和上下文的连接协议”，不是新的大模型，也不是新的 agent 框架。LangChain / LangGraph 可以作为 MCP Client 使用 MCP Server 暴露的工具。</p>
+<hr>
+<h2 id="3-什么时候应该用-mcp">3. 什么时候应该用 MCP</h2>
+<p>适合使用 MCP 的场景：</p>
+<ol>
+<li>你希望一个工具服务被多个客户端复用，例如 Claude Desktop、LangChain、LangGraph、内部 Agent 平台。</li>
+<li>你要接入的系统比较多，例如文件、数据库、HTTP API、搜索服务、工单系统。</li>
+<li>工具本身有独立生命周期，例如需要单独部署、认证、审计、升级。</li>
+<li>你需要把工具能力提供给不同语言或不同框架的客户端。</li>
+</ol>
+<p>不一定需要 MCP 的场景：</p>
+<ol>
+<li>只有一个很小的 Python 函数，只在一个脚本里用一次。</li>
+<li>工具和业务代码强耦合，没有复用价值。</li>
+<li>你只需要普通 LangChain <code>@tool</code>，并不打算跨客户端复用。</li>
+</ol>
+<p>请注意：MCP 并不会让工具天然安全。它只是让工具以标准方式被发现和调用。至于权限、审计、确认、密钥隔离，仍然是开发者自己的责任。协议能帮你把门做得标准，却不会替你决定谁该进门。</p>
+<hr>
+<h2 id="4-常见传输方式">4. 常见传输方式</h2>
+<p>MCP 常见传输方式有两类：</p>
+<table>
+  <thead>
+      <tr>
+          <th>传输方式</th>
+          <th>配置名</th>
+          <th>适合场景</th>
+          <th>特点</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>stdio</td>
+          <td><code>stdio</code></td>
+          <td>本地工具、开发环境、桌面应用</td>
+          <td>客户端启动一个本地子进程，通过标准输入输出通信</td>
+      </tr>
+      <tr>
+          <td>HTTP / Streamable HTTP</td>
+          <td><code>http</code> 或 <code>streamable-http</code></td>
+          <td>远程服务、团队共享、生产部署</td>
+          <td>Server 独立运行，客户端通过 URL 连接</td>
+      </tr>
+  </tbody>
+</table>
+<p>在 LangChain 的 Python MCP 适配器中，经常会看到这样的配置：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="s2">&#34;math&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="s2">&#34;transport&#34;</span><span class="p">:</span> <span class="s2">&#34;stdio&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="s2">&#34;command&#34;</span><span class="p">:</span> <span class="s2">&#34;python&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="s2">&#34;args&#34;</span><span class="p">:</span> <span class="p">[</span><span class="sa">r</span><span class="s2">&#34;D:\learning\Python\agent\mcp_demo\math_server.py&#34;</span><span class="p">],</span>
+</span></span><span class="line"><span class="cl">    <span class="p">},</span>
+</span></span><span class="line"><span class="cl">    <span class="s2">&#34;weather&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="s2">&#34;transport&#34;</span><span class="p">:</span> <span class="s2">&#34;http&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="s2">&#34;url&#34;</span><span class="p">:</span> <span class="s2">&#34;http://localhost:8000/mcp&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="p">},</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p><code>stdio</code> 适合本地开发，简单直接。<code>http</code> 更适合远程服务、容器化、统一认证和团队复用。</p>
+<hr>
+<h2 id="5-环境准备">5. 环境准备</h2>
+<p>建议使用 Python 3.11 或更高版本。</p>
+<p>在 PowerShell 中创建一个演示目录：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-powershell" data-lang="powershell"><span class="line"><span class="cl"><span class="n">mkdir</span> <span class="n">D:</span><span class="p">\</span><span class="n">learning</span><span class="p">\</span><span class="n">Python</span><span class="p">\</span><span class="n">agent</span><span class="p">\</span><span class="n">mcp_demo</span>
+</span></span><span class="line"><span class="cl"><span class="nb">cd </span><span class="n">D:</span><span class="p">\</span><span class="n">learning</span><span class="p">\</span><span class="n">Python</span><span class="p">\</span><span class="n">agent</span><span class="p">\</span><span class="n">mcp_demo</span>
+</span></span><span class="line"><span class="cl"><span class="n">python</span> <span class="n">-m</span> <span class="n">venv</span> <span class="p">.</span><span class="py">venv</span>
+</span></span><span class="line"><span class="cl"><span class="p">.\.</span><span class="n">venv</span><span class="p">\</span><span class="n">Scripts</span><span class="p">\</span><span class="n">Activate</span><span class="p">.</span><span class="py">ps1</span>
+</span></span><span class="line"><span class="cl"><span class="n">python</span> <span class="n">-m</span> <span class="n">pip</span> <span class="n">install</span> <span class="n">-U</span> <span class="n">pip</span>
+</span></span></code></pre></div><p>安装依赖：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-powershell" data-lang="powershell"><span class="line"><span class="cl"><span class="n">pip</span> <span class="n">install</span> <span class="n">-U</span> <span class="n">langchain</span> <span class="n">langgraph</span> <span class="nb">langchain-openai</span> <span class="nb">langchain-mcp</span><span class="n">-adapters</span> <span class="n">fastmcp</span> <span class="nb">python-dotenv</span>
+</span></span></code></pre></div><p>如果使用 OpenAI 模型：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-powershell" data-lang="powershell"><span class="line"><span class="cl"><span class="nv">$env:OPENAI_API_KEY</span><span class="p">=</span><span class="s2">&#34;你的 API Key&#34;</span>
+</span></span></code></pre></div><p>如果你使用 Anthropic、Google 或其他模型提供商，只要 LangChain 当前版本支持，也可以替换示例里的模型名称。教程里用 OpenAI 只是为了让示例更短，不表示 MCP 依赖 OpenAI。</p>
+<hr>
+<h2 id="6-编写第一个-mcp-server">6. 编写第一个 MCP Server</h2>
+<p>新建 <code>math_server.py</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="kn">from</span> <span class="nn">fastmcp</span> <span class="kn">import</span> <span class="n">FastMCP</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">mcp</span> <span class="o">=</span> <span class="n">FastMCP</span><span class="p">(</span><span class="s2">&#34;Math&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nd">@mcp.tool</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="k">def</span> <span class="nf">add</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="s2">&#34;&#34;&#34;Add two integers.&#34;&#34;&#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="n">a</span> <span class="o">+</span> <span class="n">b</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nd">@mcp.tool</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="k">def</span> <span class="nf">multiply</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="s2">&#34;&#34;&#34;Multiply two integers.&#34;&#34;&#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="n">a</span> <span class="o">*</span> <span class="n">b</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nd">@mcp.tool</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="k">def</span> <span class="nf">divide</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="s2">&#34;&#34;&#34;Divide a by b.&#34;&#34;&#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="n">b</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&#34;b must not be 0&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="n">a</span> <span class="o">/</span> <span class="n">b</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&#34;__main__&#34;</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">mcp</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">transport</span><span class="o">=</span><span class="s2">&#34;stdio&#34;</span><span class="p">)</span>
+</span></span></code></pre></div><p>这个文件就是一个 MCP Server。它暴露了三个工具：<code>add</code>、<code>multiply</code>、<code>divide</code>。</p>
+<p>这里有几个要点：</p>
+<ol>
+<li><code>FastMCP(&quot;Math&quot;)</code> 定义了服务名称。</li>
+<li><code>@mcp.tool()</code> 把普通 Python 函数注册为 MCP Tool。</li>
+<li>函数签名和 docstring 会被用来生成工具描述和参数 schema。</li>
+<li><code>mcp.run(transport=&quot;stdio&quot;)</code> 表示通过标准输入输出运行，适合由客户端启动。</li>
+</ol>
+<p>你不需要手写 <code>tools/list</code> 或 <code>tools/call</code> JSON-RPC 消息。FastMCP 会处理这些细节。能少写样板代码时，就不要表现出对样板代码的执着。</p>
+<hr>
+<h2 id="7-在-langchain-中调用-mcp">7. 在 LangChain 中调用 MCP</h2>
+<p>LangChain 调用 MCP 的推荐方式是使用 <code>langchain-mcp-adapters</code>。</p>
+<p>核心流程：</p>
+<ol>
+<li>用 <code>MultiServerMCPClient</code> 连接一个或多个 MCP Server。</li>
+<li>用 <code>await client.get_tools()</code> 把 MCP tools 转成 LangChain tools。</li>
+<li>把这些 tools 交给 LangChain agent 或手动调用。</li>
+</ol>
+<h3 id="71-直接加载并调用-mcp-tool">7.1 直接加载并调用 MCP Tool</h3>
+<p>先写一个最小客户端 <code>langchain_direct_tool_call.py</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="kn">import</span> <span class="nn">asyncio</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">from</span> <span class="nn">langchain_mcp_adapters.client</span> <span class="kn">import</span> <span class="n">MultiServerMCPClient</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">async</span> <span class="k">def</span> <span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">client</span> <span class="o">=</span> <span class="n">MultiServerMCPClient</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">        <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="s2">&#34;math&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">                <span class="s2">&#34;transport&#34;</span><span class="p">:</span> <span class="s2">&#34;stdio&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                <span class="s2">&#34;command&#34;</span><span class="p">:</span> <span class="s2">&#34;python&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                <span class="s2">&#34;args&#34;</span><span class="p">:</span> <span class="p">[</span><span class="sa">r</span><span class="s2">&#34;D:\learning\Python\agent\mcp_demo\math_server.py&#34;</span><span class="p">],</span>
+</span></span><span class="line"><span class="cl">            <span class="p">}</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">tools</span> <span class="o">=</span> <span class="k">await</span> <span class="n">client</span><span class="o">.</span><span class="n">get_tools</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nb">print</span><span class="p">(</span><span class="s2">&#34;Loaded tools:&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="n">tool</span> <span class="ow">in</span> <span class="n">tools</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&#34;- </span><span class="si">{</span><span class="n">tool</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">tool</span><span class="o">.</span><span class="n">description</span><span class="si">}</span><span class="s2">&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">tools_by_name</span> <span class="o">=</span> <span class="p">{</span><span class="n">tool</span><span class="o">.</span><span class="n">name</span><span class="p">:</span> <span class="n">tool</span> <span class="k">for</span> <span class="n">tool</span> <span class="ow">in</span> <span class="n">tools</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">tools_by_name</span><span class="p">[</span><span class="s2">&#34;add&#34;</span><span class="p">]</span><span class="o">.</span><span class="n">ainvoke</span><span class="p">({</span><span class="s2">&#34;a&#34;</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span> <span class="s2">&#34;b&#34;</span><span class="p">:</span> <span class="mi">40</span><span class="p">})</span>
+</span></span><span class="line"><span class="cl">    <span class="nb">print</span><span class="p">(</span><span class="s2">&#34;add result:&#34;</span><span class="p">,</span> <span class="n">result</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&#34;__main__&#34;</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">asyncio</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">main</span><span class="p">())</span>
+</span></span></code></pre></div><p>运行：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-powershell" data-lang="powershell"><span class="line"><span class="cl"><span class="n">python</span> <span class="n">langchain_direct_tool_call</span><span class="p">.</span><span class="py">py</span>
+</span></span></code></pre></div><p>这一步不需要大模型。它只是验证 LangChain 是否能发现并调用 MCP Server 暴露的工具。</p>
+<p>如果这里失败，先不要急着怀疑模型。模型还没出场。通常是路径、虚拟环境、依赖或 server 启动方式出了问题。</p>
+<h3 id="72-用-langchain-agent-自动选择-mcp-tool">7.2 用 LangChain Agent 自动选择 MCP Tool</h3>
+<p>接下来让模型自己决定何时调用工具。新建 <code>langchain_agent_mcp.py</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="kn">import</span> <span class="nn">asyncio</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">from</span> <span class="nn">langchain.agents</span> <span class="kn">import</span> <span class="n">create_agent</span>
+</span></span><span class="line"><span class="cl"><span class="kn">from</span> <span class="nn">langchain_mcp_adapters.client</span> <span class="kn">import</span> <span class="n">MultiServerMCPClient</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">async</span> <span class="k">def</span> <span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">client</span> <span class="o">=</span> <span class="n">MultiServerMCPClient</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">        <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="s2">&#34;math&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">                <span class="s2">&#34;transport&#34;</span><span class="p">:</span> <span class="s2">&#34;stdio&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                <span class="s2">&#34;command&#34;</span><span class="p">:</span> <span class="s2">&#34;python&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                <span class="s2">&#34;args&#34;</span><span class="p">:</span> <span class="p">[</span><span class="sa">r</span><span class="s2">&#34;D:\learning\Python\agent\mcp_demo\math_server.py&#34;</span><span class="p">],</span>
+</span></span><span class="line"><span class="cl">            <span class="p">}</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">tools</span> <span class="o">=</span> <span class="k">await</span> <span class="n">client</span><span class="o">.</span><span class="n">get_tools</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">agent</span> <span class="o">=</span> <span class="n">create_agent</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">        <span class="n">model</span><span class="o">=</span><span class="s2">&#34;openai:gpt-4.1-mini&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="n">tools</span><span class="o">=</span><span class="n">tools</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="n">system_prompt</span><span class="o">=</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">            <span class="s2">&#34;You are a careful math assistant. &#34;</span>
+</span></span><span class="line"><span class="cl">            <span class="s2">&#34;Use tools whenever arithmetic is needed.&#34;</span>
+</span></span><span class="line"><span class="cl">        <span class="p">),</span>
+</span></span><span class="line"><span class="cl">    <span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">agent</span><span class="o">.</span><span class="n">ainvoke</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">        <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="s2">&#34;messages&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">                <span class="p">{</span>
+</span></span><span class="line"><span class="cl">                    <span class="s2">&#34;role&#34;</span><span class="p">:</span> <span class="s2">&#34;user&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                    <span class="s2">&#34;content&#34;</span><span class="p">:</span> <span class="s2">&#34;请计算 (13 + 29) * 7，并说明你是怎么得到结果的。&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                <span class="p">}</span>
+</span></span><span class="line"><span class="cl">            <span class="p">]</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="n">message</span> <span class="ow">in</span> <span class="n">result</span><span class="p">[</span><span class="s2">&#34;messages&#34;</span><span class="p">]:</span>
+</span></span><span class="line"><span class="cl">        <span class="n">message</span><span class="o">.</span><span class="n">pretty_print</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&#34;__main__&#34;</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">asyncio</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">main</span><span class="p">())</span>
+</span></span></code></pre></div><p>这里发生了什么：</p>
+<ol>
+<li><code>MultiServerMCPClient</code> 启动 <code>math_server.py</code> 并读取工具列表。</li>
+<li><code>client.get_tools()</code> 返回的是 LangChain 可用的 tool 对象。</li>
+<li><code>create_agent(...)</code> 把这些工具交给 agent。</li>
+<li>模型看到用户问题后，生成 tool call。</li>
+<li>agent 执行 MCP tool，把结果作为 ToolMessage 加回对话。</li>
+<li>模型读取工具结果，生成最终回答。</li>
+</ol>
+<p>注意：MCP tool 的名称、描述、参数 schema 会影响模型是否愿意正确调用它。工具描述写得含糊，模型就会像在没有路灯的雪夜里散步一样，方向感全靠运气。</p>
+<h3 id="73-同时连接多个-mcp-server">7.3 同时连接多个 MCP Server</h3>
+<p>假设还有一个 HTTP 方式运行的天气服务：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">client</span> <span class="o">=</span> <span class="n">MultiServerMCPClient</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="s2">&#34;math&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="s2">&#34;transport&#34;</span><span class="p">:</span> <span class="s2">&#34;stdio&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">            <span class="s2">&#34;command&#34;</span><span class="p">:</span> <span class="s2">&#34;python&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">            <span class="s2">&#34;args&#34;</span><span class="p">:</span> <span class="p">[</span><span class="sa">r</span><span class="s2">&#34;D:\learning\Python\agent\mcp_demo\math_server.py&#34;</span><span class="p">],</span>
+</span></span><span class="line"><span class="cl">        <span class="p">},</span>
+</span></span><span class="line"><span class="cl">        <span class="s2">&#34;weather&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="s2">&#34;transport&#34;</span><span class="p">:</span> <span class="s2">&#34;http&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">            <span class="s2">&#34;url&#34;</span><span class="p">:</span> <span class="s2">&#34;http://localhost:8000/mcp&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="p">},</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">tools</span> <span class="o">=</span> <span class="k">await</span> <span class="n">client</span><span class="o">.</span><span class="n">get_tools</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="n">agent</span> <span class="o">=</span> <span class="n">create_agent</span><span class="p">(</span><span class="s2">&#34;openai:gpt-4.1-mini&#34;</span><span class="p">,</span> <span class="n">tools</span><span class="p">)</span>
+</span></span></code></pre></div><p>建议在启动时打印工具名称：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="k">for</span> <span class="n">tool</span> <span class="ow">in</span> <span class="n">tools</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="nb">print</span><span class="p">(</span><span class="n">tool</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+</span></span></code></pre></div><p>如果多个 Server 暴露了同名工具，要主动改名或分拆职责，避免模型和运行时混淆。一个叫 <code>search</code>，另一个也叫 <code>search</code>，然后期待系统自己理解你的心意，这并不是架构设计，是许愿。</p>
+<h3 id="74-http-server-示例">7.4 HTTP Server 示例</h3>
+<p>新建 <code>weather_server.py</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="kn">from</span> <span class="nn">fastmcp</span> <span class="kn">import</span> <span class="n">FastMCP</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">mcp</span> <span class="o">=</span> <span class="n">FastMCP</span><span class="p">(</span><span class="s2">&#34;Weather&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nd">@mcp.tool</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="k">async</span> <span class="k">def</span> <span class="nf">get_weather</span><span class="p">(</span><span class="n">location</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="s2">&#34;&#34;&#34;Get weather for a location.&#34;&#34;&#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="sa">f</span><span class="s2">&#34;The weather in </span><span class="si">{</span><span class="n">location</span><span class="si">}</span><span class="s2"> is sunny.&#34;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&#34;__main__&#34;</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">mcp</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">transport</span><span class="o">=</span><span class="s2">&#34;streamable-http&#34;</span><span class="p">)</span>
+</span></span></code></pre></div><p>运行：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-powershell" data-lang="powershell"><span class="line"><span class="cl"><span class="n">python</span> <span class="n">weather_server</span><span class="p">.</span><span class="py">py</span>
+</span></span></code></pre></div><p>客户端配置：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">client</span> <span class="o">=</span> <span class="n">MultiServerMCPClient</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="s2">&#34;weather&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="s2">&#34;transport&#34;</span><span class="p">:</span> <span class="s2">&#34;http&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">            <span class="s2">&#34;url&#34;</span><span class="p">:</span> <span class="s2">&#34;http://localhost:8000/mcp&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span></code></pre></div><p>如果你的 FastMCP 版本默认端口或路径不同，请以启动日志为准。HTTP MCP Server 的本质是：Server 独立运行，客户端通过 URL 连接。</p>
+<h3 id="75-http-header-和认证">7.5 HTTP Header 和认证</h3>
+<p>连接远程 MCP Server 时，经常要传 token：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">client</span> <span class="o">=</span> <span class="n">MultiServerMCPClient</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="s2">&#34;internal_search&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="s2">&#34;transport&#34;</span><span class="p">:</span> <span class="s2">&#34;http&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">            <span class="s2">&#34;url&#34;</span><span class="p">:</span> <span class="s2">&#34;https://mcp.example.com/mcp&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">            <span class="s2">&#34;headers&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">                <span class="s2">&#34;Authorization&#34;</span><span class="p">:</span> <span class="s2">&#34;Bearer YOUR_TOKEN&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                <span class="s2">&#34;X-Request-Source&#34;</span><span class="p">:</span> <span class="s2">&#34;langchain-agent&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">            <span class="p">},</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span></code></pre></div><p>生产环境不要把密钥硬编码在代码里。用环境变量、密钥管理服务或运行平台的 secret 注入机制。</p>
+<hr>
+<h2 id="8-在-langgraph-中调用-mcp">8. 在 LangGraph 中调用 MCP</h2>
+<p>LangGraph 有两种常见接法：</p>
+<ol>
+<li>使用 <code>create_agent</code> 快速创建 agent 图。</li>
+<li>使用 <code>StateGraph</code> 显式定义节点、边和工具调用循环。</li>
+</ol>
+<p>第一种更短，适合起步。第二种更清楚，适合需要状态、条件分支、人工审批、检查点、审计的生产流程。</p>
+<h3 id="81-langgraph-快速方式create_agent">8.1 LangGraph 快速方式：<code>create_agent</code></h3>
+<p>在 LangChain 1.x 之后，<code>create_agent</code> 是推荐的高层 agent API。它背后使用 LangGraph 的 agent 运行机制，因此对很多项目而言，这就是最省事的 LangGraph + MCP 接法。</p>
+<p>新建 <code>langgraph_create_agent_mcp.py</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="kn">import</span> <span class="nn">asyncio</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">from</span> <span class="nn">langchain.agents</span> <span class="kn">import</span> <span class="n">create_agent</span>
+</span></span><span class="line"><span class="cl"><span class="kn">from</span> <span class="nn">langchain_mcp_adapters.client</span> <span class="kn">import</span> <span class="n">MultiServerMCPClient</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">async</span> <span class="k">def</span> <span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">client</span> <span class="o">=</span> <span class="n">MultiServerMCPClient</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">        <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="s2">&#34;math&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">                <span class="s2">&#34;transport&#34;</span><span class="p">:</span> <span class="s2">&#34;stdio&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                <span class="s2">&#34;command&#34;</span><span class="p">:</span> <span class="s2">&#34;python&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                <span class="s2">&#34;args&#34;</span><span class="p">:</span> <span class="p">[</span><span class="sa">r</span><span class="s2">&#34;D:\learning\Python\agent\mcp_demo\math_server.py&#34;</span><span class="p">],</span>
+</span></span><span class="line"><span class="cl">            <span class="p">}</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">tools</span> <span class="o">=</span> <span class="k">await</span> <span class="n">client</span><span class="o">.</span><span class="n">get_tools</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">graph_agent</span> <span class="o">=</span> <span class="n">create_agent</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">        <span class="n">model</span><span class="o">=</span><span class="s2">&#34;openai:gpt-4.1-mini&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="n">tools</span><span class="o">=</span><span class="n">tools</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="n">system_prompt</span><span class="o">=</span><span class="s2">&#34;You are a precise assistant. Use MCP tools for calculations.&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">graph_agent</span><span class="o">.</span><span class="n">ainvoke</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">        <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="s2">&#34;messages&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">                <span class="p">{</span>
+</span></span><span class="line"><span class="cl">                    <span class="s2">&#34;role&#34;</span><span class="p">:</span> <span class="s2">&#34;user&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                    <span class="s2">&#34;content&#34;</span><span class="p">:</span> <span class="s2">&#34;计算 21 * (8 + 4)，必须调用工具。&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                <span class="p">}</span>
+</span></span><span class="line"><span class="cl">            <span class="p">]</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="n">message</span> <span class="ow">in</span> <span class="n">result</span><span class="p">[</span><span class="s2">&#34;messages&#34;</span><span class="p">]:</span>
+</span></span><span class="line"><span class="cl">        <span class="n">message</span><span class="o">.</span><span class="n">pretty_print</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&#34;__main__&#34;</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">asyncio</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">main</span><span class="p">())</span>
+</span></span></code></pre></div><p>这段代码看起来和 LangChain Agent 示例很像，因为 LangChain 的 agent API 和 LangGraph 已经深度整合。你可以把它理解为“LangGraph 的预制 agent 图”。</p>
+<p>适合这种方式的场景：</p>
+<ol>
+<li>普通问答 + 工具调用。</li>
+<li>不需要复杂分支。</li>
+<li>不需要自己控制每个节点。</li>
+<li>希望尽快把 MCP 工具跑起来。</li>
+</ol>
+<h3 id="82-langgraph-显式方式stategraph--toolnode">8.2 LangGraph 显式方式：<code>StateGraph</code> + <code>ToolNode</code></h3>
+<p>如果你需要完全掌控图结构，可以自己写 <code>StateGraph</code>。</p>
+<p>新建 <code>langgraph_stategraph_mcp.py</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="kn">import</span> <span class="nn">asyncio</span>
+</span></span><span class="line"><span class="cl"><span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Annotated</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">from</span> <span class="nn">langchain.chat_models</span> <span class="kn">import</span> <span class="n">init_chat_model</span>
+</span></span><span class="line"><span class="cl"><span class="kn">from</span> <span class="nn">langchain.messages</span> <span class="kn">import</span> <span class="n">AnyMessage</span><span class="p">,</span> <span class="n">SystemMessage</span>
+</span></span><span class="line"><span class="cl"><span class="kn">from</span> <span class="nn">langchain_mcp_adapters.client</span> <span class="kn">import</span> <span class="n">MultiServerMCPClient</span>
+</span></span><span class="line"><span class="cl"><span class="kn">from</span> <span class="nn">langgraph.graph</span> <span class="kn">import</span> <span class="n">END</span><span class="p">,</span> <span class="n">START</span><span class="p">,</span> <span class="n">StateGraph</span><span class="p">,</span> <span class="n">add_messages</span>
+</span></span><span class="line"><span class="cl"><span class="kn">from</span> <span class="nn">langgraph.prebuilt</span> <span class="kn">import</span> <span class="n">ToolNode</span><span class="p">,</span> <span class="n">tools_condition</span>
+</span></span><span class="line"><span class="cl"><span class="kn">from</span> <span class="nn">typing_extensions</span> <span class="kn">import</span> <span class="n">TypedDict</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">AgentState</span><span class="p">(</span><span class="n">TypedDict</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">    <span class="n">messages</span><span class="p">:</span> <span class="n">Annotated</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="n">AnyMessage</span><span class="p">],</span> <span class="n">add_messages</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">async</span> <span class="k">def</span> <span class="nf">build_graph</span><span class="p">():</span>
+</span></span><span class="line"><span class="cl">    <span class="n">client</span> <span class="o">=</span> <span class="n">MultiServerMCPClient</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">        <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="s2">&#34;math&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">                <span class="s2">&#34;transport&#34;</span><span class="p">:</span> <span class="s2">&#34;stdio&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                <span class="s2">&#34;command&#34;</span><span class="p">:</span> <span class="s2">&#34;python&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                <span class="s2">&#34;args&#34;</span><span class="p">:</span> <span class="p">[</span><span class="sa">r</span><span class="s2">&#34;D:\learning\Python\agent\mcp_demo\math_server.py&#34;</span><span class="p">],</span>
+</span></span><span class="line"><span class="cl">            <span class="p">}</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">tools</span> <span class="o">=</span> <span class="k">await</span> <span class="n">client</span><span class="o">.</span><span class="n">get_tools</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">model</span> <span class="o">=</span> <span class="n">init_chat_model</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">        <span class="s2">&#34;openai:gpt-4.1-mini&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="n">temperature</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="n">model_with_tools</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">bind_tools</span><span class="p">(</span><span class="n">tools</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">async</span> <span class="k">def</span> <span class="nf">call_model</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">AgentState</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="n">response</span> <span class="o">=</span> <span class="k">await</span> <span class="n">model_with_tools</span><span class="o">.</span><span class="n">ainvoke</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">            <span class="p">[</span>
+</span></span><span class="line"><span class="cl">                <span class="n">SystemMessage</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">                    <span class="n">content</span><span class="o">=</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">                        <span class="s2">&#34;You are a careful assistant. &#34;</span>
+</span></span><span class="line"><span class="cl">                        <span class="s2">&#34;When arithmetic is needed, call the available MCP tools.&#34;</span>
+</span></span><span class="line"><span class="cl">                    <span class="p">)</span>
+</span></span><span class="line"><span class="cl">                <span class="p">),</span>
+</span></span><span class="line"><span class="cl">                <span class="o">*</span><span class="n">state</span><span class="p">[</span><span class="s2">&#34;messages&#34;</span><span class="p">],</span>
+</span></span><span class="line"><span class="cl">            <span class="p">]</span>
+</span></span><span class="line"><span class="cl">        <span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="p">{</span><span class="s2">&#34;messages&#34;</span><span class="p">:</span> <span class="p">[</span><span class="n">response</span><span class="p">]}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">graph_builder</span> <span class="o">=</span> <span class="n">StateGraph</span><span class="p">(</span><span class="n">AgentState</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="n">graph_builder</span><span class="o">.</span><span class="n">add_node</span><span class="p">(</span><span class="s2">&#34;agent&#34;</span><span class="p">,</span> <span class="n">call_model</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="n">graph_builder</span><span class="o">.</span><span class="n">add_node</span><span class="p">(</span><span class="s2">&#34;tools&#34;</span><span class="p">,</span> <span class="n">ToolNode</span><span class="p">(</span><span class="n">tools</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">graph_builder</span><span class="o">.</span><span class="n">add_edge</span><span class="p">(</span><span class="n">START</span><span class="p">,</span> <span class="s2">&#34;agent&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="n">graph_builder</span><span class="o">.</span><span class="n">add_conditional_edges</span><span class="p">(</span><span class="s2">&#34;agent&#34;</span><span class="p">,</span> <span class="n">tools_condition</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="n">graph_builder</span><span class="o">.</span><span class="n">add_edge</span><span class="p">(</span><span class="s2">&#34;tools&#34;</span><span class="p">,</span> <span class="s2">&#34;agent&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="n">graph_builder</span><span class="o">.</span><span class="n">compile</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">async</span> <span class="k">def</span> <span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">graph</span> <span class="o">=</span> <span class="k">await</span> <span class="n">build_graph</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">graph</span><span class="o">.</span><span class="n">ainvoke</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">        <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="s2">&#34;messages&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">                <span class="p">{</span>
+</span></span><span class="line"><span class="cl">                    <span class="s2">&#34;role&#34;</span><span class="p">:</span> <span class="s2">&#34;user&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                    <span class="s2">&#34;content&#34;</span><span class="p">:</span> <span class="s2">&#34;请计算 17 * (5 + 6)。&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                <span class="p">}</span>
+</span></span><span class="line"><span class="cl">            <span class="p">]</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="n">message</span> <span class="ow">in</span> <span class="n">result</span><span class="p">[</span><span class="s2">&#34;messages&#34;</span><span class="p">]:</span>
+</span></span><span class="line"><span class="cl">        <span class="n">message</span><span class="o">.</span><span class="n">pretty_print</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&#34;__main__&#34;</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">asyncio</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">main</span><span class="p">())</span>
+</span></span></code></pre></div><p>这就是一个典型的 ReAct 工具调用循环：</p>
+<table>
+  <thead>
+      <tr>
+          <th>节点 / 边</th>
+          <th>作用</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>agent</code> 节点</td>
+          <td>调用绑定了 MCP tools 的模型</td>
+      </tr>
+      <tr>
+          <td><code>tools_condition</code></td>
+          <td>判断模型是否返回了 tool calls</td>
+      </tr>
+      <tr>
+          <td><code>tools</code> 节点</td>
+          <td><code>ToolNode</code> 执行具体工具</td>
+      </tr>
+      <tr>
+          <td><code>tools -&gt; agent</code></td>
+          <td>把工具结果交还给模型，让模型继续推理或回答</td>
+      </tr>
+      <tr>
+          <td><code>END</code></td>
+          <td>没有工具调用时结束</td>
+      </tr>
+  </tbody>
+</table>
+<p>这里最容易漏掉的是 <code>model.bind_tools(tools)</code>。如果不绑定工具，模型通常不会生成 tool calls；如果没有 <code>ToolNode(tools)</code>，图也不知道怎样执行这些 tool calls。一个负责“提出调用”，一个负责“执行调用”，二者不是同一件事。</p>
+<h3 id="83-为什么要在-langgraph-里显式接-mcp">8.3 为什么要在 LangGraph 里显式接 MCP</h3>
+<p>如果只是简单问答，<code>create_agent</code> 足够。显式 <code>StateGraph</code> 的价值在于你可以继续加东西：</p>
+<ol>
+<li>在工具调用前加入审批节点。</li>
+<li>对危险工具做权限判断。</li>
+<li>根据工具结果路由到不同分支。</li>
+<li>给长任务加 checkpoint。</li>
+<li>在状态里保留业务字段，例如 <code>user_id</code>、<code>task_status</code>、<code>retrieved_docs</code>。</li>
+<li>为不同工具失败设计重试或降级路径。</li>
+</ol>
+<p>例如你可以在 <code>AgentState</code> 加一个字段：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">AgentState</span><span class="p">(</span><span class="n">TypedDict</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">    <span class="n">messages</span><span class="p">:</span> <span class="n">Annotated</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="n">AnyMessage</span><span class="p">],</span> <span class="n">add_messages</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">    <span class="n">user_id</span><span class="p">:</span> <span class="nb">str</span>
+</span></span><span class="line"><span class="cl">    <span class="n">approved</span><span class="p">:</span> <span class="nb">bool</span>
+</span></span></code></pre></div><p>再写一个路由函数，在调用工具前检查 <code>approved</code>。MCP 负责“工具怎样暴露”，LangGraph 负责“流程怎样控制”。把这两个职责混在一起，后期会很难维护。</p>
+<hr>
+<h2 id="9-加载-mcp-resources">9. 加载 MCP Resources</h2>
+<p>Tools 是给模型执行动作的，Resources 是给客户端读取上下文的。</p>
+<p>例如某个 MCP Server 暴露了文件、数据库记录或文档片段，可以这样读取：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="kn">import</span> <span class="nn">asyncio</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">from</span> <span class="nn">langchain_mcp_adapters.client</span> <span class="kn">import</span> <span class="n">MultiServerMCPClient</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">async</span> <span class="k">def</span> <span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">client</span> <span class="o">=</span> <span class="n">MultiServerMCPClient</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">        <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="s2">&#34;docs&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">                <span class="s2">&#34;transport&#34;</span><span class="p">:</span> <span class="s2">&#34;http&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                <span class="s2">&#34;url&#34;</span><span class="p">:</span> <span class="s2">&#34;http://localhost:8000/mcp&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">            <span class="p">}</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">blobs</span> <span class="o">=</span> <span class="k">await</span> <span class="n">client</span><span class="o">.</span><span class="n">get_resources</span><span class="p">(</span><span class="s2">&#34;docs&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="n">blob</span> <span class="ow">in</span> <span class="n">blobs</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="nb">print</span><span class="p">(</span><span class="s2">&#34;URI:&#34;</span><span class="p">,</span> <span class="n">blob</span><span class="o">.</span><span class="n">metadata</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&#34;uri&#34;</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">        <span class="nb">print</span><span class="p">(</span><span class="s2">&#34;MIME:&#34;</span><span class="p">,</span> <span class="n">blob</span><span class="o">.</span><span class="n">mimetype</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="nb">print</span><span class="p">(</span><span class="n">blob</span><span class="o">.</span><span class="n">as_string</span><span class="p">()[:</span><span class="mi">500</span><span class="p">])</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&#34;__main__&#34;</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">asyncio</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">main</span><span class="p">())</span>
+</span></span></code></pre></div><p>也可以按 URI 读取：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">blobs</span> <span class="o">=</span> <span class="k">await</span> <span class="n">client</span><span class="o">.</span><span class="n">get_resources</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="s2">&#34;docs&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">uris</span><span class="o">=</span><span class="p">[</span><span class="s2">&#34;file:///project/README.md&#34;</span><span class="p">],</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span></code></pre></div><p>资源一般不会像 tool 那样自动让模型调用。常见做法是：</p>
+<ol>
+<li>客户端先读取 resource。</li>
+<li>把 resource 内容放进 prompt 或检索系统。</li>
+<li>再让模型基于这些上下文回答。</li>
+</ol>
+<p>如果资源很大，不要一股脑塞进上下文。先做检索、截断、摘要或分块。上下文窗口不是垃圾桶，虽然很多人似乎对此颇有误解。</p>
+<hr>
+<h2 id="10-加载-mcp-prompts">10. 加载 MCP Prompts</h2>
+<p>Prompts 是 MCP Server 暴露的可复用提示词或消息模板。</p>
+<p>示例：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="kn">import</span> <span class="nn">asyncio</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">from</span> <span class="nn">langchain_mcp_adapters.client</span> <span class="kn">import</span> <span class="n">MultiServerMCPClient</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">async</span> <span class="k">def</span> <span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">client</span> <span class="o">=</span> <span class="n">MultiServerMCPClient</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">        <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="s2">&#34;prompt_server&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">                <span class="s2">&#34;transport&#34;</span><span class="p">:</span> <span class="s2">&#34;http&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                <span class="s2">&#34;url&#34;</span><span class="p">:</span> <span class="s2">&#34;http://localhost:8000/mcp&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">            <span class="p">}</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">messages</span> <span class="o">=</span> <span class="k">await</span> <span class="n">client</span><span class="o">.</span><span class="n">get_prompt</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">        <span class="s2">&#34;prompt_server&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="s2">&#34;code_review&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="n">arguments</span><span class="o">=</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="s2">&#34;language&#34;</span><span class="p">:</span> <span class="s2">&#34;python&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">            <span class="s2">&#34;focus&#34;</span><span class="p">:</span> <span class="s2">&#34;security&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="p">},</span>
+</span></span><span class="line"><span class="cl">    <span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="n">message</span> <span class="ow">in</span> <span class="n">messages</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="nb">print</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">message</span><span class="o">.</span><span class="n">content</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&#34;__main__&#34;</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">asyncio</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">main</span><span class="p">())</span>
+</span></span></code></pre></div><p>Prompts 适合团队统一规范，例如：</p>
+<ol>
+<li>代码审查模板。</li>
+<li>SQL 分析模板。</li>
+<li>客服回复模板。</li>
+<li>工具使用说明模板。</li>
+</ol>
+<p>不过别把安全策略完全写进 prompt 里。Prompt 是指导，不是门禁系统。真正的权限控制应该在工具、服务端、网关或 LangGraph 控制流里实现。</p>
+<hr>
+<h2 id="11-stateful-session什么时候需要持久会话">11. Stateful Session：什么时候需要持久会话</h2>
+<p><code>MultiServerMCPClient</code> 默认是偏无状态的：每次工具调用创建会话、执行、清理。对普通工具来说这很好，简单，干净。</p>
+<p>但有些 MCP Server 是有状态的，例如：</p>
+<ol>
+<li>一个浏览器自动化 server 需要保留当前页面。</li>
+<li>一个数据库分析 server 需要保留临时表或会话变量。</li>
+<li>一个远程工作区 server 需要保留当前目录、任务上下文。</li>
+</ol>
+<p>这时可以显式创建 session：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="kn">import</span> <span class="nn">asyncio</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">from</span> <span class="nn">langchain.agents</span> <span class="kn">import</span> <span class="n">create_agent</span>
+</span></span><span class="line"><span class="cl"><span class="kn">from</span> <span class="nn">langchain_mcp_adapters.client</span> <span class="kn">import</span> <span class="n">MultiServerMCPClient</span>
+</span></span><span class="line"><span class="cl"><span class="kn">from</span> <span class="nn">langchain_mcp_adapters.tools</span> <span class="kn">import</span> <span class="n">load_mcp_tools</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">async</span> <span class="k">def</span> <span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">client</span> <span class="o">=</span> <span class="n">MultiServerMCPClient</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">        <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="s2">&#34;stateful_browser&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">                <span class="s2">&#34;transport&#34;</span><span class="p">:</span> <span class="s2">&#34;http&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                <span class="s2">&#34;url&#34;</span><span class="p">:</span> <span class="s2">&#34;http://localhost:8000/mcp&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">            <span class="p">}</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">async</span> <span class="k">with</span> <span class="n">client</span><span class="o">.</span><span class="n">session</span><span class="p">(</span><span class="s2">&#34;stateful_browser&#34;</span><span class="p">)</span> <span class="k">as</span> <span class="n">session</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="n">tools</span> <span class="o">=</span> <span class="k">await</span> <span class="n">load_mcp_tools</span><span class="p">(</span><span class="n">session</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="n">agent</span> <span class="o">=</span> <span class="n">create_agent</span><span class="p">(</span><span class="s2">&#34;openai:gpt-4.1-mini&#34;</span><span class="p">,</span> <span class="n">tools</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">        <span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">agent</span><span class="o">.</span><span class="n">ainvoke</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">            <span class="p">{</span>
+</span></span><span class="line"><span class="cl">                <span class="s2">&#34;messages&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">                    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">                        <span class="s2">&#34;role&#34;</span><span class="p">:</span> <span class="s2">&#34;user&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                        <span class="s2">&#34;content&#34;</span><span class="p">:</span> <span class="s2">&#34;打开示例网站，然后总结首页标题。&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">                <span class="p">]</span>
+</span></span><span class="line"><span class="cl">            <span class="p">}</span>
+</span></span><span class="line"><span class="cl">        <span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">        <span class="k">for</span> <span class="n">message</span> <span class="ow">in</span> <span class="n">result</span><span class="p">[</span><span class="s2">&#34;messages&#34;</span><span class="p">]:</span>
+</span></span><span class="line"><span class="cl">            <span class="n">message</span><span class="o">.</span><span class="n">pretty_print</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&#34;__main__&#34;</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">asyncio</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">main</span><span class="p">())</span>
+</span></span></code></pre></div><p>原则很简单：</p>
+<ol>
+<li>工具之间不需要共享状态，用默认方式。</li>
+<li>工具之间需要共享状态，用显式 session。</li>
+<li>如果状态涉及用户身份、浏览器、文件系统、数据库事务，要格外小心生命周期和权限边界。</li>
+</ol>
+<hr>
+<h2 id="12-mcp-tool-返回结构化内容">12. MCP Tool 返回结构化内容</h2>
+<p>MCP Tool 可以返回文本，也可以返回结构化内容。结构化内容适合订单、天气、数据库查询、搜索结果这类机器可解析数据。</p>
+<p>在 LangChain MCP adapter 中，结构化内容通常可以从 ToolMessage 的 artifact 里读取：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="kn">from</span> <span class="nn">langchain.messages</span> <span class="kn">import</span> <span class="n">ToolMessage</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">agent</span><span class="o">.</span><span class="n">ainvoke</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="s2">&#34;messages&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">            <span class="p">{</span>
+</span></span><span class="line"><span class="cl">                <span class="s2">&#34;role&#34;</span><span class="p">:</span> <span class="s2">&#34;user&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                <span class="s2">&#34;content&#34;</span><span class="p">:</span> <span class="s2">&#34;查询订单 order_123 的状态。&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">            <span class="p">}</span>
+</span></span><span class="line"><span class="cl">        <span class="p">]</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">for</span> <span class="n">message</span> <span class="ow">in</span> <span class="n">result</span><span class="p">[</span><span class="s2">&#34;messages&#34;</span><span class="p">]:</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">message</span><span class="p">,</span> <span class="n">ToolMessage</span><span class="p">)</span> <span class="ow">and</span> <span class="n">message</span><span class="o">.</span><span class="n">artifact</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="nb">print</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">artifact</span><span class="p">)</span>
+</span></span></code></pre></div><p>如果你的业务后续要使用这些数据，不要只让模型“读一段文本再猜”。能拿结构化字段，就拿结构化字段。让模型做解释，让程序做校验；职责分清，大家都轻松。</p>
+<hr>
+<h2 id="13-常见错误与排查">13. 常见错误与排查</h2>
+<h3 id="131-modulenotfounderror">13.1 <code>ModuleNotFoundError</code></h3>
+<p>确认当前虚拟环境安装了依赖：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-powershell" data-lang="powershell"><span class="line"><span class="cl"><span class="n">pip</span> <span class="n">show</span> <span class="nb">langchain-mcp</span><span class="n">-adapters</span>
+</span></span><span class="line"><span class="cl"><span class="n">pip</span> <span class="n">show</span> <span class="n">fastmcp</span>
+</span></span></code></pre></div><p>如果是在 IDE 中运行，确认 IDE 使用的是同一个 Python 解释器。</p>
+<h3 id="132-stdio-server-启动失败">13.2 stdio Server 启动失败</h3>
+<p>检查：</p>
+<ol>
+<li><code>args</code> 里的路径是否正确。</li>
+<li>路径是否需要使用 raw string，例如 <code>r&quot;D:\path\to\server.py&quot;</code>。</li>
+<li>Server 文件是否能单独运行。</li>
+<li>虚拟环境里是否安装了 server 所需依赖。</li>
+</ol>
+<h3 id="133-agent-不调用工具">13.3 Agent 不调用工具</h3>
+<p>检查：</p>
+<ol>
+<li>是否执行了 <code>tools = await client.get_tools()</code>。</li>
+<li>是否把 <code>tools</code> 传给了 <code>create_agent</code>，或执行了 <code>model.bind_tools(tools)</code>。</li>
+<li>工具描述是否清楚。</li>
+<li>用户问题是否真的需要工具。</li>
+<li>模型是否支持 tool calling。</li>
+</ol>
+<h3 id="134-工具参数错误">13.4 工具参数错误</h3>
+<p>检查函数签名和类型注解：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="nd">@mcp.tool</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="k">def</span> <span class="nf">search</span><span class="p">(</span><span class="n">query</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">limit</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">5</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">]:</span>
+</span></span><span class="line"><span class="cl">    <span class="o">...</span>
+</span></span></code></pre></div><p>比起：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="nd">@mcp.tool</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="k">def</span> <span class="nf">search</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">    <span class="o">...</span>
+</span></span></code></pre></div><p>前者对模型友好得多。模型不是你的同事，不会从一个叫 <code>x</code> 的参数里自动读出你的人生规划。</p>
+<h3 id="135-http-连接失败">13.5 HTTP 连接失败</h3>
+<p>检查：</p>
+<ol>
+<li>Server 是否已经启动。</li>
+<li>URL、端口、路径是否正确。</li>
+<li>防火墙或代理是否拦截。</li>
+<li>是否需要认证 header。</li>
+<li>客户端 transport 配置是否与 server 一致。</li>
+</ol>
+<hr>
+<h2 id="14-生产实践建议">14. 生产实践建议</h2>
+<h3 id="141-工具设计">14.1 工具设计</h3>
+<p>好的 MCP Tool 应该满足：</p>
+<ol>
+<li>名称清晰，例如 <code>get_order_status</code>，不要叫 <code>do_work</code>。</li>
+<li>描述明确，说明何时使用、输入是什么、输出是什么。</li>
+<li>参数使用类型注解。</li>
+<li>返回值尽量结构化。</li>
+<li>副作用工具要谨慎，例如删除、支付、发邮件、改数据库。</li>
+</ol>
+<h3 id="142-安全与权限">14.2 安全与权限</h3>
+<p>MCP Server 可以暴露任意代码执行路径，因此必须当作高风险边界处理。</p>
+<p>建议：</p>
+<ol>
+<li>最小权限运行 MCP Server。</li>
+<li>对危险操作做人类确认或审批。</li>
+<li>不把用户密钥暴露给不可信 Server。</li>
+<li>对工具调用做日志和审计。</li>
+<li>对远程 Server 使用认证和 HTTPS。</li>
+<li>不信任工具描述和 annotations，除非 Server 来源可信。</li>
+<li>在 LangGraph 中显式加入权限节点，而不是只靠 prompt 约束。</li>
+</ol>
+<h3 id="143-工具数量控制">14.3 工具数量控制</h3>
+<p>不要一次给模型塞几十上百个工具。工具太多时，模型选择正确工具的概率会下降。</p>
+<p>更好的做法：</p>
+<ol>
+<li>按场景加载工具。</li>
+<li>按用户权限加载工具。</li>
+<li>按任务阶段加载工具。</li>
+<li>用 LangGraph 路由到不同子图，每个子图只暴露必要工具。</li>
+</ol>
+<h3 id="144-可观测性">14.4 可观测性</h3>
+<p>建议接入 LangSmith 或你自己的 tracing 系统，至少记录：</p>
+<ol>
+<li>用户请求。</li>
+<li>模型选择了哪个工具。</li>
+<li>工具参数。</li>
+<li>工具返回。</li>
+<li>错误信息。</li>
+<li>每步耗时。</li>
+</ol>
+<p>没有日志的 agent 系统，调试时基本靠祈祷。而祈祷不属于可靠工程方法。</p>
+<hr>
+<h2 id="15-推荐项目结构">15. 推荐项目结构</h2>
+<p>一个小型 MCP + LangGraph 项目可以这样组织：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">mcp_demo/
+</span></span><span class="line"><span class="cl">  .env
+</span></span><span class="line"><span class="cl">  requirements.txt
+</span></span><span class="line"><span class="cl">  servers/
+</span></span><span class="line"><span class="cl">    math_server.py
+</span></span><span class="line"><span class="cl">    weather_server.py
+</span></span><span class="line"><span class="cl">  clients/
+</span></span><span class="line"><span class="cl">    langchain_agent_mcp.py
+</span></span><span class="line"><span class="cl">    langgraph_create_agent_mcp.py
+</span></span><span class="line"><span class="cl">    langgraph_stategraph_mcp.py
+</span></span><span class="line"><span class="cl">  app/
+</span></span><span class="line"><span class="cl">    graph.py
+</span></span><span class="line"><span class="cl">    state.py
+</span></span><span class="line"><span class="cl">    nodes.py
+</span></span><span class="line"><span class="cl">    config.py
+</span></span></code></pre></div><p>职责划分：</p>
+<table>
+  <thead>
+      <tr>
+          <th>文件</th>
+          <th>职责</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>servers/</code></td>
+          <td>MCP Server 实现</td>
+      </tr>
+      <tr>
+          <td><code>clients/</code></td>
+          <td>调用示例或测试客户端</td>
+      </tr>
+      <tr>
+          <td><code>app/graph.py</code></td>
+          <td>LangGraph 图结构</td>
+      </tr>
+      <tr>
+          <td><code>app/state.py</code></td>
+          <td>LangGraph state 类型</td>
+      </tr>
+      <tr>
+          <td><code>app/nodes.py</code></td>
+          <td>节点函数</td>
+      </tr>
+      <tr>
+          <td><code>app/config.py</code></td>
+          <td>MCP Server 地址、模型配置、环境变量</td>
+      </tr>
+  </tbody>
+</table>
+<hr>
+<h2 id="16-一份完整依赖文件">16. 一份完整依赖文件</h2>
+<p><code>requirements.txt</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">fastmcp
+</span></span><span class="line"><span class="cl">langchain
+</span></span><span class="line"><span class="cl">langchain-openai
+</span></span><span class="line"><span class="cl">langchain-mcp-adapters
+</span></span><span class="line"><span class="cl">langgraph
+</span></span><span class="line"><span class="cl">python-dotenv
+</span></span></code></pre></div><p>安装：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-powershell" data-lang="powershell"><span class="line"><span class="cl"><span class="n">pip</span> <span class="n">install</span> <span class="n">-r</span> <span class="n">requirements</span><span class="p">.</span><span class="py">txt</span>
+</span></span></code></pre></div><hr>
+<h2 id="17-最小可运行闭环">17. 最小可运行闭环</h2>
+<p>如果你只想验证“LangGraph 调 MCP”是否跑通，最少需要两个文件。</p>
+<p>第一个：<code>math_server.py</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="kn">from</span> <span class="nn">fastmcp</span> <span class="kn">import</span> <span class="n">FastMCP</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">mcp</span> <span class="o">=</span> <span class="n">FastMCP</span><span class="p">(</span><span class="s2">&#34;Math&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nd">@mcp.tool</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="k">def</span> <span class="nf">add</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="s2">&#34;&#34;&#34;Add two integers.&#34;&#34;&#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="n">a</span> <span class="o">+</span> <span class="n">b</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&#34;__main__&#34;</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">mcp</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">transport</span><span class="o">=</span><span class="s2">&#34;stdio&#34;</span><span class="p">)</span>
+</span></span></code></pre></div><p>第二个：<code>run_graph.py</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="kn">import</span> <span class="nn">asyncio</span>
+</span></span><span class="line"><span class="cl"><span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Annotated</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">from</span> <span class="nn">langchain.chat_models</span> <span class="kn">import</span> <span class="n">init_chat_model</span>
+</span></span><span class="line"><span class="cl"><span class="kn">from</span> <span class="nn">langchain.messages</span> <span class="kn">import</span> <span class="n">AnyMessage</span>
+</span></span><span class="line"><span class="cl"><span class="kn">from</span> <span class="nn">langchain_mcp_adapters.client</span> <span class="kn">import</span> <span class="n">MultiServerMCPClient</span>
+</span></span><span class="line"><span class="cl"><span class="kn">from</span> <span class="nn">langgraph.graph</span> <span class="kn">import</span> <span class="n">START</span><span class="p">,</span> <span class="n">StateGraph</span><span class="p">,</span> <span class="n">add_messages</span>
+</span></span><span class="line"><span class="cl"><span class="kn">from</span> <span class="nn">langgraph.prebuilt</span> <span class="kn">import</span> <span class="n">ToolNode</span><span class="p">,</span> <span class="n">tools_condition</span>
+</span></span><span class="line"><span class="cl"><span class="kn">from</span> <span class="nn">typing_extensions</span> <span class="kn">import</span> <span class="n">TypedDict</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">State</span><span class="p">(</span><span class="n">TypedDict</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">    <span class="n">messages</span><span class="p">:</span> <span class="n">Annotated</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="n">AnyMessage</span><span class="p">],</span> <span class="n">add_messages</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">async</span> <span class="k">def</span> <span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">client</span> <span class="o">=</span> <span class="n">MultiServerMCPClient</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">        <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="s2">&#34;math&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">                <span class="s2">&#34;transport&#34;</span><span class="p">:</span> <span class="s2">&#34;stdio&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                <span class="s2">&#34;command&#34;</span><span class="p">:</span> <span class="s2">&#34;python&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                <span class="s2">&#34;args&#34;</span><span class="p">:</span> <span class="p">[</span><span class="sa">r</span><span class="s2">&#34;D:\learning\Python\agent\mcp_demo\math_server.py&#34;</span><span class="p">],</span>
+</span></span><span class="line"><span class="cl">            <span class="p">}</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">tools</span> <span class="o">=</span> <span class="k">await</span> <span class="n">client</span><span class="o">.</span><span class="n">get_tools</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="n">model</span> <span class="o">=</span> <span class="n">init_chat_model</span><span class="p">(</span><span class="s2">&#34;openai:gpt-4.1-mini&#34;</span><span class="p">,</span> <span class="n">temperature</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">bind_tools</span><span class="p">(</span><span class="n">tools</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">async</span> <span class="k">def</span> <span class="nf">agent_node</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">State</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="n">response</span> <span class="o">=</span> <span class="k">await</span> <span class="n">model</span><span class="o">.</span><span class="n">ainvoke</span><span class="p">(</span><span class="n">state</span><span class="p">[</span><span class="s2">&#34;messages&#34;</span><span class="p">])</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="p">{</span><span class="s2">&#34;messages&#34;</span><span class="p">:</span> <span class="p">[</span><span class="n">response</span><span class="p">]}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">builder</span> <span class="o">=</span> <span class="n">StateGraph</span><span class="p">(</span><span class="n">State</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="n">builder</span><span class="o">.</span><span class="n">add_node</span><span class="p">(</span><span class="s2">&#34;agent&#34;</span><span class="p">,</span> <span class="n">agent_node</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="n">builder</span><span class="o">.</span><span class="n">add_node</span><span class="p">(</span><span class="s2">&#34;tools&#34;</span><span class="p">,</span> <span class="n">ToolNode</span><span class="p">(</span><span class="n">tools</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">    <span class="n">builder</span><span class="o">.</span><span class="n">add_edge</span><span class="p">(</span><span class="n">START</span><span class="p">,</span> <span class="s2">&#34;agent&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="n">builder</span><span class="o">.</span><span class="n">add_conditional_edges</span><span class="p">(</span><span class="s2">&#34;agent&#34;</span><span class="p">,</span> <span class="n">tools_condition</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="n">builder</span><span class="o">.</span><span class="n">add_edge</span><span class="p">(</span><span class="s2">&#34;tools&#34;</span><span class="p">,</span> <span class="s2">&#34;agent&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">graph</span> <span class="o">=</span> <span class="n">builder</span><span class="o">.</span><span class="n">compile</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">graph</span><span class="o">.</span><span class="n">ainvoke</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">        <span class="p">{</span><span class="s2">&#34;messages&#34;</span><span class="p">:</span> <span class="p">[{</span><span class="s2">&#34;role&#34;</span><span class="p">:</span> <span class="s2">&#34;user&#34;</span><span class="p">,</span> <span class="s2">&#34;content&#34;</span><span class="p">:</span> <span class="s2">&#34;What is 2 + 40? Use the tool.&#34;</span><span class="p">}]}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">result</span><span class="p">[</span><span class="s2">&#34;messages&#34;</span><span class="p">][</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">pretty_print</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&#34;__main__&#34;</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">asyncio</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">main</span><span class="p">())</span>
+</span></span></code></pre></div><p>运行：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-powershell" data-lang="powershell"><span class="line"><span class="cl"><span class="n">python</span> <span class="n">run_graph</span><span class="p">.</span><span class="py">py</span>
+</span></span></code></pre></div><p>这就是完整闭环：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">用户问题 -&gt; LangGraph agent 节点 -&gt; 模型生成 tool call
+</span></span><span class="line"><span class="cl">       -&gt; ToolNode 执行 MCP tool -&gt; 工具结果回到 agent 节点
+</span></span><span class="line"><span class="cl">       -&gt; 模型生成最终回答
+</span></span></code></pre></div><hr>
+<h2 id="18-langchain-与-langgraph-调用-mcp-的区别">18. LangChain 与 LangGraph 调用 MCP 的区别</h2>
+<table>
+  <thead>
+      <tr>
+          <th>维度</th>
+          <th>LangChain Agent</th>
+          <th>LangGraph 显式图</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>上手成本</td>
+          <td>低</td>
+          <td>中等</td>
+      </tr>
+      <tr>
+          <td>代码量</td>
+          <td>少</td>
+          <td>多</td>
+      </tr>
+      <tr>
+          <td>控制能力</td>
+          <td>适合常规工具调用</td>
+          <td>适合复杂流程控制</td>
+      </tr>
+      <tr>
+          <td>状态管理</td>
+          <td>由 agent 抽象处理</td>
+          <td>你自己定义 state</td>
+      </tr>
+      <tr>
+          <td>条件分支</td>
+          <td>不明显</td>
+          <td>非常明确</td>
+      </tr>
+      <tr>
+          <td>人工审批</td>
+          <td>需要额外扩展</td>
+          <td>很适合做成节点</td>
+      </tr>
+      <tr>
+          <td>生产可维护性</td>
+          <td>简单场景足够</td>
+          <td>复杂场景更清楚</td>
+      </tr>
+  </tbody>
+</table>
+<p>选择建议：</p>
+<ol>
+<li>刚接 MCP：先用 <code>create_agent</code>。</li>
+<li>要做业务流程：用 <code>StateGraph</code>。</li>
+<li>要做人类审批、检查点、任务恢复：用 LangGraph。</li>
+<li>只想调用工具拿结果：直接 <code>tool.ainvoke(...)</code> 即可。</li>
+</ol>
+<hr>
+<h2 id="19-学习路线">19. 学习路线</h2>
+<p>建议按这个顺序练习：</p>
+<ol>
+<li>写一个只有 <code>add</code> 的 MCP Server。</li>
+<li>用 <code>client.get_tools()</code> 打印工具列表。</li>
+<li>直接 <code>tool.ainvoke(...)</code> 调用工具。</li>
+<li>用 <code>create_agent</code> 让模型自动调用工具。</li>
+<li>用 <code>StateGraph + ToolNode</code> 手写 ReAct 循环。</li>
+<li>改成 HTTP MCP Server。</li>
+<li>加入资源 Resources。</li>
+<li>加入提示词 Prompts。</li>
+<li>在 LangGraph 中加入审批节点。</li>
+<li>加 tracing 和错误处理。</li>
+</ol>
+<p>这样学不会显得快，但会稳。学习框架时，稳比快有用得多。快而不稳，最后只是把错误传播得更有效率。</p>
+<hr>
+<h2 id="20-参考资料">20. 参考资料</h2>
+<ol>
+<li>Model Context Protocol 官方规范：<a href="https://modelcontextprotocol.io/specification/2025-06-18">https://modelcontextprotocol.io/specification/2025-06-18</a>
+</li>
+<li>MCP Tools 官方规范：<a href="https://modelcontextprotocol.io/specification/2025-06-18/server/tools">https://modelcontextprotocol.io/specification/2025-06-18/server/tools</a>
+</li>
+<li>LangChain Python MCP 文档：<a href="https://docs.langchain.com/oss/python/langchain/mcp">https://docs.langchain.com/oss/python/langchain/mcp</a>
+</li>
+<li><code>langchain-mcp-adapters</code> GitHub：<a href="https://github.com/langchain-ai/langchain-mcp-adapters">https://github.com/langchain-ai/langchain-mcp-adapters</a>
+</li>
+<li>LangGraph Quickstart：<a href="https://docs.langchain.com/oss/python/langgraph/quickstart">https://docs.langchain.com/oss/python/langgraph/quickstart</a>
+</li>
+</ol>
+<hr>
+<h2 id="21-总结">21. 总结</h2>
+<p>MCP 是工具和上下文的标准连接协议；LangChain / LangGraph 是使用这些能力构建 agent 的应用框架。</p>
+<p>最关键的代码路径只有三步：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">client</span> <span class="o">=</span> <span class="n">MultiServerMCPClient</span><span class="p">({</span><span class="o">...</span><span class="p">})</span>
+</span></span><span class="line"><span class="cl"><span class="n">tools</span> <span class="o">=</span> <span class="k">await</span> <span class="n">client</span><span class="o">.</span><span class="n">get_tools</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="n">agent</span> <span class="o">=</span> <span class="n">create_agent</span><span class="p">(</span><span class="s2">&#34;openai:gpt-4.1-mini&#34;</span><span class="p">,</span> <span class="n">tools</span><span class="p">)</span>
+</span></span></code></pre></div><p>如果你使用显式 LangGraph：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">tools</span> <span class="o">=</span> <span class="k">await</span> <span class="n">client</span><span class="o">.</span><span class="n">get_tools</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="n">model_with_tools</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">bind_tools</span><span class="p">(</span><span class="n">tools</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="n">tool_node</span> <span class="o">=</span> <span class="n">ToolNode</span><span class="p">(</span><span class="n">tools</span><span class="p">)</span>
+</span></span></code></pre></div><p>记住这件事就够了：MCP 负责暴露工具，LangChain 负责把工具交给 agent，LangGraph 负责把工具调用放进可控的流程。三者各司其职，系统才不容易变成一团看似智能、实际难以追踪的雾。</p>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

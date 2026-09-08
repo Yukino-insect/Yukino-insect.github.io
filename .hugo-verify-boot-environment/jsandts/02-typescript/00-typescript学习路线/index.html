@@ -1,0 +1,1308 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TypeScript 学习路线：从类型标注到工程契约 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="TypeScript 的价值不在于“给每个变量写类型”，而在于把隐含规则显式表达出来。接口返回什么、组件需要什么参数、状态有哪几种可能、函数允许什么输入、错误应该如何处理，这些都应该变成代码里能检查的契约。
+如果说 JavaScript 负责表达运行时逻辑，那么 TypeScript 负责约束这些逻辑的边界。边界越清楚，重构时越不需要靠记忆和运气。
+一、TypeScript 解决什么问题 JavaScript 很灵活，但灵活也意味着错误可能到运行时才暴露。
+function getUserName(user) { return user.profile.name } 如果 profile 是 null，这段代码运行时才会报错。TypeScript 可以提前提醒你：
+type User = { profile?: { name: string } } function getUserName(user: User) { return user.profile?.name ?? &#39;匿名用户&#39; } 类型系统的本质是把“不确定”摆到台面上。只要你愿意正视它，代码就会少很多意外。嗯，逃避当然也可以，只是错误不会因此变得懂事。
+二、学习路线 推荐按下面顺序学习：
+基础类型和类型推断 -&gt; 对象类型、可选字段和只读字段 -&gt; 字面量类型、联合类型和类型收窄 -&gt; interface、type 和结构化类型系统 -&gt; 函数类型、回调类型和 this 类型 -&gt; 泛型和泛型约束 -&gt; keyof、typeof、索引访问类型 -&gt; 映射类型、条件类型和 infer -&gt; 内置工具类型 -&gt; 接口响应、表单、组件 Props 和状态建模 -&gt; tsconfig、模块解析和运行时边界 不要一开始就钻递归类型和复杂类型体操。那些能力有用，但不是入门阶段的主菜。能把真实业务数据建模清楚，比写出让同事沉默的类型谜题更有价值。
+三、类型和运行时的边界 TypeScript 类型只在编译期存在，运行后会被擦除。
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/jsandts/02-typescript/00-typescript%E5%AD%A6%E4%B9%A0%E8%B7%AF%E7%BA%BF/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/jsandts/02-typescript/00-typescript%E5%AD%A6%E4%B9%A0%E8%B7%AF%E7%BA%BF/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="TypeScript 学习路线：从类型标注到工程契约">
+  <meta property="og:description" content="TypeScript 的价值不在于“给每个变量写类型”，而在于把隐含规则显式表达出来。接口返回什么、组件需要什么参数、状态有哪几种可能、函数允许什么输入、错误应该如何处理，这些都应该变成代码里能检查的契约。
+如果说 JavaScript 负责表达运行时逻辑，那么 TypeScript 负责约束这些逻辑的边界。边界越清楚，重构时越不需要靠记忆和运气。
+一、TypeScript 解决什么问题 JavaScript 很灵活，但灵活也意味着错误可能到运行时才暴露。
+function getUserName(user) { return user.profile.name } 如果 profile 是 null，这段代码运行时才会报错。TypeScript 可以提前提醒你：
+type User = { profile?: { name: string } } function getUserName(user: User) { return user.profile?.name ?? &#39;匿名用户&#39; } 类型系统的本质是把“不确定”摆到台面上。只要你愿意正视它，代码就会少很多意外。嗯，逃避当然也可以，只是错误不会因此变得懂事。
+二、学习路线 推荐按下面顺序学习：
+基础类型和类型推断 -&gt; 对象类型、可选字段和只读字段 -&gt; 字面量类型、联合类型和类型收窄 -&gt; interface、type 和结构化类型系统 -&gt; 函数类型、回调类型和 this 类型 -&gt; 泛型和泛型约束 -&gt; keyof、typeof、索引访问类型 -&gt; 映射类型、条件类型和 infer -&gt; 内置工具类型 -&gt; 接口响应、表单、组件 Props 和状态建模 -&gt; tsconfig、模块解析和运行时边界 不要一开始就钻递归类型和复杂类型体操。那些能力有用，但不是入门阶段的主菜。能把真实业务数据建模清楚，比写出让同事沉默的类型谜题更有价值。
+三、类型和运行时的边界 TypeScript 类型只在编译期存在，运行后会被擦除。">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="jsandts">
+    <meta property="article:published_time" content="2026-08-19T18:26:00+08:00">
+    <meta property="article:modified_time" content="2026-08-19T18:26:00+08:00">
+
+  
+  <meta itemprop="name" content="TypeScript 学习路线：从类型标注到工程契约">
+  <meta itemprop="description" content="TypeScript 的价值不在于“给每个变量写类型”，而在于把隐含规则显式表达出来。接口返回什么、组件需要什么参数、状态有哪几种可能、函数允许什么输入、错误应该如何处理，这些都应该变成代码里能检查的契约。
+如果说 JavaScript 负责表达运行时逻辑，那么 TypeScript 负责约束这些逻辑的边界。边界越清楚，重构时越不需要靠记忆和运气。
+一、TypeScript 解决什么问题 JavaScript 很灵活，但灵活也意味着错误可能到运行时才暴露。
+function getUserName(user) { return user.profile.name } 如果 profile 是 null，这段代码运行时才会报错。TypeScript 可以提前提醒你：
+type User = { profile?: { name: string } } function getUserName(user: User) { return user.profile?.name ?? &#39;匿名用户&#39; } 类型系统的本质是把“不确定”摆到台面上。只要你愿意正视它，代码就会少很多意外。嗯，逃避当然也可以，只是错误不会因此变得懂事。
+二、学习路线 推荐按下面顺序学习：
+基础类型和类型推断 -&gt; 对象类型、可选字段和只读字段 -&gt; 字面量类型、联合类型和类型收窄 -&gt; interface、type 和结构化类型系统 -&gt; 函数类型、回调类型和 this 类型 -&gt; 泛型和泛型约束 -&gt; keyof、typeof、索引访问类型 -&gt; 映射类型、条件类型和 infer -&gt; 内置工具类型 -&gt; 接口响应、表单、组件 Props 和状态建模 -&gt; tsconfig、模块解析和运行时边界 不要一开始就钻递归类型和复杂类型体操。那些能力有用，但不是入门阶段的主菜。能把真实业务数据建模清楚，比写出让同事沉默的类型谜题更有价值。
+三、类型和运行时的边界 TypeScript 类型只在编译期存在，运行后会被擦除。">
+  <meta itemprop="datePublished" content="2026-08-19T18:26:00+08:00">
+  <meta itemprop="dateModified" content="2026-08-19T18:26:00+08:00">
+  <meta itemprop="wordCount" content="285">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="TypeScript 学习路线：从类型标注到工程契约">
+  <meta name="twitter:description" content="TypeScript 的价值不在于“给每个变量写类型”，而在于把隐含规则显式表达出来。接口返回什么、组件需要什么参数、状态有哪几种可能、函数允许什么输入、错误应该如何处理，这些都应该变成代码里能检查的契约。
+如果说 JavaScript 负责表达运行时逻辑，那么 TypeScript 负责约束这些逻辑的边界。边界越清楚，重构时越不需要靠记忆和运气。
+一、TypeScript 解决什么问题 JavaScript 很灵活，但灵活也意味着错误可能到运行时才暴露。
+function getUserName(user) { return user.profile.name } 如果 profile 是 null，这段代码运行时才会报错。TypeScript 可以提前提醒你：
+type User = { profile?: { name: string } } function getUserName(user: User) { return user.profile?.name ?? &#39;匿名用户&#39; } 类型系统的本质是把“不确定”摆到台面上。只要你愿意正视它，代码就会少很多意外。嗯，逃避当然也可以，只是错误不会因此变得懂事。
+二、学习路线 推荐按下面顺序学习：
+基础类型和类型推断 -&gt; 对象类型、可选字段和只读字段 -&gt; 字面量类型、联合类型和类型收窄 -&gt; interface、type 和结构化类型系统 -&gt; 函数类型、回调类型和 this 类型 -&gt; 泛型和泛型约束 -&gt; keyof、typeof、索引访问类型 -&gt; 映射类型、条件类型和 infer -&gt; 内置工具类型 -&gt; 接口响应、表单、组件 Props 和状态建模 -&gt; tsconfig、模块解析和运行时边界 不要一开始就钻递归类型和复杂类型体操。那些能力有用，但不是入门阶段的主菜。能把真实业务数据建模清楚，比写出让同事沉默的类型谜题更有价值。
+三、类型和运行时的边界 TypeScript 类型只在编译期存在，运行后会被擦除。">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">TypeScript 学习路线：从类型标注到工程契约</h1>
+
+    
+      <div class="post-date">August 19, 2026</div>
+    
+
+    <div class="post-content">
+      <p>TypeScript 的价值不在于“给每个变量写类型”，而在于把隐含规则显式表达出来。接口返回什么、组件需要什么参数、状态有哪几种可能、函数允许什么输入、错误应该如何处理，这些都应该变成代码里能检查的契约。</p>
+<p>如果说 JavaScript 负责表达运行时逻辑，那么 TypeScript 负责约束这些逻辑的边界。边界越清楚，重构时越不需要靠记忆和运气。</p>
+<h2 id="一typescript-解决什么问题">一、TypeScript 解决什么问题</h2>
+<p>JavaScript 很灵活，但灵活也意味着错误可能到运行时才暴露。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kd">function</span> <span class="nx">getUserName</span><span class="p">(</span><span class="nx">user</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="k">return</span> <span class="nx">user</span><span class="p">.</span><span class="nx">profile</span><span class="p">.</span><span class="nx">name</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>如果 <code>profile</code> 是 <code>null</code>，这段代码运行时才会报错。TypeScript 可以提前提醒你：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">User</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">profile</span><span class="o">?:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">name</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">function</span> <span class="nx">getUserName</span><span class="p">(</span><span class="nx">user</span>: <span class="kt">User</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="k">return</span> <span class="nx">user</span><span class="p">.</span><span class="nx">profile</span><span class="o">?</span><span class="p">.</span><span class="nx">name</span> <span class="o">??</span> <span class="s1">&#39;匿名用户&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>类型系统的本质是把“不确定”摆到台面上。只要你愿意正视它，代码就会少很多意外。嗯，逃避当然也可以，只是错误不会因此变得懂事。</p>
+<h2 id="二学习路线">二、学习路线</h2>
+<p>推荐按下面顺序学习：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">基础类型和类型推断
+</span></span><span class="line"><span class="cl"> -&gt; 对象类型、可选字段和只读字段
+</span></span><span class="line"><span class="cl"> -&gt; 字面量类型、联合类型和类型收窄
+</span></span><span class="line"><span class="cl"> -&gt; interface、type 和结构化类型系统
+</span></span><span class="line"><span class="cl"> -&gt; 函数类型、回调类型和 this 类型
+</span></span><span class="line"><span class="cl"> -&gt; 泛型和泛型约束
+</span></span><span class="line"><span class="cl"> -&gt; keyof、typeof、索引访问类型
+</span></span><span class="line"><span class="cl"> -&gt; 映射类型、条件类型和 infer
+</span></span><span class="line"><span class="cl"> -&gt; 内置工具类型
+</span></span><span class="line"><span class="cl"> -&gt; 接口响应、表单、组件 Props 和状态建模
+</span></span><span class="line"><span class="cl"> -&gt; tsconfig、模块解析和运行时边界
+</span></span></code></pre></div><p>不要一开始就钻递归类型和复杂类型体操。那些能力有用，但不是入门阶段的主菜。能把真实业务数据建模清楚，比写出让同事沉默的类型谜题更有价值。</p>
+<h2 id="三类型和运行时的边界">三、类型和运行时的边界</h2>
+<p>TypeScript 类型只在编译期存在，运行后会被擦除。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">User</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">id</span>: <span class="kt">number</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">name</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>编译成 JavaScript 后，<code>User</code> 不存在。也就是说，TypeScript 不能替你证明真实接口数据一定可靠。</p>
+<p>你仍然需要处理运行时校验：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kd">function</span> <span class="nx">isUser</span><span class="p">(</span><span class="nx">value</span>: <span class="kt">unknown</span><span class="p">)</span><span class="o">:</span> <span class="nx">value</span> <span class="k">is</span> <span class="nx">User</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="k">return</span> <span class="k">typeof</span> <span class="nx">value</span> <span class="o">===</span> <span class="s1">&#39;object&#39;</span>
+</span></span><span class="line"><span class="cl">    <span class="o">&amp;&amp;</span> <span class="nx">value</span> <span class="o">!==</span> <span class="kc">null</span>
+</span></span><span class="line"><span class="cl">    <span class="o">&amp;&amp;</span> <span class="k">typeof</span> <span class="p">(</span><span class="nx">value</span> <span class="kr">as</span> <span class="nx">User</span><span class="p">).</span><span class="nx">id</span> <span class="o">===</span> <span class="s1">&#39;number&#39;</span>
+</span></span><span class="line"><span class="cl">    <span class="o">&amp;&amp;</span> <span class="k">typeof</span> <span class="p">(</span><span class="nx">value</span> <span class="kr">as</span> <span class="nx">User</span><span class="p">).</span><span class="nx">name</span> <span class="o">===</span> <span class="s1">&#39;string&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>类型是开发期契约，运行时校验是现实世界的门卫。两者各司其职，别让其中一个假装自己能包办全部工作。</p>
+<h2 id="四前端常见建模对象">四、前端常见建模对象</h2>
+<p>前端项目中最常建模的对象包括：</p>
+<table>
+  <thead>
+      <tr>
+          <th>对象</th>
+          <th>示例</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>接口响应</td>
+          <td><code>ApiResponse&lt;T&gt;</code></td>
+      </tr>
+      <tr>
+          <td>分页数据</td>
+          <td><code>PageResult&lt;T&gt;</code></td>
+      </tr>
+      <tr>
+          <td>用户信息</td>
+          <td><code>UserProfile</code></td>
+      </tr>
+      <tr>
+          <td>表单模型</td>
+          <td><code>LoginForm</code>、<code>PostForm</code></td>
+      </tr>
+      <tr>
+          <td>提交参数</td>
+          <td><code>CreatePostRequest</code>、<code>UpdateUserRequest</code></td>
+      </tr>
+      <tr>
+          <td>页面状态</td>
+          <td><code>LoadState&lt;T&gt;</code></td>
+      </tr>
+      <tr>
+          <td>组件参数</td>
+          <td><code>ButtonProps</code>、<code>TableColumn&lt;T&gt;</code></td>
+      </tr>
+      <tr>
+          <td>枚举值</td>
+          <td><code>PostStatus</code>、<code>ThemeMode</code></td>
+      </tr>
+      <tr>
+          <td>配置映射</td>
+          <td><code>Record&lt;PostStatus, StatusConfig&gt;</code></td>
+      </tr>
+  </tbody>
+</table>
+<p>这些类型不只是为了 IDE 提示，它们也是团队协作的边界。</p>
+<h2 id="五后端学生的迁移理解">五、后端学生的迁移理解</h2>
+<p>可以这样类比：</p>
+<table>
+  <thead>
+      <tr>
+          <th>后端概念</th>
+          <th>TypeScript / 前端概念</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>DTO</td>
+          <td>接口请求和响应类型</td>
+      </tr>
+      <tr>
+          <td>VO</td>
+          <td>页面展示模型</td>
+      </tr>
+      <tr>
+          <td>Enum</td>
+          <td>字面量联合类型</td>
+      </tr>
+      <tr>
+          <td>Service 方法签名</td>
+          <td>函数参数与返回值类型</td>
+      </tr>
+      <tr>
+          <td>Controller 入参校验</td>
+          <td>表单类型与运行时校验</td>
+      </tr>
+      <tr>
+          <td>泛型响应对象</td>
+          <td><code>ApiResponse&lt;T&gt;</code></td>
+      </tr>
+      <tr>
+          <td>状态机</td>
+          <td>判别联合类型</td>
+      </tr>
+  </tbody>
+</table>
+<p>但要注意：TypeScript 不是 Java。它的类型系统更偏结构化。只要对象结构匹配，类型通常就兼容，不要求来自同一个类。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">User</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">id</span>: <span class="kt">number</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">name</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">Member</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">id</span>: <span class="kt">number</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">name</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">user</span>: <span class="kt">User</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">id</span>: <span class="kt">1</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">name</span><span class="o">:</span> <span class="s1">&#39;Yuki&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">member</span>: <span class="kt">Member</span> <span class="o">=</span> <span class="nx">user</span>
+</span></span></code></pre></div><p>这段代码成立，因为 <code>User</code> 和 <code>Member</code> 的结构兼容。理解结构化类型，是理解 TypeScript 的一条主线。</p>
+<h2 id="六精通-typescript-的标志">六、精通 TypeScript 的标志</h2>
+<p>初级使用者会写：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">list</span>: <span class="kt">any</span><span class="p">[]</span> <span class="o">=</span> <span class="p">[]</span>
+</span></span></code></pre></div><p>成熟使用者会写：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">PostCard</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">id</span>: <span class="kt">number</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">title</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">summary</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">liked</span>: <span class="kt">boolean</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">list</span> <span class="o">=</span> <span class="nx">ref</span><span class="p">&lt;</span><span class="nt">PostCard</span><span class="err">[]</span><span class="p">&gt;([])</span>
+</span></span></code></pre></div><p>更进一步，会把通用契约抽出来：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">PageResult</span><span class="p">&lt;</span><span class="nt">T</span><span class="p">&gt;</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">records</span>: <span class="kt">T</span><span class="p">[]</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">total</span>: <span class="kt">number</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">page</span>: <span class="kt">number</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">pageSize</span>: <span class="kt">number</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">PostListState</span> <span class="o">=</span> <span class="nx">LoadState</span><span class="p">&lt;</span><span class="nt">PageResult</span><span class="p">&lt;</span><span class="nt">PostCard</span><span class="p">&gt;&gt;</span>
+</span></span></code></pre></div><p>精通不是写出谁都看不懂的类型，而是用类型减少沟通成本、减少错误、提升重构信心。</p>
+<h2 id="七练习路线">七、练习路线</h2>
+<p>按顺序练习：</p>
+<ol>
+<li>给用户对象、文章对象、评论对象定义类型。</li>
+<li>区分接口响应模型、页面展示模型和表单模型。</li>
+<li>定义统一接口响应 <code>ApiResponse&lt;T&gt;</code>。</li>
+<li>定义分页响应 <code>PageResult&lt;T&gt;</code>。</li>
+<li>用判别联合定义请求状态 <code>LoadState&lt;T&gt;</code>。</li>
+<li>写一个泛型函数，从数组中按 <code>id</code> 查找元素。</li>
+<li>用 <code>Pick</code>、<code>Omit</code>、<code>Partial</code> 推导提交参数类型。</li>
+<li>用 <code>Record</code> 约束状态到文案、颜色、按钮行为的映射。</li>
+<li>写一个类型守卫，把 <code>unknown</code> 接口数据收窄成业务类型。</li>
+<li>打开 <code>strict</code>，修复项目里暴露出来的真实问题。</li>
+</ol>
+<p>当你能把真实业务数据自然地翻译成类型，TypeScript 才算真正学进去了。类型不是装饰，它应该参与设计。</p>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

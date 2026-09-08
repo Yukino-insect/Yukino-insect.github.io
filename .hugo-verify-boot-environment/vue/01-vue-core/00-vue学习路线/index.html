@@ -1,0 +1,1468 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vue 学习路线：从页面语法到前端工程能力 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="Vue 不是一组模板语法的集合，而是一套组织前端应用的方式。它把页面拆成组件，把状态变成响应式数据，把 DOM 更新交给框架，把业务逻辑放进组合函数和状态管理中。
+如果你从零开始学 Vue，推荐按“能看懂 -&gt; 能写页面 -&gt; 能拆组件 -&gt; 能管状态 -&gt; 能做工程”的顺序推进。
+一、Vue 要解决什么问题 没有框架时，前端代码通常会混在一起：
+获取 DOM -&gt; 监听事件 -&gt; 修改变量 -&gt; 手动更新 DOM -&gt; 发请求 -&gt; 再手动更新 DOM Vue 的思路是：
+声明状态 -&gt; 根据状态渲染页面 -&gt; 状态变化后自动更新视图 你不再直接命令 DOM 怎么改，而是描述“当前状态下页面应该是什么样”。这就是声明式 UI。
+二、学习阶段 1. 入门阶段 掌握：
+单文件组件。 模板插值。 属性绑定。 事件绑定。 条件渲染。 列表渲染。 ref 和 reactive。 这一阶段目标是能写一个页面。
+2. 组件阶段 掌握：
+props。 emits。 slot。 组件拆分。 组合函数。 受控与非受控状态。 这一阶段目标是能把复杂页面拆成可维护组件。
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/vue/01-vue-core/00-vue%E5%AD%A6%E4%B9%A0%E8%B7%AF%E7%BA%BF/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/vue/01-vue-core/00-vue%E5%AD%A6%E4%B9%A0%E8%B7%AF%E7%BA%BF/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="Vue 学习路线：从页面语法到前端工程能力">
+  <meta property="og:description" content="Vue 不是一组模板语法的集合，而是一套组织前端应用的方式。它把页面拆成组件，把状态变成响应式数据，把 DOM 更新交给框架，把业务逻辑放进组合函数和状态管理中。
+如果你从零开始学 Vue，推荐按“能看懂 -&gt; 能写页面 -&gt; 能拆组件 -&gt; 能管状态 -&gt; 能做工程”的顺序推进。
+一、Vue 要解决什么问题 没有框架时，前端代码通常会混在一起：
+获取 DOM -&gt; 监听事件 -&gt; 修改变量 -&gt; 手动更新 DOM -&gt; 发请求 -&gt; 再手动更新 DOM Vue 的思路是：
+声明状态 -&gt; 根据状态渲染页面 -&gt; 状态变化后自动更新视图 你不再直接命令 DOM 怎么改，而是描述“当前状态下页面应该是什么样”。这就是声明式 UI。
+二、学习阶段 1. 入门阶段 掌握：
+单文件组件。 模板插值。 属性绑定。 事件绑定。 条件渲染。 列表渲染。 ref 和 reactive。 这一阶段目标是能写一个页面。
+2. 组件阶段 掌握：
+props。 emits。 slot。 组件拆分。 组合函数。 受控与非受控状态。 这一阶段目标是能把复杂页面拆成可维护组件。">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="vue">
+    <meta property="article:published_time" content="2026-08-19T18:20:00+08:00">
+    <meta property="article:modified_time" content="2026-08-19T18:20:00+08:00">
+
+  
+  <meta itemprop="name" content="Vue 学习路线：从页面语法到前端工程能力">
+  <meta itemprop="description" content="Vue 不是一组模板语法的集合，而是一套组织前端应用的方式。它把页面拆成组件，把状态变成响应式数据，把 DOM 更新交给框架，把业务逻辑放进组合函数和状态管理中。
+如果你从零开始学 Vue，推荐按“能看懂 -&gt; 能写页面 -&gt; 能拆组件 -&gt; 能管状态 -&gt; 能做工程”的顺序推进。
+一、Vue 要解决什么问题 没有框架时，前端代码通常会混在一起：
+获取 DOM -&gt; 监听事件 -&gt; 修改变量 -&gt; 手动更新 DOM -&gt; 发请求 -&gt; 再手动更新 DOM Vue 的思路是：
+声明状态 -&gt; 根据状态渲染页面 -&gt; 状态变化后自动更新视图 你不再直接命令 DOM 怎么改，而是描述“当前状态下页面应该是什么样”。这就是声明式 UI。
+二、学习阶段 1. 入门阶段 掌握：
+单文件组件。 模板插值。 属性绑定。 事件绑定。 条件渲染。 列表渲染。 ref 和 reactive。 这一阶段目标是能写一个页面。
+2. 组件阶段 掌握：
+props。 emits。 slot。 组件拆分。 组合函数。 受控与非受控状态。 这一阶段目标是能把复杂页面拆成可维护组件。">
+  <meta itemprop="datePublished" content="2026-08-19T18:20:00+08:00">
+  <meta itemprop="dateModified" content="2026-08-19T18:20:00+08:00">
+  <meta itemprop="wordCount" content="560">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Vue 学习路线：从页面语法到前端工程能力">
+  <meta name="twitter:description" content="Vue 不是一组模板语法的集合，而是一套组织前端应用的方式。它把页面拆成组件，把状态变成响应式数据，把 DOM 更新交给框架，把业务逻辑放进组合函数和状态管理中。
+如果你从零开始学 Vue，推荐按“能看懂 -&gt; 能写页面 -&gt; 能拆组件 -&gt; 能管状态 -&gt; 能做工程”的顺序推进。
+一、Vue 要解决什么问题 没有框架时，前端代码通常会混在一起：
+获取 DOM -&gt; 监听事件 -&gt; 修改变量 -&gt; 手动更新 DOM -&gt; 发请求 -&gt; 再手动更新 DOM Vue 的思路是：
+声明状态 -&gt; 根据状态渲染页面 -&gt; 状态变化后自动更新视图 你不再直接命令 DOM 怎么改，而是描述“当前状态下页面应该是什么样”。这就是声明式 UI。
+二、学习阶段 1. 入门阶段 掌握：
+单文件组件。 模板插值。 属性绑定。 事件绑定。 条件渲染。 列表渲染。 ref 和 reactive。 这一阶段目标是能写一个页面。
+2. 组件阶段 掌握：
+props。 emits。 slot。 组件拆分。 组合函数。 受控与非受控状态。 这一阶段目标是能把复杂页面拆成可维护组件。">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">Vue 学习路线：从页面语法到前端工程能力</h1>
+
+    
+      <div class="post-date">August 19, 2026</div>
+    
+
+    <div class="post-content">
+      <p>Vue 不是一组模板语法的集合，而是一套组织前端应用的方式。它把页面拆成组件，把状态变成响应式数据，把 DOM 更新交给框架，把业务逻辑放进组合函数和状态管理中。</p>
+<p>如果你从零开始学 Vue，推荐按“能看懂 -&gt; 能写页面 -&gt; 能拆组件 -&gt; 能管状态 -&gt; 能做工程”的顺序推进。</p>
+<h2 id="一vue-要解决什么问题">一、Vue 要解决什么问题</h2>
+<p>没有框架时，前端代码通常会混在一起：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">获取 DOM
+</span></span><span class="line"><span class="cl"> -&gt; 监听事件
+</span></span><span class="line"><span class="cl"> -&gt; 修改变量
+</span></span><span class="line"><span class="cl"> -&gt; 手动更新 DOM
+</span></span><span class="line"><span class="cl"> -&gt; 发请求
+</span></span><span class="line"><span class="cl"> -&gt; 再手动更新 DOM
+</span></span></code></pre></div><p>Vue 的思路是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">声明状态
+</span></span><span class="line"><span class="cl"> -&gt; 根据状态渲染页面
+</span></span><span class="line"><span class="cl"> -&gt; 状态变化后自动更新视图
+</span></span></code></pre></div><p>你不再直接命令 DOM 怎么改，而是描述“当前状态下页面应该是什么样”。这就是声明式 UI。</p>
+<h2 id="二学习阶段">二、学习阶段</h2>
+<h3 id="1-入门阶段">1. 入门阶段</h3>
+<p>掌握：</p>
+<ul>
+<li>单文件组件。</li>
+<li>模板插值。</li>
+<li>属性绑定。</li>
+<li>事件绑定。</li>
+<li>条件渲染。</li>
+<li>列表渲染。</li>
+<li><code>ref</code> 和 <code>reactive</code>。</li>
+</ul>
+<p>这一阶段目标是能写一个页面。</p>
+<h3 id="2-组件阶段">2. 组件阶段</h3>
+<p>掌握：</p>
+<ul>
+<li>props。</li>
+<li>emits。</li>
+<li>slot。</li>
+<li>组件拆分。</li>
+<li>组合函数。</li>
+<li>受控与非受控状态。</li>
+</ul>
+<p>这一阶段目标是能把复杂页面拆成可维护组件。</p>
+<h3 id="3-数据流阶段">3. 数据流阶段</h3>
+<p>掌握：</p>
+<ul>
+<li>接口请求封装。</li>
+<li>loading、error、empty 状态。</li>
+<li>Pinia。</li>
+<li>本地存储。</li>
+<li>token 和权限。</li>
+<li>乐观更新。</li>
+</ul>
+<p>这一阶段目标是能处理真实业务数据。</p>
+<h3 id="4-工程阶段">4. 工程阶段</h3>
+<p>掌握：</p>
+<ul>
+<li>路由和页面结构。</li>
+<li>uni-app 页面配置。</li>
+<li>目录分层。</li>
+<li>性能优化。</li>
+<li>类型检查。</li>
+<li>测试。</li>
+<li>构建和部署。</li>
+</ul>
+<p>这一阶段目标是能维护中大型项目。</p>
+<h2 id="三vue-3-的核心思想">三、Vue 3 的核心思想</h2>
+<p>Vue 3 的核心可以概括为四句话：</p>
+<ul>
+<li>组件是页面的基本组织单位。</li>
+<li>响应式状态驱动视图更新。</li>
+<li>组合式 API 负责复用逻辑。</li>
+<li>工程化工具负责类型、构建和质量。</li>
+</ul>
+<p>写 Vue 时，你真正要反复判断的是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">这段代码属于页面、组件、状态、接口、工具函数，还是构建配置？
+</span></span></code></pre></div><p>判断清楚位置，代码自然会变清楚。</p>
+<h2 id="四推荐练习路径">四、推荐练习路径</h2>
+<p>从一个小应用开始：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">文章列表
+</span></span><span class="line"><span class="cl"> -&gt; 文章详情
+</span></span><span class="line"><span class="cl"> -&gt; 发布文章
+</span></span><span class="line"><span class="cl"> -&gt; 登录状态
+</span></span><span class="line"><span class="cl"> -&gt; 个人资料
+</span></span></code></pre></div><p>每一步都对应 Vue 的一个能力点：</p>
+<table>
+  <thead>
+      <tr>
+          <th>功能</th>
+          <th>训练点</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>文章列表</td>
+          <td>列表渲染、接口请求、加载状态</td>
+      </tr>
+      <tr>
+          <td>文章详情</td>
+          <td>路由参数、详情请求、空状态</td>
+      </tr>
+      <tr>
+          <td>发布文章</td>
+          <td>表单、校验、提交、错误提示</td>
+      </tr>
+      <tr>
+          <td>登录状态</td>
+          <td>Pinia、本地存储、token</td>
+      </tr>
+      <tr>
+          <td>个人资料</td>
+          <td>组件拆分、图片展示、权限</td>
+      </tr>
+  </tbody>
+</table>
+<h2 id="五从后端视角理解-vue">五、从后端视角理解 Vue</h2>
+<p>可以做一个不完全类比：</p>
+<table>
+  <thead>
+      <tr>
+          <th>后端概念</th>
+          <th>Vue 概念</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Controller</td>
+          <td>页面组件</td>
+      </tr>
+      <tr>
+          <td>Service</td>
+          <td>组合函数或业务模块</td>
+      </tr>
+      <tr>
+          <td>DTO</td>
+          <td>TypeScript 类型</td>
+      </tr>
+      <tr>
+          <td>Mapper / Repository</td>
+          <td>API 请求模块</td>
+      </tr>
+      <tr>
+          <td>全局上下文</td>
+          <td>Pinia store</td>
+      </tr>
+      <tr>
+          <td>配置文件</td>
+          <td>Vite、pages.json、环境变量</td>
+      </tr>
+  </tbody>
+</table>
+<p>类比只是辅助，不要照搬。前端还有用户交互、浏览器状态、组件生命周期和渲染性能，这些是后端开发中不太常见的问题。</p>
+<h2 id="六学习路线练习讲解搭建第一个可运行-vue-项目">六、学习路线练习讲解：搭建第一个可运行 Vue 项目</h2>
+<p>这一节的练习不是写某个花哨页面，而是搭好一个以后所有练习都能复用的 Vue 3 + TypeScript 项目。基础工程不稳，后面写得再热闹也只是临时搭台。项目不会因为你一时兴起就保持整洁，真是毫不浪漫。</p>
+<h3 id="1-实现目标">1. 实现目标</h3>
+<p>做一个文章列表小页面，覆盖最基础的 Vue 能力：</p>
+<ul>
+<li>使用 Vite 创建 Vue 3 项目。</li>
+<li>使用 <code>ref</code> 管理文章列表和搜索关键字。</li>
+<li>使用 <code>computed</code> 计算搜索结果。</li>
+<li>使用 <code>v-model</code>、<code>v-for</code>、<code>:key</code>、<code>@click</code> 完成页面交互。</li>
+<li>点赞后更新当前文章的点赞数。</li>
+</ul>
+<h3 id="2-创建项目并运行">2. 创建项目并运行</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">npm create vite@latest vue-course-demo -- --template vue-ts
+</span></span><span class="line"><span class="cl"><span class="nb">cd</span> vue-course-demo
+</span></span><span class="line"><span class="cl">npm install
+</span></span><span class="line"><span class="cl">npm run dev
+</span></span></code></pre></div><p>浏览器访问终端提示的地址，通常是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">http://localhost:5173
+</span></span></code></pre></div><h3 id="3-替换-srcappvue">3. 替换 <code>src/App.vue</code></h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">script</span> <span class="na">setup</span> <span class="na">lang</span><span class="o">=</span><span class="s">&#34;ts&#34;</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">computed</span><span class="p">,</span> <span class="nx">ref</span> <span class="p">}</span> <span class="nx">from</span> <span class="s1">&#39;vue&#39;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">type</span> <span class="nx">Post</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">id</span><span class="o">:</span> <span class="nx">number</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">title</span><span class="o">:</span> <span class="nx">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">summary</span><span class="o">:</span> <span class="nx">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">author</span><span class="o">:</span> <span class="nx">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">likes</span><span class="o">:</span> <span class="nx">number</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">liked</span><span class="o">:</span> <span class="kr">boolean</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">keyword</span> <span class="o">=</span> <span class="nx">ref</span><span class="p">(</span><span class="s1">&#39;&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">posts</span> <span class="o">=</span> <span class="nx">ref</span><span class="p">&lt;</span><span class="nt">Post</span><span class="err">[]</span><span class="p">&gt;([</span>
+</span></span><span class="line"><span class="cl">  <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">id</span><span class="o">:</span> <span class="mi">1</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">title</span><span class="o">:</span> <span class="s1">&#39;Vue 响应式到底解决了什么&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">summary</span><span class="o">:</span> <span class="s1">&#39;用状态描述页面，让视图跟随数据变化。&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">author</span><span class="o">:</span> <span class="s1">&#39;Yuki&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">likes</span><span class="o">:</span> <span class="mi">12</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">liked</span><span class="o">:</span> <span class="kc">false</span>
+</span></span><span class="line"><span class="cl">  <span class="p">},</span>
+</span></span><span class="line"><span class="cl">  <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">id</span><span class="o">:</span> <span class="mi">2</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">title</span><span class="o">:</span> <span class="s1">&#39;组合式 API 如何组织业务逻辑&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">summary</span><span class="o">:</span> <span class="s1">&#39;把可复用的状态和行为提取成组合函数。&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">author</span><span class="o">:</span> <span class="s1">&#39;Haruno&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">likes</span><span class="o">:</span> <span class="mi">8</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">liked</span><span class="o">:</span> <span class="kc">false</span>
+</span></span><span class="line"><span class="cl">  <span class="p">},</span>
+</span></span><span class="line"><span class="cl">  <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">id</span><span class="o">:</span> <span class="mi">3</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">title</span><span class="o">:</span> <span class="s1">&#39;Pinia 适合存放哪些状态&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">summary</span><span class="o">:</span> <span class="s1">&#39;全局状态应该有边界，不是所有数据都该塞进去。&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">author</span><span class="o">:</span> <span class="s1">&#39;Hikigaya&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">likes</span><span class="o">:</span> <span class="mi">21</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">liked</span><span class="o">:</span> <span class="kc">true</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">])</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">filteredPosts</span> <span class="o">=</span> <span class="nx">computed</span><span class="p">(()</span> <span class="p">=&gt;</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">const</span> <span class="nx">text</span> <span class="o">=</span> <span class="nx">keyword</span><span class="p">.</span><span class="nx">value</span><span class="p">.</span><span class="nx">trim</span><span class="p">().</span><span class="nx">toLowerCase</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nx">text</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nx">posts</span><span class="p">.</span><span class="nx">value</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="k">return</span> <span class="nx">posts</span><span class="p">.</span><span class="nx">value</span><span class="p">.</span><span class="nx">filter</span><span class="p">((</span><span class="nx">post</span><span class="p">)</span> <span class="p">=&gt;</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nx">post</span><span class="p">.</span><span class="nx">title</span><span class="p">.</span><span class="nx">toLowerCase</span><span class="p">().</span><span class="nx">includes</span><span class="p">(</span><span class="nx">text</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">      <span class="o">||</span> <span class="nx">post</span><span class="p">.</span><span class="nx">summary</span><span class="p">.</span><span class="nx">toLowerCase</span><span class="p">().</span><span class="nx">includes</span><span class="p">(</span><span class="nx">text</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">      <span class="o">||</span> <span class="nx">post</span><span class="p">.</span><span class="nx">author</span><span class="p">.</span><span class="nx">toLowerCase</span><span class="p">().</span><span class="nx">includes</span><span class="p">(</span><span class="nx">text</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="p">})</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">function</span> <span class="nx">toggleLike</span><span class="p">(</span><span class="nx">post</span><span class="o">:</span> <span class="nx">Post</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">post</span><span class="p">.</span><span class="nx">liked</span> <span class="o">=</span> <span class="o">!</span><span class="nx">post</span><span class="p">.</span><span class="nx">liked</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">post</span><span class="p">.</span><span class="nx">likes</span> <span class="o">+=</span> <span class="nx">post</span><span class="p">.</span><span class="nx">liked</span> <span class="o">?</span> <span class="mi">1</span> <span class="o">:</span> <span class="o">-</span><span class="mi">1</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">&lt;/</span><span class="nt">script</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">template</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">&lt;</span><span class="nt">main</span> <span class="na">class</span><span class="o">=</span><span class="s">&#34;page&#34;</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">&lt;</span><span class="nt">header</span> <span class="na">class</span><span class="o">=</span><span class="s">&#34;header&#34;</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">      <span class="p">&lt;</span><span class="nt">h1</span><span class="p">&gt;</span><span class="nx">Vue</span> <span class="nx">文章练习</span><span class="p">&lt;/</span><span class="nt">h1</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">      <span class="p">&lt;</span><span class="nt">input</span> <span class="nt">v-model</span><span class="o">=</span><span class="s">&#34;keyword&#34; placeholder=&#34;搜索标题、摘要或作者&#34;</span><span class="p"> /&gt;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">&lt;/</span><span class="nt">header</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="p">&lt;</span><span class="nt">p</span> <span class="nt">v-if</span><span class="o">=</span><span class="s">&#34;filteredPosts.length === 0&#34; class=&#34;empty&#34;</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">      <span class="na">没有搜索结果</span><span class="err">。</span><span class="na">不是页面坏了</span><span class="err">，</span><span class="na">只是条件太苛刻</span><span class="err">。</span>
+</span></span><span class="line"><span class="cl">    <span class="p">&lt;/</span><span class="nt">p</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="p">&lt;</span><span class="nt">section</span> <span class="nt">v-else</span><span class="p"> </span><span class="na">class</span><span class="o">=</span><span class="s">&#34;list&#34;</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">      <span class="p">&lt;</span><span class="nt">article</span> <span class="nt">v-for</span><span class="o">=</span><span class="s">&#34;post in filteredPosts&#34; :key=&#34;post.id&#34; class=&#34;card&#34;</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">        <span class="p">&lt;</span><span class="nt">div</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">          <span class="p">&lt;</span><span class="nt">h2</span><span class="p">&gt;{{</span> <span class="nx">post</span><span class="p">.</span><span class="nx">title</span> <span class="p">}}&lt;/</span><span class="nt">h2</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">          <span class="p">&lt;</span><span class="nt">p</span><span class="p">&gt;{{</span> <span class="nx">post</span><span class="p">.</span><span class="nx">summary</span> <span class="p">}}&lt;/</span><span class="nt">p</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">          <span class="p">&lt;</span><span class="nt">span</span><span class="p">&gt;</span><span class="nx">作者</span><span class="err">：</span><span class="p">{{</span> <span class="nx">post</span><span class="p">.</span><span class="nx">author</span> <span class="p">}}&lt;/</span><span class="nt">span</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">        <span class="p">&lt;/</span><span class="nt">div</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">        <span class="p">&lt;</span><span class="nt">button</span> <span class="o">:</span><span class="na">class</span><span class="o">=</span><span class="s">&#34;{ liked: post.liked }&#34;</span> <span class="nt">@click</span><span class="s">=&#34;toggleLike(post)&#34;</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">          <span class="p">{{</span> <span class="na">post.liked</span> <span class="err">?</span> <span class="err">&#39;</span><span class="na">已赞</span><span class="err">&#39;</span> <span class="o">:</span> <span class="err">&#39;</span><span class="na">点赞</span><span class="err">&#39;</span> <span class="p">}}</span> <span class="err">·</span> <span class="p">{{</span> <span class="na">post.likes</span> <span class="p">}}</span>
+</span></span><span class="line"><span class="cl">        <span class="p">&lt;/</span><span class="nt">button</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">      <span class="p">&lt;/</span><span class="nt">article</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">&lt;/</span><span class="nt">section</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">&lt;/</span><span class="nt">main</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="p">&lt;/</span><span class="nt">template</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">style</span> <span class="na">scoped</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="p">.</span><span class="nx">page</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">max</span><span class="o">-</span><span class="nx">width</span><span class="o">:</span> <span class="mi">880</span><span class="nx">px</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">margin</span><span class="o">:</span> <span class="mi">0</span> <span class="nx">auto</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">padding</span><span class="o">:</span> <span class="mi">32</span><span class="nx">px</span> <span class="mi">20</span><span class="nx">px</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">color</span><span class="o">:</span> <span class="err">#</span><span class="mi">1</span><span class="nx">f2937</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="p">.</span><span class="nx">header</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">display</span><span class="o">:</span> <span class="nx">grid</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">gap</span><span class="o">:</span> <span class="mi">16</span><span class="nx">px</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">margin</span><span class="o">-</span><span class="nx">bottom</span><span class="o">:</span> <span class="mi">24</span><span class="nx">px</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">h1</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">margin</span><span class="o">:</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">font</span><span class="o">-</span><span class="nx">size</span><span class="o">:</span> <span class="mi">28</span><span class="nx">px</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">input</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">width</span><span class="o">:</span> <span class="mi">100</span><span class="o">%</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">box</span><span class="o">-</span><span class="nx">sizing</span><span class="o">:</span> <span class="nx">border</span><span class="o">-</span><span class="nx">box</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">padding</span><span class="o">:</span> <span class="mi">12</span><span class="nx">px</span> <span class="mi">14</span><span class="nx">px</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">border</span><span class="o">:</span> <span class="mi">1</span><span class="nx">px</span> <span class="nx">solid</span> <span class="err">#</span><span class="nx">cbd5e1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">border</span><span class="o">-</span><span class="nx">radius</span><span class="o">:</span> <span class="mi">8</span><span class="nx">px</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">font</span><span class="o">-</span><span class="nx">size</span><span class="o">:</span> <span class="mi">16</span><span class="nx">px</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="p">.</span><span class="nx">list</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">display</span><span class="o">:</span> <span class="nx">grid</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">gap</span><span class="o">:</span> <span class="mi">14</span><span class="nx">px</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="p">.</span><span class="nx">card</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">display</span><span class="o">:</span> <span class="nx">flex</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">align</span><span class="o">-</span><span class="nx">items</span><span class="o">:</span> <span class="nx">center</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">justify</span><span class="o">-</span><span class="nx">content</span><span class="o">:</span> <span class="nx">space</span><span class="o">-</span><span class="nx">between</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">gap</span><span class="o">:</span> <span class="mi">16</span><span class="nx">px</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">padding</span><span class="o">:</span> <span class="mi">18</span><span class="nx">px</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">border</span><span class="o">:</span> <span class="mi">1</span><span class="nx">px</span> <span class="nx">solid</span> <span class="err">#</span><span class="nx">e5e7eb</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">border</span><span class="o">-</span><span class="nx">radius</span><span class="o">:</span> <span class="mi">8</span><span class="nx">px</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">background</span><span class="o">:</span> <span class="err">#</span><span class="nx">fff</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">h2</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">margin</span><span class="o">:</span> <span class="mi">0</span> <span class="mi">0</span> <span class="mi">8</span><span class="nx">px</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">font</span><span class="o">-</span><span class="nx">size</span><span class="o">:</span> <span class="mi">18</span><span class="nx">px</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">p</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">margin</span><span class="o">:</span> <span class="mi">0</span> <span class="mi">0</span> <span class="mi">8</span><span class="nx">px</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">color</span><span class="o">:</span> <span class="err">#</span><span class="mi">475569</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">span</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">color</span><span class="o">:</span> <span class="err">#</span><span class="mi">64748</span><span class="nx">b</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">font</span><span class="o">-</span><span class="nx">size</span><span class="o">:</span> <span class="mi">14</span><span class="nx">px</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">button</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">flex</span><span class="o">:</span> <span class="mi">0</span> <span class="mi">0</span> <span class="nx">auto</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">padding</span><span class="o">:</span> <span class="mi">8</span><span class="nx">px</span> <span class="mi">12</span><span class="nx">px</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">border</span><span class="o">:</span> <span class="mi">1</span><span class="nx">px</span> <span class="nx">solid</span> <span class="err">#</span><span class="mi">94</span><span class="nx">a3b8</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">border</span><span class="o">-</span><span class="nx">radius</span><span class="o">:</span> <span class="mi">8</span><span class="nx">px</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">background</span><span class="o">:</span> <span class="err">#</span><span class="nx">fff</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">cursor</span><span class="o">:</span> <span class="nx">pointer</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">button</span><span class="p">.</span><span class="nx">liked</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">border</span><span class="o">-</span><span class="nx">color</span><span class="o">:</span> <span class="err">#</span><span class="mi">2563</span><span class="nx">eb</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">background</span><span class="o">:</span> <span class="err">#</span><span class="mi">2563</span><span class="nx">eb</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">color</span><span class="o">:</span> <span class="err">#</span><span class="nx">fff</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="p">.</span><span class="nx">empty</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">padding</span><span class="o">:</span> <span class="mi">24</span><span class="nx">px</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">border</span><span class="o">:</span> <span class="mi">1</span><span class="nx">px</span> <span class="nx">dashed</span> <span class="err">#</span><span class="nx">cbd5e1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">border</span><span class="o">-</span><span class="nx">radius</span><span class="o">:</span> <span class="mi">8</span><span class="nx">px</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">color</span><span class="o">:</span> <span class="err">#</span><span class="mi">64748</span><span class="nx">b</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">&lt;/</span><span class="nt">style</span><span class="p">&gt;</span>
+</span></span></code></pre></div><h3 id="4-检查结果">4. 检查结果</h3>
+<p>运行后应该能看到三篇文章。输入关键字时列表会过滤，点击点赞按钮会切换状态并修改点赞数。这里已经包含后续 Vue 页面最常见的骨架：源数据、派生数据、用户输入、列表渲染和事件处理。</p>
+<h2 id="七精通-vue-的标志">七、精通 Vue 的标志</h2>
+<p>不是会背所有 API，而是能做到：</p>
+<ul>
+<li>能判断状态应该放组件内、父组件、Pinia，还是 URL。</li>
+<li>能拆出职责清晰的组件。</li>
+<li>能封装请求并统一处理错误。</li>
+<li>能解释响应式数据为什么更新或不更新。</li>
+<li>能处理表单、列表、权限、加载、空态和失败态。</li>
+<li>能定位构建、类型和跨端问题。</li>
+<li>能让代码在需求变化时仍然可维护。</li>
+</ul>
+<p>Vue 不难入门，但想写得稳，需要你保持一点结构感。随便能跑的代码很多，能长期维护的代码并不多。</p>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

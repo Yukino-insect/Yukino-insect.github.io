@@ -1,0 +1,1316 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TCP报文 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="TCP 报文，也叫 TCP Segment，是传输层用于可靠传输数据的基本单位。
+面试中如果被问“TCP 报文头有哪些字段”，不要只背字段名。更好的回答方式是：先说 TCP 头部的核心字段，再解释这些字段分别服务于连接管理、可靠传输、流量控制和差错校验。
+一、TCP 报文结构 一个 TCP 报文大致由两部分组成：
+TCP 头部 TCP 数据 TCP 数据部分承载应用层协议内容，例如 HTTP 请求、HTTP 响应、MySQL 协议数据等。
+TCP 头部最小 20 字节，最大 60 字节。之所以长度可变，是因为存在 Options 选项字段。
+二、TCP 头部字段 1. 源端口和目的端口 Source Port 16 位 Destination Port 16 位 端口用于标识主机上的进程或服务。
+例如：
+客户端 51523 -&gt; 服务端 443 IP 地址负责找到主机，端口负责找到主机上的应用。
+2. 序列号 Sequence Number 32 位 序列号表示当前 TCP 报文段中第一个数据字节的编号。
+TCP 是字节流协议，它不是按“消息”编号，而是按字节编号。序列号用于：
+保证数据按顺序重组。 发现丢包。 支持重传。 在 SYN 报文中，序列号表示初始序列号 ISN。
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/internet/tcp%E6%8A%A5%E6%96%87/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/internet/tcp%E6%8A%A5%E6%96%87/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="TCP报文">
+  <meta property="og:description" content="TCP 报文，也叫 TCP Segment，是传输层用于可靠传输数据的基本单位。
+面试中如果被问“TCP 报文头有哪些字段”，不要只背字段名。更好的回答方式是：先说 TCP 头部的核心字段，再解释这些字段分别服务于连接管理、可靠传输、流量控制和差错校验。
+一、TCP 报文结构 一个 TCP 报文大致由两部分组成：
+TCP 头部 TCP 数据 TCP 数据部分承载应用层协议内容，例如 HTTP 请求、HTTP 响应、MySQL 协议数据等。
+TCP 头部最小 20 字节，最大 60 字节。之所以长度可变，是因为存在 Options 选项字段。
+二、TCP 头部字段 1. 源端口和目的端口 Source Port 16 位 Destination Port 16 位 端口用于标识主机上的进程或服务。
+例如：
+客户端 51523 -&gt; 服务端 443 IP 地址负责找到主机，端口负责找到主机上的应用。
+2. 序列号 Sequence Number 32 位 序列号表示当前 TCP 报文段中第一个数据字节的编号。
+TCP 是字节流协议，它不是按“消息”编号，而是按字节编号。序列号用于：
+保证数据按顺序重组。 发现丢包。 支持重传。 在 SYN 报文中，序列号表示初始序列号 ISN。">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="internet">
+    <meta property="article:published_time" content="2026-03-23T19:42:01+08:00">
+    <meta property="article:modified_time" content="2026-03-23T19:42:01+08:00">
+
+  
+  <meta itemprop="name" content="TCP报文">
+  <meta itemprop="description" content="TCP 报文，也叫 TCP Segment，是传输层用于可靠传输数据的基本单位。
+面试中如果被问“TCP 报文头有哪些字段”，不要只背字段名。更好的回答方式是：先说 TCP 头部的核心字段，再解释这些字段分别服务于连接管理、可靠传输、流量控制和差错校验。
+一、TCP 报文结构 一个 TCP 报文大致由两部分组成：
+TCP 头部 TCP 数据 TCP 数据部分承载应用层协议内容，例如 HTTP 请求、HTTP 响应、MySQL 协议数据等。
+TCP 头部最小 20 字节，最大 60 字节。之所以长度可变，是因为存在 Options 选项字段。
+二、TCP 头部字段 1. 源端口和目的端口 Source Port 16 位 Destination Port 16 位 端口用于标识主机上的进程或服务。
+例如：
+客户端 51523 -&gt; 服务端 443 IP 地址负责找到主机，端口负责找到主机上的应用。
+2. 序列号 Sequence Number 32 位 序列号表示当前 TCP 报文段中第一个数据字节的编号。
+TCP 是字节流协议，它不是按“消息”编号，而是按字节编号。序列号用于：
+保证数据按顺序重组。 发现丢包。 支持重传。 在 SYN 报文中，序列号表示初始序列号 ISN。">
+  <meta itemprop="datePublished" content="2026-03-23T19:42:01+08:00">
+  <meta itemprop="dateModified" content="2026-03-23T19:42:01+08:00">
+  <meta itemprop="wordCount" content="365">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="TCP报文">
+  <meta name="twitter:description" content="TCP 报文，也叫 TCP Segment，是传输层用于可靠传输数据的基本单位。
+面试中如果被问“TCP 报文头有哪些字段”，不要只背字段名。更好的回答方式是：先说 TCP 头部的核心字段，再解释这些字段分别服务于连接管理、可靠传输、流量控制和差错校验。
+一、TCP 报文结构 一个 TCP 报文大致由两部分组成：
+TCP 头部 TCP 数据 TCP 数据部分承载应用层协议内容，例如 HTTP 请求、HTTP 响应、MySQL 协议数据等。
+TCP 头部最小 20 字节，最大 60 字节。之所以长度可变，是因为存在 Options 选项字段。
+二、TCP 头部字段 1. 源端口和目的端口 Source Port 16 位 Destination Port 16 位 端口用于标识主机上的进程或服务。
+例如：
+客户端 51523 -&gt; 服务端 443 IP 地址负责找到主机，端口负责找到主机上的应用。
+2. 序列号 Sequence Number 32 位 序列号表示当前 TCP 报文段中第一个数据字节的编号。
+TCP 是字节流协议，它不是按“消息”编号，而是按字节编号。序列号用于：
+保证数据按顺序重组。 发现丢包。 支持重传。 在 SYN 报文中，序列号表示初始序列号 ISN。">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">TCP报文</h1>
+
+    
+      <div class="post-date">March 23, 2026</div>
+    
+
+    <div class="post-content">
+      <p>TCP 报文，也叫 TCP Segment，是传输层用于可靠传输数据的基本单位。</p>
+<p>面试中如果被问“TCP 报文头有哪些字段”，不要只背字段名。更好的回答方式是：先说 TCP 头部的核心字段，再解释这些字段分别服务于连接管理、可靠传输、流量控制和差错校验。</p>
+<h2 id="一tcp-报文结构">一、TCP 报文结构</h2>
+<p>一个 TCP 报文大致由两部分组成：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">TCP 头部
+</span></span><span class="line"><span class="cl">TCP 数据
+</span></span></code></pre></div><p>TCP 数据部分承载应用层协议内容，例如 HTTP 请求、HTTP 响应、MySQL 协议数据等。</p>
+<p>TCP 头部最小 20 字节，最大 60 字节。之所以长度可变，是因为存在 Options 选项字段。</p>
+<h2 id="二tcp-头部字段">二、TCP 头部字段</h2>
+<h3 id="1-源端口和目的端口">1. 源端口和目的端口</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Source Port      16 位
+</span></span><span class="line"><span class="cl">Destination Port 16 位
+</span></span></code></pre></div><p>端口用于标识主机上的进程或服务。</p>
+<p>例如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">客户端 51523 -&gt; 服务端 443
+</span></span></code></pre></div><p>IP 地址负责找到主机，端口负责找到主机上的应用。</p>
+<h3 id="2-序列号">2. 序列号</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Sequence Number 32 位
+</span></span></code></pre></div><p>序列号表示当前 TCP 报文段中第一个数据字节的编号。</p>
+<p>TCP 是字节流协议，它不是按“消息”编号，而是按字节编号。序列号用于：</p>
+<ol>
+<li>保证数据按顺序重组。</li>
+<li>发现丢包。</li>
+<li>支持重传。</li>
+</ol>
+<p>在 SYN 报文中，序列号表示初始序列号 ISN。</p>
+<h3 id="3-确认号">3. 确认号</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Acknowledgment Number 32 位
+</span></span></code></pre></div><p>确认号表示接收方期望收到的下一个字节序号。</p>
+<p>例如确认号是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">ACK = 1001
+</span></span></code></pre></div><p>含义是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">1000 及之前的字节我都收到了，下次请从 1001 开始发。
+</span></span></code></pre></div><p>确认号只有在 <code>ACK</code> 标志位为 1 时有效。</p>
+<h3 id="4-数据偏移">4. 数据偏移</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Data Offset 4 位
+</span></span></code></pre></div><p>表示 TCP 头部长度。</p>
+<p>因为 TCP 头部可能携带 Options，所以接收方需要知道头部从哪里结束、数据从哪里开始。</p>
+<h3 id="5-保留位">5. 保留位</h3>
+<p>保留给未来扩展，正常情况下应为 0。</p>
+<h3 id="6-标志位">6. 标志位</h3>
+<p>常见标志位包括：</p>
+<table>
+  <thead>
+      <tr>
+          <th>标志位</th>
+          <th>作用</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>SYN</code></td>
+          <td>建立连接，同步初始序列号</td>
+      </tr>
+      <tr>
+          <td><code>ACK</code></td>
+          <td>确认号有效</td>
+      </tr>
+      <tr>
+          <td><code>FIN</code></td>
+          <td>正常关闭连接的一个方向</td>
+      </tr>
+      <tr>
+          <td><code>RST</code></td>
+          <td>重置连接</td>
+      </tr>
+      <tr>
+          <td><code>PSH</code></td>
+          <td>尽快把数据交给应用层</td>
+      </tr>
+      <tr>
+          <td><code>URG</code></td>
+          <td>紧急指针有效</td>
+      </tr>
+      <tr>
+          <td><code>ECE</code></td>
+          <td>显式拥塞通知相关</td>
+      </tr>
+      <tr>
+          <td><code>CWR</code></td>
+          <td>拥塞窗口减少相关</td>
+      </tr>
+      <tr>
+          <td><code>NS</code></td>
+          <td>ECN 扩展相关</td>
+      </tr>
+  </tbody>
+</table>
+<p>面试中最重要的是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">SYN、ACK、FIN、RST
+</span></span></code></pre></div><p>它们分别对应连接建立、确认、关闭和异常重置。</p>
+<h3 id="7-窗口大小">7. 窗口大小</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Window Size 16 位
+</span></span></code></pre></div><p>窗口大小表示接收方当前还能接收多少数据，用于 TCP 流量控制。</p>
+<p>如果接收方处理不过来，可以通告更小的窗口，甚至通告 0 窗口，让发送方暂停发送。</p>
+<p>实际窗口大小还可能结合 Window Scale 选项扩大。</p>
+<h3 id="8-校验和">8. 校验和</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Checksum 16 位
+</span></span></code></pre></div><p>用于检测 TCP 报文在传输过程中是否出现错误。</p>
+<p>TCP 校验和会覆盖 TCP 头部、数据以及伪首部。伪首部来自 IP 层信息，用来增强校验能力。</p>
+<h3 id="9-紧急指针">9. 紧急指针</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Urgent Pointer 16 位
+</span></span></code></pre></div><p>只有 <code>URG</code> 标志位为 1 时才有效。</p>
+<p>现代应用中很少使用这个字段。</p>
+<h3 id="10-选项和填充">10. 选项和填充</h3>
+<p>Options 是可变长度字段，常见选项包括：</p>
+<ol>
+<li>MSS：最大报文段长度。</li>
+<li>Window Scale：窗口扩大因子。</li>
+<li>SACK Permitted：允许选择性确认。</li>
+<li>Timestamp：时间戳，用于 RTT 估算和防止旧报文干扰。</li>
+</ol>
+<p>Padding 用来把 TCP 头部补齐到 32 位对齐。</p>
+<h3 id="11-数据">11. 数据</h3>
+<p>数据部分承载应用层内容。</p>
+<p>例如 HTTP 请求：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="nf">GET</span> <span class="nn">/index.html</span> <span class="kr">HTTP</span><span class="o">/</span><span class="m">1.1</span>
+</span></span><span class="line"><span class="cl"><span class="n">Host</span><span class="o">:</span> <span class="l">example.com</span>
+</span></span></code></pre></div><p>会作为 TCP 数据部分传输。</p>
+<h2 id="三tcp-报文类型">三、TCP 报文类型</h2>
+<p>严格来说，TCP 头部格式是统一的。所谓“报文类型”，主要是根据标志位组合和连接状态来区分。</p>
+<h3 id="1-syn-报文">1. SYN 报文</h3>
+<p>用于发起连接。</p>
+<p>特点：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">SYN = 1
+</span></span><span class="line"><span class="cl">ACK = 0
+</span></span></code></pre></div><p>客户端在三次握手第一步发送 SYN，并携带客户端初始序列号。</p>
+<h3 id="2-syn--ack-报文">2. SYN + ACK 报文</h3>
+<p>用于响应连接请求。</p>
+<p>特点：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">SYN = 1
+</span></span><span class="line"><span class="cl">ACK = 1
+</span></span></code></pre></div><p>服务端确认客户端初始序列号，同时发送自己的初始序列号。</p>
+<h3 id="3-ack-报文">3. ACK 报文</h3>
+<p>用于确认收到的数据或确认连接建立。</p>
+<p>特点：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">ACK = 1
+</span></span></code></pre></div><p>连接建立后，大多数 TCP 报文都会带 ACK。</p>
+<h3 id="4-数据报文">4. 数据报文</h3>
+<p>用于传输应用层数据。</p>
+<p>特点通常是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">ACK = 1
+</span></span><span class="line"><span class="cl">Data 不为空
+</span></span></code></pre></div><p>例如 HTTP 请求和响应都通过这类 TCP 报文承载。</p>
+<h3 id="5-fin-报文">5. FIN 报文</h3>
+<p>用于正常关闭连接的一个方向。</p>
+<p>特点：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">FIN = 1
+</span></span></code></pre></div><p>TCP 是全双工协议，所以一个方向关闭后，另一个方向仍可能继续发送数据。</p>
+<h3 id="6-rst-报文">6. RST 报文</h3>
+<p>用于异常重置连接。</p>
+<p>常见场景：</p>
+<ol>
+<li>访问未监听的端口。</li>
+<li>连接状态异常。</li>
+<li>应用强制关闭连接。</li>
+<li>收到不符合当前连接状态的报文。</li>
+</ol>
+<p>RST 不是优雅关闭，而是直接告诉对方：这个连接不能继续用了。</p>
+<h3 id="7-psh-报文">7. PSH 报文</h3>
+<p><code>PSH</code> 表示希望接收方尽快把数据交给应用层。</p>
+<p>它不是“立刻发送”的意思。发送时机仍然受 TCP 栈、Nagle 算法、拥塞控制等影响。</p>
+<h2 id="四序列号和确认号示例">四、序列号和确认号示例</h2>
+<p>假设客户端发送 100 字节数据：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Seq = 1000
+</span></span><span class="line"><span class="cl">Len = 100
+</span></span></code></pre></div><p>服务端收到后返回：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Ack = 1100
+</span></span></code></pre></div><p>含义是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">1000 ~ 1099 的数据我收到了，下一个请发 1100。
+</span></span></code></pre></div><p>如果中间丢了一段，接收方可以通过 ACK 和 SACK 告诉发送方缺哪些数据，从而触发重传。</p>
+<h2 id="五tcp-如何承载-http">五、TCP 如何承载 HTTP</h2>
+<p>HTTP 是应用层协议，TCP 是传输层协议。</p>
+<p>发送 HTTP 请求时，层次大致是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">HTTP 请求内容
+</span></span><span class="line"><span class="cl">  -&gt; 放入 TCP 数据部分
+</span></span><span class="line"><span class="cl">  -&gt; 加上 TCP 头部
+</span></span><span class="line"><span class="cl">  -&gt; 加上 IP 头部
+</span></span><span class="line"><span class="cl">  -&gt; 加上以太网帧头
+</span></span><span class="line"><span class="cl">  -&gt; 发到网络中
+</span></span></code></pre></div><p>接收方再反向拆包，最终把 HTTP 数据交给 Web 服务器处理。</p>
+<h2 id="六面试时怎么回答">六、面试时怎么回答</h2>
+<p>可以这样说：</p>
+<blockquote>
+<p>TCP 头部最小 20 字节，主要字段包括源端口、目的端口、序列号、确认号、数据偏移、标志位、窗口大小、校验和、紧急指针和选项。端口用于定位应用，序列号和确认号用于可靠传输，SYN、ACK、FIN、RST 等标志位用于连接管理，窗口大小用于流量控制，校验和用于错误检测，选项中常见 MSS、窗口扩大、SACK 和时间戳。</p></blockquote>
+<h2 id="七一句话总结">七、一句话总结</h2>
+<p>TCP 报文头不是一堆孤立字段。端口解决进程定位，序列号和确认号解决可靠传输，标志位解决连接状态，窗口大小解决流量控制，校验和解决错误检测。</p>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

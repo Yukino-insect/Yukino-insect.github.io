@@ -1,0 +1,1639 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Elasticsearch 国际化问题 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="我就面个实习，面试官询问跨境电商搜索业务。作为只会 CRUD ES 的、人怎么可能会。很自然的被拷打了，现在查阅资料了解一下。
+跨境电商里的国际化至少有两类问题，必须分开谈：
+站内多语言体验（Language i18n） 多国家/地区站点本地化（Regionalization） Language i18n 是字段与分词问题，而 Regionalization 是数据模型、索引拓扑、合规与权限问题。
+第一类问题主要是为同一个地区的不同用户提供以下服务
+不同语言的商品信息展示。如标题、属性、类目、品牌名的翻译。 使用不同的搜索语言可以匹配到正确的商品。如中文搜索、英文搜索都能命中同样的商品。 而第二类问题面对的问题就不一样了。它主要是商品数据隔离问题。不同国家/地区站点的商品集合是不一样的，不同商品集合之间天然存在：
+可售不同（禁售/授权/类目限制） 价格/币种不同（税费、汇率、促销） 库存/仓覆盖/时效不同 合规不同（法务红线） 同一 SPU 在不同站点可能对应不同 SKU 或不同上架条目 因此，市场隔离是跨境电商搜索要面临的首要问题。我们提供的服务需要达到以下跨境搜索的目标：
+不串货：中国用户看不到日本可售商品
+不出错价：币种/税费/促销不混
+不违规：合规禁售必须快速生效
+可演进：支持重建索引、灰度、回滚
+体验本地化：地区内多语言、排序信号符合本地策略
+站内多语言体验 在同一地区多语言搜索场景下，搜索服务要完成以下任务：
+在业务层实现语言选择。因为 ES 并不识别语言。 用户选择的语言字段在结果排序中要占高权重，符合用于语言预期。 要有其他语言字段低权重兜底，防止因商品数据不完整导致搜索不到目标。 统一返回结果 为什么用户使用一种语言搜索，却要聚合返回多种语言的数据呢？
+这种行为被称为跨语言召回。主要是因为有些地区的商品内容在多语言环境下往往是不完整，不对称的。跨语言召回主要是为了作为兜底机制，避免因语言差异导致召回的商品内容缺失。实现上通常以用户语言字段为主，其他语言字段低权重补充，既保证体验，又不影响相关性。
+ES 层如何存不同语言的数据呢，现提供如下方案。
+同一文档多语言字段方案 最推荐该方案。
+在同一个商品文档中保存多种语言的标题、属性和描述字段，并为不同语言字段配置不同 analyzer。
+需要注意：这里说的“多语言字段”不是 ES mapping 中 fields 那种 multi-fields。fields 适合把同一个字符串值用不同方式索引，例如 title 同时有 text 和 keyword 形态；而多语言翻译通常是不同字符串，例如中文标题和英文标题，应该使用独立字段或 object 字段。
+它的 mapping 设计如下：
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/elasticsearch/elasticsearch%E5%9B%BD%E9%99%85%E5%8C%96%E9%97%AE%E9%A2%98/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/elasticsearch/elasticsearch%E5%9B%BD%E9%99%85%E5%8C%96%E9%97%AE%E9%A2%98/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="Elasticsearch 国际化问题">
+  <meta property="og:description" content="我就面个实习，面试官询问跨境电商搜索业务。作为只会 CRUD ES 的、人怎么可能会。很自然的被拷打了，现在查阅资料了解一下。
+跨境电商里的国际化至少有两类问题，必须分开谈：
+站内多语言体验（Language i18n） 多国家/地区站点本地化（Regionalization） Language i18n 是字段与分词问题，而 Regionalization 是数据模型、索引拓扑、合规与权限问题。
+第一类问题主要是为同一个地区的不同用户提供以下服务
+不同语言的商品信息展示。如标题、属性、类目、品牌名的翻译。 使用不同的搜索语言可以匹配到正确的商品。如中文搜索、英文搜索都能命中同样的商品。 而第二类问题面对的问题就不一样了。它主要是商品数据隔离问题。不同国家/地区站点的商品集合是不一样的，不同商品集合之间天然存在：
+可售不同（禁售/授权/类目限制） 价格/币种不同（税费、汇率、促销） 库存/仓覆盖/时效不同 合规不同（法务红线） 同一 SPU 在不同站点可能对应不同 SKU 或不同上架条目 因此，市场隔离是跨境电商搜索要面临的首要问题。我们提供的服务需要达到以下跨境搜索的目标：
+不串货：中国用户看不到日本可售商品
+不出错价：币种/税费/促销不混
+不违规：合规禁售必须快速生效
+可演进：支持重建索引、灰度、回滚
+体验本地化：地区内多语言、排序信号符合本地策略
+站内多语言体验 在同一地区多语言搜索场景下，搜索服务要完成以下任务：
+在业务层实现语言选择。因为 ES 并不识别语言。 用户选择的语言字段在结果排序中要占高权重，符合用于语言预期。 要有其他语言字段低权重兜底，防止因商品数据不完整导致搜索不到目标。 统一返回结果 为什么用户使用一种语言搜索，却要聚合返回多种语言的数据呢？
+这种行为被称为跨语言召回。主要是因为有些地区的商品内容在多语言环境下往往是不完整，不对称的。跨语言召回主要是为了作为兜底机制，避免因语言差异导致召回的商品内容缺失。实现上通常以用户语言字段为主，其他语言字段低权重补充，既保证体验，又不影响相关性。
+ES 层如何存不同语言的数据呢，现提供如下方案。
+同一文档多语言字段方案 最推荐该方案。
+在同一个商品文档中保存多种语言的标题、属性和描述字段，并为不同语言字段配置不同 analyzer。
+需要注意：这里说的“多语言字段”不是 ES mapping 中 fields 那种 multi-fields。fields 适合把同一个字符串值用不同方式索引，例如 title 同时有 text 和 keyword 形态；而多语言翻译通常是不同字符串，例如中文标题和英文标题，应该使用独立字段或 object 字段。
+它的 mapping 设计如下：">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="elasticsearch">
+    <meta property="article:published_time" content="2026-03-17T21:33:38+08:00">
+    <meta property="article:modified_time" content="2026-03-17T21:33:38+08:00">
+
+  
+  <meta itemprop="name" content="Elasticsearch 国际化问题">
+  <meta itemprop="description" content="我就面个实习，面试官询问跨境电商搜索业务。作为只会 CRUD ES 的、人怎么可能会。很自然的被拷打了，现在查阅资料了解一下。
+跨境电商里的国际化至少有两类问题，必须分开谈：
+站内多语言体验（Language i18n） 多国家/地区站点本地化（Regionalization） Language i18n 是字段与分词问题，而 Regionalization 是数据模型、索引拓扑、合规与权限问题。
+第一类问题主要是为同一个地区的不同用户提供以下服务
+不同语言的商品信息展示。如标题、属性、类目、品牌名的翻译。 使用不同的搜索语言可以匹配到正确的商品。如中文搜索、英文搜索都能命中同样的商品。 而第二类问题面对的问题就不一样了。它主要是商品数据隔离问题。不同国家/地区站点的商品集合是不一样的，不同商品集合之间天然存在：
+可售不同（禁售/授权/类目限制） 价格/币种不同（税费、汇率、促销） 库存/仓覆盖/时效不同 合规不同（法务红线） 同一 SPU 在不同站点可能对应不同 SKU 或不同上架条目 因此，市场隔离是跨境电商搜索要面临的首要问题。我们提供的服务需要达到以下跨境搜索的目标：
+不串货：中国用户看不到日本可售商品
+不出错价：币种/税费/促销不混
+不违规：合规禁售必须快速生效
+可演进：支持重建索引、灰度、回滚
+体验本地化：地区内多语言、排序信号符合本地策略
+站内多语言体验 在同一地区多语言搜索场景下，搜索服务要完成以下任务：
+在业务层实现语言选择。因为 ES 并不识别语言。 用户选择的语言字段在结果排序中要占高权重，符合用于语言预期。 要有其他语言字段低权重兜底，防止因商品数据不完整导致搜索不到目标。 统一返回结果 为什么用户使用一种语言搜索，却要聚合返回多种语言的数据呢？
+这种行为被称为跨语言召回。主要是因为有些地区的商品内容在多语言环境下往往是不完整，不对称的。跨语言召回主要是为了作为兜底机制，避免因语言差异导致召回的商品内容缺失。实现上通常以用户语言字段为主，其他语言字段低权重补充，既保证体验，又不影响相关性。
+ES 层如何存不同语言的数据呢，现提供如下方案。
+同一文档多语言字段方案 最推荐该方案。
+在同一个商品文档中保存多种语言的标题、属性和描述字段，并为不同语言字段配置不同 analyzer。
+需要注意：这里说的“多语言字段”不是 ES mapping 中 fields 那种 multi-fields。fields 适合把同一个字符串值用不同方式索引，例如 title 同时有 text 和 keyword 形态；而多语言翻译通常是不同字符串，例如中文标题和英文标题，应该使用独立字段或 object 字段。
+它的 mapping 设计如下：">
+  <meta itemprop="datePublished" content="2026-03-17T21:33:38+08:00">
+  <meta itemprop="dateModified" content="2026-03-17T21:33:38+08:00">
+  <meta itemprop="wordCount" content="964">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Elasticsearch 国际化问题">
+  <meta name="twitter:description" content="我就面个实习，面试官询问跨境电商搜索业务。作为只会 CRUD ES 的、人怎么可能会。很自然的被拷打了，现在查阅资料了解一下。
+跨境电商里的国际化至少有两类问题，必须分开谈：
+站内多语言体验（Language i18n） 多国家/地区站点本地化（Regionalization） Language i18n 是字段与分词问题，而 Regionalization 是数据模型、索引拓扑、合规与权限问题。
+第一类问题主要是为同一个地区的不同用户提供以下服务
+不同语言的商品信息展示。如标题、属性、类目、品牌名的翻译。 使用不同的搜索语言可以匹配到正确的商品。如中文搜索、英文搜索都能命中同样的商品。 而第二类问题面对的问题就不一样了。它主要是商品数据隔离问题。不同国家/地区站点的商品集合是不一样的，不同商品集合之间天然存在：
+可售不同（禁售/授权/类目限制） 价格/币种不同（税费、汇率、促销） 库存/仓覆盖/时效不同 合规不同（法务红线） 同一 SPU 在不同站点可能对应不同 SKU 或不同上架条目 因此，市场隔离是跨境电商搜索要面临的首要问题。我们提供的服务需要达到以下跨境搜索的目标：
+不串货：中国用户看不到日本可售商品
+不出错价：币种/税费/促销不混
+不违规：合规禁售必须快速生效
+可演进：支持重建索引、灰度、回滚
+体验本地化：地区内多语言、排序信号符合本地策略
+站内多语言体验 在同一地区多语言搜索场景下，搜索服务要完成以下任务：
+在业务层实现语言选择。因为 ES 并不识别语言。 用户选择的语言字段在结果排序中要占高权重，符合用于语言预期。 要有其他语言字段低权重兜底，防止因商品数据不完整导致搜索不到目标。 统一返回结果 为什么用户使用一种语言搜索，却要聚合返回多种语言的数据呢？
+这种行为被称为跨语言召回。主要是因为有些地区的商品内容在多语言环境下往往是不完整，不对称的。跨语言召回主要是为了作为兜底机制，避免因语言差异导致召回的商品内容缺失。实现上通常以用户语言字段为主，其他语言字段低权重补充，既保证体验，又不影响相关性。
+ES 层如何存不同语言的数据呢，现提供如下方案。
+同一文档多语言字段方案 最推荐该方案。
+在同一个商品文档中保存多种语言的标题、属性和描述字段，并为不同语言字段配置不同 analyzer。
+需要注意：这里说的“多语言字段”不是 ES mapping 中 fields 那种 multi-fields。fields 适合把同一个字符串值用不同方式索引，例如 title 同时有 text 和 keyword 形态；而多语言翻译通常是不同字符串，例如中文标题和英文标题，应该使用独立字段或 object 字段。
+它的 mapping 设计如下：">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">Elasticsearch 国际化问题</h1>
+
+    
+      <div class="post-date">March 17, 2026</div>
+    
+
+    <div class="post-content">
+      <p>我就面个实习，面试官询问跨境电商搜索业务。作为只会 CRUD ES 的、人怎么可能会。很自然的被拷打了，现在查阅资料了解一下。</p>
+<p>跨境电商里的国际化至少有两类问题，必须分开谈：</p>
+<ol>
+<li><strong>站内多语言体验（Language i18n）</strong></li>
+<li><strong>多国家/地区站点本地化（Regionalization）</strong></li>
+</ol>
+<blockquote>
+<p>Language i18n 是字段与分词问题，而 Regionalization 是数据模型、索引拓扑、合规与权限问题。</p></blockquote>
+<p>第一类问题主要是为同一个地区的不同用户提供以下服务</p>
+<ul>
+<li>不同语言的商品信息展示。如标题、属性、类目、品牌名的翻译。</li>
+<li>使用不同的搜索语言可以匹配到正确的商品。如中文搜索、英文搜索都能命中同样的商品。</li>
+</ul>
+<p>而第二类问题面对的问题就不一样了。它主要是<strong>商品数据隔离问题</strong>。不同国家/地区站点的商品集合是不一样的，不同商品集合之间天然存在：</p>
+<ul>
+<li>可售不同（禁售/授权/类目限制）</li>
+<li>价格/币种不同（税费、汇率、促销）</li>
+<li>库存/仓覆盖/时效不同</li>
+<li>合规不同（法务红线）</li>
+<li>同一 SPU 在不同站点可能对应不同 SKU 或不同上架条目</li>
+</ul>
+<p>因此，市场隔离是跨境电商搜索要面临的首要问题。我们提供的服务需要达到以下跨境搜索的目标：</p>
+<ul>
+<li>
+<p><strong>不串货</strong>：中国用户看不到日本可售商品</p>
+</li>
+<li>
+<p><strong>不出错价</strong>：币种/税费/促销不混</p>
+</li>
+<li>
+<p><strong>不违规</strong>：合规禁售必须快速生效</p>
+</li>
+<li>
+<p><strong>可演进</strong>：支持重建索引、灰度、回滚</p>
+</li>
+<li>
+<p><strong>体验本地化</strong>：地区内多语言、排序信号符合本地策略</p>
+</li>
+</ul>
+<h2 id="站内多语言体验">站内多语言体验</h2>
+<p>在同一地区多语言搜索场景下，搜索服务要完成以下任务：</p>
+<ol>
+<li>在业务层实现语言选择。因为 ES 并不识别语言。</li>
+<li>用户选择的语言字段在结果排序中要占高权重，符合用于语言预期。</li>
+<li>要有其他语言字段低权重兜底，防止因商品数据不完整导致搜索不到目标。</li>
+<li>统一返回结果</li>
+</ol>
+<blockquote>
+<p>为什么用户使用一种语言搜索，却要聚合返回多种语言的数据呢？</p>
+<p>这种行为被称为<strong>跨语言召回</strong>。主要是因为有些地区的商品内容在多语言环境下往往是不完整，不对称的。跨语言召回主要是为了作为兜底机制，避免因语言差异导致召回的商品内容缺失。实现上通常以用户语言字段为主，其他语言字段低权重补充，既保证体验，又不影响相关性。</p></blockquote>
+<p>ES 层如何存不同语言的数据呢，现提供如下方案。</p>
+<h3 id="同一文档多语言字段方案">同一文档多语言字段方案</h3>
+<blockquote>
+<p>最推荐该方案。</p></blockquote>
+<p>在同一个商品文档中保存多种语言的标题、属性和描述字段，并为不同语言字段配置不同 analyzer。</p>
+<p>需要注意：这里说的“多语言字段”不是 ES mapping 中 <code>fields</code> 那种 multi-fields。<code>fields</code> 适合把<strong>同一个字符串值</strong>用不同方式索引，例如 <code>title</code> 同时有 <code>text</code> 和 <code>keyword</code> 形态；而多语言翻译通常是不同字符串，例如中文标题和英文标题，应该使用独立字段或 object 字段。</p>
+<p>它的 mapping 设计如下：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">PUT /product_i18n
+</span></span></span><span class="line"><span class="cl"><span class="err">{
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;settings&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;analysis&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;analyzer&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">        &#34;ik_zh&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">          &#34;tokenizer&#34;: &#34;ik_max_word&#34;
+</span></span></span><span class="line"><span class="cl"><span class="err">        },
+</span></span></span><span class="line"><span class="cl"><span class="err">        &#34;en_analyzer&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">          &#34;tokenizer&#34;: &#34;standard&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">          &#34;filter&#34;: [&#34;lowercase&#34;]
+</span></span></span><span class="line"><span class="cl"><span class="err">        }
+</span></span></span><span class="line"><span class="cl"><span class="err">      }
+</span></span></span><span class="line"><span class="cl"><span class="err">    }
+</span></span></span><span class="line"><span class="cl"><span class="err">  },
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;mappings&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;properties&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;title_zh&#34;: { &#34;type&#34;: &#34;text&#34;, &#34;analyzer&#34;: &#34;ik_zh&#34; },
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;title_en&#34;: { &#34;type&#34;: &#34;text&#34;, &#34;analyzer&#34;: &#34;en_analyzer&#34; },
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;attrs_zh&#34;: { &#34;type&#34;: &#34;text&#34;, &#34;analyzer&#34;: &#34;ik_zh&#34; },
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;attrs_en&#34;: { &#34;type&#34;: &#34;text&#34;, &#34;analyzer&#34;: &#34;en_analyzer&#34; }
+</span></span></span><span class="line"><span class="cl"><span class="err">    }
+</span></span></span><span class="line"><span class="cl"><span class="err">  }
+</span></span></span><span class="line"><span class="cl"><span class="err">}
+</span></span></span></code></pre></div><p><code>title_zh</code> 和 <code>title_en</code> 是同一个商品在不同语言下的标题字段。这样既能为不同语言配置不同 analyzer，也能在查询时给用户当前语言更高权重。</p>
+<p>写入数据</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">POST /product_i18n/_doc/1
+</span></span></span><span class="line"><span class="cl"><span class="err">{
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;title_zh&#34;: &#34;苹果手机&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;title_en&#34;: &#34;iPhone&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;attrs_zh&#34;: &#34;钛金属 256GB&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;attrs_en&#34;: &#34;titanium 256GB&#34;
+</span></span></span><span class="line"><span class="cl"><span class="err">}
+</span></span></span></code></pre></div><p>查询</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">GET /product_i18n/_search
+</span></span></span><span class="line"><span class="cl"><span class="err">{
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;query&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;match&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;title_en&#34;: &#34;iphone&#34;
+</span></span></span><span class="line"><span class="cl"><span class="err">    }
+</span></span></span><span class="line"><span class="cl"><span class="err">  }
+</span></span></span><span class="line"><span class="cl"><span class="err">}
+</span></span></span></code></pre></div><h3 id="多索引方案">多索引方案</h3>
+<p>在该方案中，每种语言用一个索引，不同语言之间的内容隔离。但这样会导致很多问题，如：跨语言聚合困难、分页一致性难保证、同一商品需要多次写入、翻译更新需要同步多个索引等。</p>
+<p>英文索引：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">PUT /product_en
+</span></span></span><span class="line"><span class="cl"><span class="err">{
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;settings&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;analysis&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;analyzer&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">        &#34;en_analyzer&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">          &#34;tokenizer&#34;: &#34;standard&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">          &#34;filter&#34;: [&#34;lowercase&#34;]
+</span></span></span><span class="line"><span class="cl"><span class="err">        }
+</span></span></span><span class="line"><span class="cl"><span class="err">      }
+</span></span></span><span class="line"><span class="cl"><span class="err">    }
+</span></span></span><span class="line"><span class="cl"><span class="err">  },
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;mappings&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;properties&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;title&#34;: { &#34;type&#34;: &#34;text&#34;, &#34;analyzer&#34;: &#34;en_analyzer&#34; },
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;price&#34;: { &#34;type&#34;: &#34;double&#34; }
+</span></span></span><span class="line"><span class="cl"><span class="err">    }
+</span></span></span><span class="line"><span class="cl"><span class="err">  }
+</span></span></span><span class="line"><span class="cl"><span class="err">}
+</span></span></span></code></pre></div><h3 id="语言决策层">语言决策层</h3>
+<p>现使用多字段方案存储数据，展示一下该方案在 Java 层的职责拆分</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">HTTP 请求
+</span></span><span class="line"><span class="cl">↓
+</span></span><span class="line"><span class="cl">SearchController
+</span></span><span class="line"><span class="cl">↓
+</span></span><span class="line"><span class="cl">LanguageResolver      ← 决定主语言
+</span></span><span class="line"><span class="cl">↓
+</span></span><span class="line"><span class="cl">QueryBuilder          ← 构建多字段加权查询
+</span></span><span class="line"><span class="cl">↓
+</span></span><span class="line"><span class="cl">ElasticsearchClient   ← 执行查询
+</span></span><span class="line"><span class="cl">↓
+</span></span><span class="line"><span class="cl">ResultAssembler       ← 结果返回
+</span></span></code></pre></div><p>从请求中解析用户选择的语言，该语言属于用户意图。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">LanguageResolver</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kd">static</span><span class="w"> </span><span class="n">Lang</span><span class="w"> </span><span class="nf">resolve</span><span class="p">(</span><span class="n">HttpServletRequest</span><span class="w"> </span><span class="n">request</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">String</span><span class="w"> </span><span class="n">header</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">request</span><span class="p">.</span><span class="na">getHeader</span><span class="p">(</span><span class="s">&#34;Accept-Language&#34;</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">header</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="kc">null</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="n">Lang</span><span class="p">.</span><span class="na">EN</span><span class="p">;</span><span class="w"> </span><span class="c1">// 默认语言</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">header</span><span class="p">.</span><span class="na">startsWith</span><span class="p">(</span><span class="s">&#34;zh&#34;</span><span class="p">)</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="n">Lang</span><span class="p">.</span><span class="na">ZH</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">Lang</span><span class="p">.</span><span class="na">EN</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>提前构造好语言权重</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">SearchFieldConfig</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kd">static</span><span class="w"> </span><span class="n">Map</span><span class="o">&lt;</span><span class="n">Lang</span><span class="p">,</span><span class="w"> </span><span class="n">Map</span><span class="o">&lt;</span><span class="n">String</span><span class="p">,</span><span class="w"> </span><span class="n">Float</span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="nf">fieldBoosts</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">Map</span><span class="o">&lt;</span><span class="n">String</span><span class="p">,</span><span class="w"> </span><span class="n">Float</span><span class="o">&gt;</span><span class="w"> </span><span class="n">zhBoost</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Map</span><span class="p">.</span><span class="na">of</span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="s">&#34;title_zh&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">3</span><span class="p">.</span><span class="na">0f</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="s">&#34;attrs_zh&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">2</span><span class="p">.</span><span class="na">0f</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="s">&#34;title_en&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">1</span><span class="p">.</span><span class="na">0f</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">Map</span><span class="o">&lt;</span><span class="n">String</span><span class="p">,</span><span class="w"> </span><span class="n">Float</span><span class="o">&gt;</span><span class="w"> </span><span class="n">enBoost</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Map</span><span class="p">.</span><span class="na">of</span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="s">&#34;title_en&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">3</span><span class="p">.</span><span class="na">0f</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="s">&#34;attrs_en&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">2</span><span class="p">.</span><span class="na">0f</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="s">&#34;title_zh&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">1</span><span class="p">.</span><span class="na">0f</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">Map</span><span class="p">.</span><span class="na">of</span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="n">Lang</span><span class="p">.</span><span class="na">ZH</span><span class="p">,</span><span class="w"> </span><span class="n">zhBoost</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="n">Lang</span><span class="p">.</span><span class="na">EN</span><span class="p">,</span><span class="w"> </span><span class="n">enBoost</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>每种配置，主语言 boost 要高，满足用户预期，其他语言 boost 低，只保证最后的召回完整。</p>
+<p>构建查询</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">QueryBuilder</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kd">static</span><span class="w"> </span><span class="n">Query</span><span class="w"> </span><span class="nf">buildMultiLangQuery</span><span class="p">(</span><span class="n">String</span><span class="w"> </span><span class="n">keyword</span><span class="p">,</span><span class="w"> </span><span class="n">Lang</span><span class="w"> </span><span class="n">lang</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">Map</span><span class="o">&lt;</span><span class="n">String</span><span class="p">,</span><span class="w"> </span><span class="n">Float</span><span class="o">&gt;</span><span class="w"> </span><span class="n">boosts</span><span class="w"> </span><span class="o">=</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="n">SearchFieldConfig</span><span class="p">.</span><span class="na">fieldBoosts</span><span class="p">().</span><span class="na">get</span><span class="p">(</span><span class="n">lang</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">Query</span><span class="p">.</span><span class="na">of</span><span class="p">(</span><span class="n">q</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="n">q</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="p">.</span><span class="na">multiMatch</span><span class="p">(</span><span class="n">mm</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="n">mm</span><span class="p">.</span><span class="na">query</span><span class="p">(</span><span class="n">keyword</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="n">boosts</span><span class="p">.</span><span class="na">forEach</span><span class="p">((</span><span class="n">field</span><span class="p">,</span><span class="w"> </span><span class="n">boost</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                        </span><span class="n">mm</span><span class="p">.</span><span class="na">fields</span><span class="p">(</span><span class="n">field</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="s">&#34;^&#34;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">boost</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="k">return</span><span class="w"> </span><span class="n">mm</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="p">})</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>执行搜索</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">SearchService</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="kd">final</span><span class="w"> </span><span class="n">ElasticsearchClient</span><span class="w"> </span><span class="n">client</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="nf">SearchService</span><span class="p">(</span><span class="n">ElasticsearchClient</span><span class="w"> </span><span class="n">client</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">this</span><span class="p">.</span><span class="na">client</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">client</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="n">SearchResponse</span><span class="o">&lt;</span><span class="n">ProductDoc</span><span class="o">&gt;</span><span class="w"> </span><span class="nf">search</span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">String</span><span class="w"> </span><span class="n">index</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">String</span><span class="w"> </span><span class="n">keyword</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">HttpServletRequest</span><span class="w"> </span><span class="n">request</span><span class="p">)</span><span class="w"> </span><span class="kd">throws</span><span class="w"> </span><span class="n">IOException</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">Lang</span><span class="w"> </span><span class="n">lang</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">LanguageResolver</span><span class="p">.</span><span class="na">resolve</span><span class="p">(</span><span class="n">request</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">Query</span><span class="w"> </span><span class="n">query</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">QueryBuilder</span><span class="p">.</span><span class="na">buildMultiLangQuery</span><span class="p">(</span><span class="n">keyword</span><span class="p">,</span><span class="w"> </span><span class="n">lang</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">client</span><span class="p">.</span><span class="na">search</span><span class="p">(</span><span class="n">s</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="n">s</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="na">index</span><span class="p">(</span><span class="n">index</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="na">query</span><span class="p">(</span><span class="n">query</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="na">size</span><span class="p">(</span><span class="n">20</span><span class="p">),</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">ProductDoc</span><span class="p">.</span><span class="na">class</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><h2 id="多国家地区站点本地化">多国家/地区站点本地化</h2>
+<p>解决第二类的方案整体上满足<strong>单一搜索平台 + 多地区租户化</strong>。</p>
+<p>这里的单一搜索平台是指：统一使用一套搜索服务代码，但是不同地区的数据和信息隔离存储。</p>
+<h3 id="alias-路由--地区索引版本化">Alias 路由 + 地区索引版本化</h3>
+<p>该方案比较推荐。它是将不同地区的索引单独存储。然后使用 alias 路由，实现无感索引重建。</p>
+<p>示例：</p>
+<p>索引命名规范</p>
+<ul>
+<li>真实索引：<code>product_{region}_v{version}</code></li>
+<li>业务访问：<code>product_{region}_alias</code></li>
+</ul>
+<p>例如：</p>
+<ul>
+<li><code>product_us_v1</code>, <code>product_us_v2</code></li>
+<li><code>product_us_alias</code> -&gt; 指向当前版本</li>
+</ul>
+<p>mapping</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">PUT product_us_v1
+</span></span></span><span class="line"><span class="cl"><span class="err">{
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;settings&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;number_of_shards&#34;: 3,
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;analysis&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;analyzer&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">        &#34;en_analyzer&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">          &#34;tokenizer&#34;: &#34;standard&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">          &#34;filter&#34;: [&#34;lowercase&#34;]
+</span></span></span><span class="line"><span class="cl"><span class="err">        }
+</span></span></span><span class="line"><span class="cl"><span class="err">      }
+</span></span></span><span class="line"><span class="cl"><span class="err">    }
+</span></span></span><span class="line"><span class="cl"><span class="err">  },
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;mappings&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;properties&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;region&#34;: { &#34;type&#34;: &#34;keyword&#34; },
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;listing_id&#34;: { &#34;type&#34;: &#34;keyword&#34; },
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;spu_id&#34;: { &#34;type&#34;: &#34;keyword&#34; },
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;sku_id&#34;: { &#34;type&#34;: &#34;keyword&#34; },
+</span></span></span><span class="line"><span class="cl"><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;saleable&#34;: { &#34;type&#34;: &#34;boolean&#34; },
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;compliance_status&#34;: { &#34;type&#34;: &#34;keyword&#34; },  
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;category_id&#34;: { &#34;type&#34;: &#34;keyword&#34; },
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;brand&#34;: { &#34;type&#34;: &#34;keyword&#34; },
+</span></span></span><span class="line"><span class="cl"><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;currency&#34;: { &#34;type&#34;: &#34;keyword&#34; },
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;price&#34;: { &#34;type&#34;: &#34;scaled_float&#34;, &#34;scaling_factor&#34;: 100 }, 
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;promo_price&#34;: { &#34;type&#34;: &#34;scaled_float&#34;, &#34;scaling_factor&#34;: 100 },
+</span></span></span><span class="line"><span class="cl"><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;stock_status&#34;: { &#34;type&#34;: &#34;keyword&#34; },         
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;eta_days&#34;: { &#34;type&#34;: &#34;integer&#34; },             
+</span></span></span><span class="line"><span class="cl"><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;title&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">        &#34;type&#34;: &#34;text&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">        &#34;analyzer&#34;: &#34;en_analyzer&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">        &#34;fields&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">          &#34;raw&#34;: { &#34;type&#34;: &#34;keyword&#34; }
+</span></span></span><span class="line"><span class="cl"><span class="err">        }
+</span></span></span><span class="line"><span class="cl"><span class="err">      },
+</span></span></span><span class="line"><span class="cl"><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;attrs&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">        &#34;type&#34;: &#34;text&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">        &#34;analyzer&#34;: &#34;en_analyzer&#34;
+</span></span></span><span class="line"><span class="cl"><span class="err">      },
+</span></span></span><span class="line"><span class="cl"><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;sales_30d&#34;: { &#34;type&#34;: &#34;integer&#34; },
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;quality_score&#34;: { &#34;type&#34;: &#34;float&#34; },
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;updated_at&#34;: { &#34;type&#34;: &#34;date&#34; }
+</span></span></span><span class="line"><span class="cl"><span class="err">    }
+</span></span></span><span class="line"><span class="cl"><span class="err">  }
+</span></span></span><span class="line"><span class="cl"><span class="err">}
+</span></span></span></code></pre></div><p>绑定 alias</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">POST _aliases
+</span></span></span><span class="line"><span class="cl"><span class="err">{
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;actions&#34;: [
+</span></span></span><span class="line"><span class="cl"><span class="err">    { &#34;add&#34;: { &#34;index&#34;: &#34;product_us_v1&#34;, &#34;alias&#34;: &#34;product_us_alias&#34; } }
+</span></span></span><span class="line"><span class="cl"><span class="err">  ]
+</span></span></span><span class="line"><span class="cl"><span class="err">}
+</span></span></span></code></pre></div><p>文档数据</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">POST product_us_alias/_doc/1
+</span></span></span><span class="line"><span class="cl"><span class="err">{
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;region&#34;: &#34;US&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;listing_id&#34;: &#34;L10001&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;spu_id&#34;: &#34;SPU9&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;sku_id&#34;: &#34;SKU9-US&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;saleable&#34;: true,
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;compliance_status&#34;: &#34;PASS&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;category_id&#34;: &#34;phone&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;brand&#34;: &#34;Apple&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;currency&#34;: &#34;USD&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;price&#34;: 69900,
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;promo_price&#34;: 64900,
+</span></span></span><span class="line"><span class="cl"><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;stock_status&#34;: &#34;IN_STOCK&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;eta_days&#34;: 2,
+</span></span></span><span class="line"><span class="cl"><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;title&#34;: &#34;iPhone 15 Pro&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;attrs&#34;: &#34;256GB titanium&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;sales_30d&#34;: 1200,
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;quality_score&#34;: 0.86,
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;updated_at&#34;: &#34;2025-12-25T00:00:00Z&#34;
+</span></span></span><span class="line"><span class="cl"><span class="err">}
+</span></span></span></code></pre></div><p>这样在需要重建索引时，只需要构建新版本的 Index，进行 alias 切换，reindex 迁移数据就可以了。</p>
+<p><strong>ES 是如何部署的？</strong></p>
+<p>在提供跨境搜索时，电商大多使用的是单集群 + 多地索引。</p>
+<p>为什么是使用一个集群，而不是不同国家维护不同的集群提供服务呢？</p>
+<p>原因：</p>
+<ul>
+<li>搜索是<strong>读密集型</strong></li>
+<li>跨地区数据量可控</li>
+<li>alias + index 已能实现强隔离</li>
+<li>运维成本远低于多集群</li>
+</ul>
+<p>什么时候用多集群？</p>
+<ul>
+<li>数据主权要求（GDPR / 国别法规）</li>
+<li>数据规模极大（百亿级文档）</li>
+<li>网络延迟不可接受</li>
+</ul>
+<p><strong>跨境电商的数据库如何设计？</strong></p>
+<p>通常可以在一个数据库中存放按地区划分的表</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">db_product
+</span></span><span class="line"><span class="cl"> ├── product_listing_us
+</span></span><span class="line"><span class="cl"> ├── product_listing_jp
+</span></span><span class="line"><span class="cl"> ├── product_listing_sg
+</span></span></code></pre></div><p>访问时选择正确的表：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">String</span><span class="w"> </span><span class="n">table</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&#34;product_listing_&#34;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">region</span><span class="p">;</span><span class="w">
+</span></span></span></code></pre></div><p>也可以选择分库分表</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">db_product_us
+</span></span><span class="line"><span class="cl"> └── product_listing
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">db_product_jp
+</span></span><span class="line"><span class="cl"> └── product_listing
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">db_product_sg
+</span></span><span class="line"><span class="cl"> └── product_listing
+</span></span></code></pre></div><h3 id="单集群--多索引">单集群 + 多索引</h3>
+<p>该方案和上一个方案的区别就是没有使用 alias</p>
+<p>索引按地区拆分，然后由业务层路由</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">product_us
+</span></span><span class="line"><span class="cl">product_jp
+</span></span><span class="line"><span class="cl">product_sg
+</span></span></code></pre></div><p>查询时选择索引</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">GET product_jp/_search
+</span></span></span><span class="line"><span class="cl"><span class="err">{ ... }
+</span></span></span></code></pre></div><p>在没有使用 alias 的情况下，数据迁移可能会很麻烦</p>
+<h3 id="单索引--region-filter">单索引 + region filter</h3>
+<p>该方案是在同一个索引中存放不同地区的文档数据。查询的时候按地区过滤。它的缺陷比较严重，不推荐使用</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">GET /product_global/_search
+</span></span></span><span class="line"><span class="cl"><span class="err">{
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;query&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;bool&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;must&#34;: [
+</span></span></span><span class="line"><span class="cl"><span class="err">        { &#34;match&#34;: { &#34;title&#34;: &#34;iphone&#34; } }
+</span></span></span><span class="line"><span class="cl"><span class="err">      ],
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;filter&#34;: [
+</span></span></span><span class="line"><span class="cl"><span class="err">        { &#34;term&#34;: { &#34;region&#34;: &#34;US&#34; } },
+</span></span></span><span class="line"><span class="cl"><span class="err">        { &#34;term&#34;: { &#34;saleable&#34;: true } },
+</span></span></span><span class="line"><span class="cl"><span class="err">        { &#34;term&#34;: { &#34;compliance_status&#34;: &#34;PASS&#34; } }
+</span></span></span><span class="line"><span class="cl"><span class="err">      ]
+</span></span></span><span class="line"><span class="cl"><span class="err">    }
+</span></span></span><span class="line"><span class="cl"><span class="err">  }
+</span></span></span><span class="line"><span class="cl"><span class="err">}
+</span></span></span></code></pre></div><h3 id="跨境搜索的调用链路">跨境搜索的调用链路</h3>
+<ol>
+<li><strong>Region 决策层</strong>
+<ul>
+<li>域名/站点（us.xxx.com）</li>
+<li>用户账号绑定 region</li>
+<li>IP/Geo 兜底（谨慎，可能误判）</li>
+</ul>
+</li>
+<li><strong>路由层</strong>
+<ul>
+<li>选择 <code>product_{region}_alias</code></li>
+<li>绑定该地区的检索配置：语言、同义词、排序模板</li>
+</ul>
+</li>
+<li><strong>检索执行层（ES）</strong>
+<ul>
+<li>召回：match/multi_match + filters</li>
+<li>过滤：合规、可售、类目、品牌黑白名单</li>
+</ul>
+</li>
+<li><strong>排序层</strong>
+<ul>
+<li>相关性（文本匹配）</li>
+<li>本地信号（热销、转化、时效、库存、价格策略）</li>
+</ul>
+</li>
+<li><strong>展示层</strong>
+<ul>
+<li>返回地区币种价格、地区语言字段</li>
+<li>高亮使用对应 analyzer 的字段</li>
+</ul>
+</li>
+</ol>
+<h3 id="业务层路由代码">业务层路由代码</h3>
+<p>Java 伪代码。</p>
+<p>region 决策 + alias 路由</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">SearchRouter</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// region -&gt; alias 映射（也可来自配置中心）</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="kd">static</span><span class="w"> </span><span class="kd">final</span><span class="w"> </span><span class="n">Map</span><span class="o">&lt;</span><span class="n">String</span><span class="p">,</span><span class="w"> </span><span class="n">String</span><span class="o">&gt;</span><span class="w"> </span><span class="n">REGION_ALIAS</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Map</span><span class="p">.</span><span class="na">of</span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="s">&#34;US&#34;</span><span class="p">,</span><span class="w"> </span><span class="s">&#34;product_us_alias&#34;</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="s">&#34;JP&#34;</span><span class="p">,</span><span class="w"> </span><span class="s">&#34;product_jp_alias&#34;</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="s">&#34;SG&#34;</span><span class="p">,</span><span class="w"> </span><span class="s">&#34;product_sg_alias&#34;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="n">String</span><span class="w"> </span><span class="nf">resolveRegion</span><span class="p">(</span><span class="n">HttpServletRequest</span><span class="w"> </span><span class="n">req</span><span class="p">,</span><span class="w"> </span><span class="n">UserProfile</span><span class="w"> </span><span class="n">user</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="c1">// 1) 站点/域名优先</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">String</span><span class="w"> </span><span class="n">host</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">req</span><span class="p">.</span><span class="na">getHeader</span><span class="p">(</span><span class="s">&#34;Host&#34;</span><span class="p">);</span><span class="w"> </span><span class="c1">// us.xxx.com</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">host</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">null</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">host</span><span class="p">.</span><span class="na">startsWith</span><span class="p">(</span><span class="s">&#34;us.&#34;</span><span class="p">))</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="s">&#34;US&#34;</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">host</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">null</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">host</span><span class="p">.</span><span class="na">startsWith</span><span class="p">(</span><span class="s">&#34;jp.&#34;</span><span class="p">))</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="s">&#34;JP&#34;</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="c1">// 2) 登录用户站点</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">user</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">null</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">user</span><span class="p">.</span><span class="na">getRegion</span><span class="p">()</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">null</span><span class="p">)</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">user</span><span class="p">.</span><span class="na">getRegion</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="c1">// 3) IP/Geo 兜底（注意误判风险）</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="s">&#34;US&#34;</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="n">String</span><span class="w"> </span><span class="nf">resolveIndexAlias</span><span class="p">(</span><span class="n">String</span><span class="w"> </span><span class="n">region</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">String</span><span class="w"> </span><span class="n">alias</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">REGION_ALIAS</span><span class="p">.</span><span class="na">get</span><span class="p">(</span><span class="n">region</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">alias</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="kc">null</span><span class="p">)</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">IllegalArgumentException</span><span class="p">(</span><span class="s">&#34;Unsupported region: &#34;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">region</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">alias</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>构建查询</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="kd">public</span><span class="w"> </span><span class="n">SearchRequest</span><span class="w"> </span><span class="nf">buildRequest</span><span class="p">(</span><span class="n">String</span><span class="w"> </span><span class="n">indexAlias</span><span class="p">,</span><span class="w"> </span><span class="n">String</span><span class="w"> </span><span class="n">keyword</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">SearchRequest</span><span class="p">.</span><span class="na">Builder</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">.</span><span class="na">index</span><span class="p">(</span><span class="n">indexAlias</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">.</span><span class="na">query</span><span class="p">(</span><span class="n">q</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="n">q</span><span class="p">.</span><span class="na">bool</span><span class="p">(</span><span class="n">b</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="n">b</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="p">.</span><span class="na">must</span><span class="p">(</span><span class="n">m</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="n">m</span><span class="p">.</span><span class="na">multiMatch</span><span class="p">(</span><span class="n">mm</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="n">mm</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="na">query</span><span class="p">(</span><span class="n">keyword</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="na">fields</span><span class="p">(</span><span class="s">&#34;title^3&#34;</span><span class="p">,</span><span class="w"> </span><span class="s">&#34;attrs&#34;</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="p">))</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="p">.</span><span class="na">filter</span><span class="p">(</span><span class="n">f</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="n">f</span><span class="p">.</span><span class="na">term</span><span class="p">(</span><span class="n">t</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="n">t</span><span class="p">.</span><span class="na">field</span><span class="p">(</span><span class="s">&#34;saleable&#34;</span><span class="p">).</span><span class="na">value</span><span class="p">(</span><span class="kc">true</span><span class="p">)))</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="p">.</span><span class="na">filter</span><span class="p">(</span><span class="n">f</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="n">f</span><span class="p">.</span><span class="na">term</span><span class="p">(</span><span class="n">t</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="n">t</span><span class="p">.</span><span class="na">field</span><span class="p">(</span><span class="s">&#34;compliance_status&#34;</span><span class="p">).</span><span class="na">value</span><span class="p">(</span><span class="s">&#34;PASS&#34;</span><span class="p">)))</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">))</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">.</span><span class="na">size</span><span class="p">(</span><span class="n">20</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">.</span><span class="na">build</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>整体架构</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">┌─────────────┐
+</span></span><span class="line"><span class="cl">│  用户请求   │
+</span></span><span class="line"><span class="cl">└─────┬───────┘
+</span></span><span class="line"><span class="cl">      ↓
+</span></span><span class="line"><span class="cl">┌───────────────────┐
+</span></span><span class="line"><span class="cl">│  Region 决策层    │ ← 域名 / IP / 用户站点
+</span></span><span class="line"><span class="cl">└─────┬─────────────┘
+</span></span><span class="line"><span class="cl">      ↓
+</span></span><span class="line"><span class="cl">┌───────────────────┐
+</span></span><span class="line"><span class="cl">│  搜索路由层       │ ← 选 index / alias
+</span></span><span class="line"><span class="cl">└─────┬─────────────┘
+</span></span><span class="line"><span class="cl">      ↓
+</span></span><span class="line"><span class="cl">┌───────────────────┐
+</span></span><span class="line"><span class="cl">│  ES 搜索执行层    │ ← 分词 / 召回 / 排序
+</span></span><span class="line"><span class="cl">└─────┬─────────────┘
+</span></span><span class="line"><span class="cl">      ↓
+</span></span><span class="line"><span class="cl">┌───────────────────┐
+</span></span><span class="line"><span class="cl">│  本地化排序/过滤  │ ← 价格 / 库存 / 合规
+</span></span><span class="line"><span class="cl">└───────────────────┘
+</span></span></code></pre></div><p>参考：</p>
+<p><strong><a href="https://juejin.cn/post/7325806646063497242">https://juejin.cn/post/7325806646063497242</a>
+</strong></p>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

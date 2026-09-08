@@ -1,0 +1,1528 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>spring-Integration | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="Spring Integration 框架基于 Spring 提供了一种实现企业集成模式的方式。用于不同企业应用实现消息传递，简化企业应用集成的复杂性
+组成 Spring Integration 的三大组件是 Message、Message Channel 和 Message Endpoint
+message	message	message	message channel---------&gt;endpoint---------&gt;channel--------&gt;endpoint---------&gt; Message：即消息本身，它由 Payload 和 Headers 两部分组成，Payload 载荷是实际传递的数据对象，如 Json、字符串、DTO 等。而 Headers 消息头中则包含了一些元数据，如消息 ID，时间戳、路由键等
+Message&lt;String&gt; message = MessageBuilder .withPayload(&#34;Hello World&#34;) .setHeader(&#34;type&#34;, &#34;greeting&#34;) .build(); Message Channel：是消息传输的载体，通常可以分为 point-to-point（点对点）和 publish-subscribe（发布订阅）两种行为模式。此外从通道是否保存消息的角度来说，通道还分为 Pollable Channel 和 Subscribable Channel 两种。
+Pollable Channel：保存消息，消费者需要主动拉取消息，核心接口为 PollableChannel。 Subscribable Channel：可订阅型通道，不存储消息，消费者被动通知消息，核心接口为 SubscribableChannel。这种划分方式也是API接口的划分方式，不同的通道类型对消息流程的处理会有不同的表现形式。 Message Endpoint：消息端点，它是消息的消费端，通常与外部系统对接。Spring Integration 提供了多种不同的 EndPoint 满足不同的需求。
+消息通道（Message Channel） Spring Integration 提供了多种通道的实现
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/spring/spring-integration/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/spring/spring-integration/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="spring-Integration">
+  <meta property="og:description" content="Spring Integration 框架基于 Spring 提供了一种实现企业集成模式的方式。用于不同企业应用实现消息传递，简化企业应用集成的复杂性
+组成 Spring Integration 的三大组件是 Message、Message Channel 和 Message Endpoint
+message	message	message	message channel---------&gt;endpoint---------&gt;channel--------&gt;endpoint---------&gt; Message：即消息本身，它由 Payload 和 Headers 两部分组成，Payload 载荷是实际传递的数据对象，如 Json、字符串、DTO 等。而 Headers 消息头中则包含了一些元数据，如消息 ID，时间戳、路由键等
+Message&lt;String&gt; message = MessageBuilder .withPayload(&#34;Hello World&#34;) .setHeader(&#34;type&#34;, &#34;greeting&#34;) .build(); Message Channel：是消息传输的载体，通常可以分为 point-to-point（点对点）和 publish-subscribe（发布订阅）两种行为模式。此外从通道是否保存消息的角度来说，通道还分为 Pollable Channel 和 Subscribable Channel 两种。
+Pollable Channel：保存消息，消费者需要主动拉取消息，核心接口为 PollableChannel。 Subscribable Channel：可订阅型通道，不存储消息，消费者被动通知消息，核心接口为 SubscribableChannel。这种划分方式也是API接口的划分方式，不同的通道类型对消息流程的处理会有不同的表现形式。 Message Endpoint：消息端点，它是消息的消费端，通常与外部系统对接。Spring Integration 提供了多种不同的 EndPoint 满足不同的需求。
+消息通道（Message Channel） Spring Integration 提供了多种通道的实现">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="spring">
+    <meta property="article:published_time" content="2025-10-19T16:37:19+08:00">
+    <meta property="article:modified_time" content="2025-10-19T16:37:19+08:00">
+
+  
+  <meta itemprop="name" content="spring-Integration">
+  <meta itemprop="description" content="Spring Integration 框架基于 Spring 提供了一种实现企业集成模式的方式。用于不同企业应用实现消息传递，简化企业应用集成的复杂性
+组成 Spring Integration 的三大组件是 Message、Message Channel 和 Message Endpoint
+message	message	message	message channel---------&gt;endpoint---------&gt;channel--------&gt;endpoint---------&gt; Message：即消息本身，它由 Payload 和 Headers 两部分组成，Payload 载荷是实际传递的数据对象，如 Json、字符串、DTO 等。而 Headers 消息头中则包含了一些元数据，如消息 ID，时间戳、路由键等
+Message&lt;String&gt; message = MessageBuilder .withPayload(&#34;Hello World&#34;) .setHeader(&#34;type&#34;, &#34;greeting&#34;) .build(); Message Channel：是消息传输的载体，通常可以分为 point-to-point（点对点）和 publish-subscribe（发布订阅）两种行为模式。此外从通道是否保存消息的角度来说，通道还分为 Pollable Channel 和 Subscribable Channel 两种。
+Pollable Channel：保存消息，消费者需要主动拉取消息，核心接口为 PollableChannel。 Subscribable Channel：可订阅型通道，不存储消息，消费者被动通知消息，核心接口为 SubscribableChannel。这种划分方式也是API接口的划分方式，不同的通道类型对消息流程的处理会有不同的表现形式。 Message Endpoint：消息端点，它是消息的消费端，通常与外部系统对接。Spring Integration 提供了多种不同的 EndPoint 满足不同的需求。
+消息通道（Message Channel） Spring Integration 提供了多种通道的实现">
+  <meta itemprop="datePublished" content="2025-10-19T16:37:19+08:00">
+  <meta itemprop="dateModified" content="2025-10-19T16:37:19+08:00">
+  <meta itemprop="wordCount" content="860">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="spring-Integration">
+  <meta name="twitter:description" content="Spring Integration 框架基于 Spring 提供了一种实现企业集成模式的方式。用于不同企业应用实现消息传递，简化企业应用集成的复杂性
+组成 Spring Integration 的三大组件是 Message、Message Channel 和 Message Endpoint
+message	message	message	message channel---------&gt;endpoint---------&gt;channel--------&gt;endpoint---------&gt; Message：即消息本身，它由 Payload 和 Headers 两部分组成，Payload 载荷是实际传递的数据对象，如 Json、字符串、DTO 等。而 Headers 消息头中则包含了一些元数据，如消息 ID，时间戳、路由键等
+Message&lt;String&gt; message = MessageBuilder .withPayload(&#34;Hello World&#34;) .setHeader(&#34;type&#34;, &#34;greeting&#34;) .build(); Message Channel：是消息传输的载体，通常可以分为 point-to-point（点对点）和 publish-subscribe（发布订阅）两种行为模式。此外从通道是否保存消息的角度来说，通道还分为 Pollable Channel 和 Subscribable Channel 两种。
+Pollable Channel：保存消息，消费者需要主动拉取消息，核心接口为 PollableChannel。 Subscribable Channel：可订阅型通道，不存储消息，消费者被动通知消息，核心接口为 SubscribableChannel。这种划分方式也是API接口的划分方式，不同的通道类型对消息流程的处理会有不同的表现形式。 Message Endpoint：消息端点，它是消息的消费端，通常与外部系统对接。Spring Integration 提供了多种不同的 EndPoint 满足不同的需求。
+消息通道（Message Channel） Spring Integration 提供了多种通道的实现">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">spring-Integration</h1>
+
+    
+      <div class="post-date">October 19, 2025</div>
+    
+
+    <div class="post-content">
+      <p><strong>Spring Integration</strong> 框架基于 Spring 提供了一种实现企业集成模式的方式。用于不同企业应用实现消息传递，简化企业应用集成的复杂性</p>
+<p>组成 Spring Integration 的三大组件是 <strong>Message</strong>、<strong>Message Channel</strong> 和 <strong>Message Endpoint</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-markdown" data-lang="markdown"><span class="line"><span class="cl">		message			message			 message		message
+</span></span><span class="line"><span class="cl">channel---------&gt;endpoint---------&gt;channel--------&gt;endpoint---------&gt;
+</span></span></code></pre></div><ul>
+<li>
+<p>Message：即消息本身，它由 Payload 和 Headers 两部分组成，Payload 载荷是实际传递的数据对象，如 Json、字符串、DTO 等。而 Headers 消息头中则包含了一些元数据，如消息 ID，时间戳、路由键等</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">Message</span><span class="o">&lt;</span><span class="n">String</span><span class="o">&gt;</span><span class="w"> </span><span class="n">message</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">MessageBuilder</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">.</span><span class="na">withPayload</span><span class="p">(</span><span class="s">&#34;Hello World&#34;</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">.</span><span class="na">setHeader</span><span class="p">(</span><span class="s">&#34;type&#34;</span><span class="p">,</span><span class="w"> </span><span class="s">&#34;greeting&#34;</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">.</span><span class="na">build</span><span class="p">();</span><span class="w">
+</span></span></span></code></pre></div></li>
+<li>
+<p>Message Channel：是消息传输的载体，通常可以分为 point-to-point（点对点）和 publish-subscribe（发布订阅）两种行为模式。此外从通道是否保存消息的角度来说，通道还分为 Pollable Channel 和 Subscribable Channel 两种。</p>
+<ul>
+<li>Pollable Channel：保存消息，消费者需要主动拉取消息，核心接口为 PollableChannel。</li>
+<li>Subscribable Channel：可订阅型通道，不存储消息，消费者被动通知消息，核心接口为 SubscribableChannel。这种划分方式也是API接口的划分方式，不同的通道类型对消息流程的处理会有不同的表现形式。</li>
+</ul>
+</li>
+<li>
+<p>Message Endpoint：消息端点，它是消息的消费端，通常与外部系统对接。Spring Integration 提供了多种不同的 EndPoint 满足不同的需求。</p>
+</li>
+</ul>
+<h3 id="消息通道message-channel">消息通道（Message Channel）</h3>
+<p><strong>Spring Integration</strong> 提供了多种通道的实现</p>
+<p>常见类型有：</p>
+<ul>
+<li><code>DirectChannel</code>：同步调用，发出消息后立即由下游组件处理。</li>
+<li><code>QueueChannel</code>：异步，消息进入队列，消费者异步处理。</li>
+<li><code>PublishSubscribeChannel</code>：广播模式，多个订阅者同时收到消息。</li>
+<li><code>ExecutorChannel</code>：基于线程池的异步通道。</li>
+</ul>
+<h3 id="消息端点message-endpoints">消息端点（Message Endpoints）</h3>
+<p>消息端点是消息处理的核心组件，它是业务逻辑执行的地方</p>
+<p>常见的端点类型有：</p>
+<table>
+  <thead>
+      <tr>
+          <th>端点类型</th>
+          <th>功能</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><strong>Service Activator</strong></td>
+          <td>调用业务服务处理消息</td>
+      </tr>
+      <tr>
+          <td><strong>Transformer</strong></td>
+          <td>转换消息内容格式</td>
+      </tr>
+      <tr>
+          <td><strong>Filter</strong></td>
+          <td>过滤消息</td>
+      </tr>
+      <tr>
+          <td><strong>Router</strong></td>
+          <td>根据条件路由消息到不同通道</td>
+      </tr>
+      <tr>
+          <td><strong>Splitter</strong></td>
+          <td>拆分消息</td>
+      </tr>
+      <tr>
+          <td><strong>Aggregator</strong></td>
+          <td>聚合多个消息</td>
+      </tr>
+      <tr>
+          <td><strong>Bridge</strong></td>
+          <td>连接两个通道</td>
+      </tr>
+  </tbody>
+</table>
+<p>看一个配置</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="c1">// 配置通道类</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nd">@Configuration</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">ChannelConfig</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nd">@Bean</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="n">MessageChannel</span><span class="w"> </span><span class="nf">inputChannel</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">DirectChannel</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nd">@Bean</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="n">MessageChannel</span><span class="w"> </span><span class="nf">middleChannel</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">DirectChannel</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="nd">@EnableIntegration</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">HandlerConfig</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// 声明一个数据源，轮询器 poller 以固定时间将数据发送到绑定的 channel 上</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nd">@InboundChannelAdapter</span><span class="p">(</span><span class="n">channel</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&#34;inputChannel&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">poller</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nd">@Poller</span><span class="p">(</span><span class="n">fixedRate</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&#34;500&#34;</span><span class="p">))</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="n">Message</span><span class="o">&lt;</span><span class="n">String</span><span class="o">&gt;</span><span class="w"> </span><span class="nf">input</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">Message</span><span class="o">&lt;&gt;</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="nd">@Override</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="kd">public</span><span class="w"> </span><span class="n">String</span><span class="w"> </span><span class="nf">getPayload</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="k">return</span><span class="w"> </span><span class="s">&#34;我永远喜欢雪之下雪乃&#34;</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="nd">@Override</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="kd">public</span><span class="w"> </span><span class="n">MessageHeaders</span><span class="w"> </span><span class="nf">getHeaders</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="k">return</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">MessageHeaders</span><span class="p">(</span><span class="n">Map</span><span class="p">.</span><span class="na">of</span><span class="p">());</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">};</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// 消息端点</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nd">@Transformer</span><span class="p">(</span><span class="n">inputChannel</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&#34;inputChannel&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">outputChannel</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&#34;middleChannel&#34;</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="n">Message</span><span class="o">&lt;?&gt;</span><span class="w"> </span><span class="n">middleTransformer</span><span class="p">(</span><span class="n">Message</span><span class="o">&lt;?&gt;</span><span class="w"> </span><span class="n">message</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">GenericMessage</span><span class="o">&lt;&gt;</span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="n">message</span><span class="p">.</span><span class="na">getPayload</span><span class="p">(),</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="n">Map</span><span class="p">.</span><span class="na">of</span><span class="p">(</span><span class="s">&#34;transformer&#34;</span><span class="p">,</span><span class="w"> </span><span class="s">&#34;middleTransformer&#34;</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// 用于定义最终处理器</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nd">@ServiceActivator</span><span class="p">(</span><span class="n">inputChannel</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&#34;middleChannel&#34;</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">handler</span><span class="p">(</span><span class="n">Message</span><span class="o">&lt;</span><span class="n">String</span><span class="o">&gt;</span><span class="w"> </span><span class="n">message</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">System</span><span class="p">.</span><span class="na">out</span><span class="p">.</span><span class="na">println</span><span class="p">(</span><span class="n">message</span><span class="p">.</span><span class="na">getHeaders</span><span class="p">().</span><span class="na">get</span><span class="p">(</span><span class="s">&#34;transformer&#34;</span><span class="p">));</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">System</span><span class="p">.</span><span class="na">out</span><span class="p">.</span><span class="na">println</span><span class="p">(</span><span class="n">message</span><span class="p">.</span><span class="na">getPayload</span><span class="p">());</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><blockquote>
+<p><code>@MessageEndpoint</code> 是 Spring Integration 提供的一个<strong>组件标识注解</strong>，用于表明某个类是一个<strong>消息端点（Message Endpoint）</strong>。</p>
+<p>它的作用类似于：</p>
+<ul>
+<li><code>@Component</code>（用于标识普通 Bean）</li>
+<li><code>@Controller</code>（用于标识 Web 控制器）</li>
+<li><code>@Service</code>（用于标识业务逻辑组件）</li>
+</ul>
+<p>换句话说，<code>@MessageEndpoint</code> 表示：</p>
+<p>这是一个专门用于<strong>接收、处理或发送消息</strong>的 Spring Bean。</p>
+<p><code>@EnableIntegration</code> 是 Spring Integration 提供的一个 <strong>启用配置注解</strong>，
+类似于：</p>
+<ul>
+<li><code>@EnableScheduling</code> 启用定时任务</li>
+<li><code>@EnableAsync</code> 启用异步任务</li>
+<li><code>@EnableWebMvc</code> 启用 Spring MVC</li>
+</ul>
+<p>它会自动注册运行时的消息基础设施，如通道、错误处理、生命周期、监控等，是所有 <code>@ServiceActivator</code>、<code>IntegrationFlow</code> 等组件能正常工作的前提条件</p></blockquote>
+<p>配置处理器</p>
+<p>消息会通过 Channel 传递，消息端点会按照不同的规则处理消息</p>
+<p><code>@InboundChannelAdapter</code> 注解是用来定义消息源</p>
+<p><code>@ServiceActivator</code> 注解是用来定义定义最终消息处理器</p>
+<p>Spring Integration 还有</p>
+<p><strong>Integration Flow（集成流程）</strong></p>
+<ul>
+<li>定义了消息从输入到输出的完整处理路径。</li>
+<li>可以用 <strong>Java DSL</strong> 来声明：</li>
+</ul>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="nd">@Bean</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">public</span><span class="w"> </span><span class="n">IntegrationFlow</span><span class="w"> </span><span class="nf">demoFlow</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">IntegrationFlows</span><span class="p">.</span><span class="na">from</span><span class="p">(</span><span class="s">&#34;inputChannel&#34;</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="p">.</span><span class="na">filter</span><span class="p">((</span><span class="n">String</span><span class="w"> </span><span class="n">msg</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="n">msg</span><span class="p">.</span><span class="na">startsWith</span><span class="p">(</span><span class="s">&#34;A&#34;</span><span class="p">))</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="p">.</span><span class="na">transform</span><span class="p">(</span><span class="n">String</span><span class="p">::</span><span class="n">toLowerCase</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="p">.</span><span class="na">handle</span><span class="p">(</span><span class="n">System</span><span class="p">.</span><span class="na">out</span><span class="p">::</span><span class="n">println</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="p">.</span><span class="na">get</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p><strong>Gateway（网关）</strong></p>
+<ul>
+<li>是应用与集成系统之间的接口。</li>
+<li>用于将普通方法调用转换为消息发送/接收。</li>
+</ul>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="nd">@MessagingGateway</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">public</span><span class="w"> </span><span class="kd">interface</span> <span class="nc">DeviceGateway</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nd">@Gateway</span><span class="p">(</span><span class="n">requestChannel</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&#34;deviceInputChannel&#34;</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">sendToDevice</span><span class="p">(</span><span class="n">String</span><span class="w"> </span><span class="n">data</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><h4 id="adapter适配器">Adapter（适配器）</h4>
+<p>它是用于与 <strong>外部系统</strong> 进行连接的组件。</p>
+<p>例如，我们上一个例子中的 <strong>Inbound Adapter</strong>，它可以从外部系统接收消息（HTTP、MQTT、Kafka、JMS、FTP、TCP…）</p>
+<p>还有 <strong>Outbound Adapter</strong>，它是向外部系统发送消息</p>
+<p>接下来我们在系统中集成一个 MQTT</p>
+<h3 id="spring-integration-mqtt"><a href="https://www.cnblogs.com/cxuanBlog/p/14917187.html">Spring Integration MQTT</a>
+</h3>
+<p>在使用该框架之前，我们先了解一下 MQTT。</p>
+<p>MQTT 是一种基于发布订阅模式的消息协议，基于 TCP/IP 协议。一般多用于物联网，广泛应用于工业级别的应用场景。主要面向 <strong>长连接、弱网、低功耗</strong> 设备。</p>
+<p>设计目标：<strong>最小报文、最少带宽、可靠可选</strong>。典型用于 IoT 采集、设备控制、车联网、移动端推送等。</p>
+<p>参与方有：</p>
+<ul>
+<li><strong>Broker（代理/服务器）</strong>：转发中心（如 EMQX、Mosquitto、HiveMQ）。</li>
+<li><strong>Client（客户端）</strong>：发布消息和订阅消息的都称之为客户端</li>
+<li><strong>Topic（主题）</strong>：是一个层级字符串，用于路由消息（如 <code>device/123/telemetry</code>）。</li>
+</ul>
+<h4 id="核心机制">核心机制</h4>
+<p><strong>主题与通配符</strong>
+<code>+</code> 匹配单层；</p>
+<p><code>#</code> 匹配多层，但是只能出现在最后。
+例：订阅 <code>device/+/telemetry</code> 可接收任意设备的遥测；<code>device/#</code> 接收该前缀下所有消息。</p>
+<blockquote>
+<p>PS：发布时 <strong>不能</strong> 使用通配符，必须使用一个确切的主题；订阅时可以模糊订阅。</p></blockquote>
+<p><strong>QoS（服务质量等级）</strong></p>
+<ul>
+<li>
+<p><strong>QoS 0</strong>：消息最多送达一次，不保证送达。</p>
+<blockquote>
+<p>客户端发送消息给 Broker（或 Broker 发送给客户端），<strong>不需要经过确认</strong>。</p>
+<p>但当网络断开时，消息可能<strong>丢失</strong>。</p>
+<p>没有重发机制。</p></blockquote>
+</li>
+<li>
+<p><strong>QoS 1</strong>：消息至少送达一次，可能重复。</p>
+<blockquote>
+<p>发送方发送 <code>PUBLISH</code>（带 <code>QoS=1</code>）</p>
+<p>接收方收到后回复 <code>PUBACK</code>（确认）</p>
+<p>若发送方未收到 <code>PUBACK</code>，则重发消息</p>
+<p>因为有重发机制，<strong>接收方可能收到重复消息</strong></p></blockquote>
+</li>
+<li>
+<p><strong>QoS 2</strong>：消息只送达一次，不丢不重。</p>
+<blockquote>
+<p>发送方：<code>PUBLISH</code></p>
+<p>接收方：<code>PUBREC</code>（已收到）</p>
+<p>发送方：<code>PUBREL</code>（确认发布）</p>
+<p>接收方：<code>PUBCOMP</code>（完成）</p>
+<p>整个流程确保：不会重复；不会丢失；但会增加延迟和网络流量</p></blockquote>
+</li>
+</ul>
+<p><strong>保留消息（Retained Message）</strong></p>
+<p>Broker 会记住该主题 <strong>最后一条</strong> 消息，如果有新订阅者它会立刻收到这条消息。发送 <strong>空载荷 + retain</strong> 可清除该主题的保留消息。</p>
+<p><strong>遗嘱消息（Last Will &amp; Testament, LWT）</strong></p>
+<p>客户端异常断开时，Broker 自动向指定主题发布 <strong>离线/故障</strong> 消息。</p>
+<blockquote>
+<p>它可以用来判断设备的在线状态，主动下线的时候主动发送下线消息，但当异常下线的时候，就需要通过遗嘱消息来更新设备状态</p></blockquote>
+<p><strong>共享订阅（Shared Subscription）</strong>：</p>
+<p>多消费者 <strong>分摊</strong> 同一主题负载，类似 MQ 的集群消费。</p>
+<p>常见语语法：<code>$share/&lt;group&gt;/device/+/telemetry</code>。同组内仅 <strong>一台</strong> 消费者收到某条消息（负载均衡）</p>
+<p>接下来看一个例子</p>
+<p>配置依赖</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-xml" data-lang="xml"><span class="line"><span class="cl"><span class="nt">&lt;dependency&gt;</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&lt;groupId&gt;</span>org.springframework.integration<span class="nt">&lt;/groupId&gt;</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&lt;artifactId&gt;</span>spring-integration-mqtt<span class="nt">&lt;/artifactId&gt;</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&lt;version&gt;</span>6.2.3<span class="nt">&lt;/version&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="nt">&lt;/dependency&gt;</span>
+</span></span></code></pre></div><p>Spring Integration 通过 <code>MqttPahoClientFactory</code> 创建和配置 MQTT 客户端。是 MQTT 客户端配置中心，负责统一提供客户端连接配置（Broker 地址、认证、超时、SSL 等）。供发布端和订阅端使用，避免重复配置，方便维护和扩展</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="nd">@Bean</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">public</span><span class="w"> </span><span class="n">MqttPahoClientFactory</span><span class="w"> </span><span class="nf">mqttClientFactory</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">DefaultMqttPahoClientFactory</span><span class="w"> </span><span class="n">factory</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">DefaultMqttPahoClientFactory</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">MqttConnectOptions</span><span class="w"> </span><span class="n">options</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">MqttConnectOptions</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">options</span><span class="p">.</span><span class="na">setServerURIs</span><span class="p">(</span><span class="k">new</span><span class="w"> </span><span class="n">String</span><span class="o">[]</span><span class="p">{</span><span class="s">&#34;tcp://127.0.0.1:1883&#34;</span><span class="p">});</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">options</span><span class="p">.</span><span class="na">setUserName</span><span class="p">(</span><span class="s">&#34;username&#34;</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">options</span><span class="p">.</span><span class="na">setPassword</span><span class="p">(</span><span class="s">&#34;password&#34;</span><span class="p">.</span><span class="na">toCharArray</span><span class="p">());</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">factory</span><span class="p">.</span><span class="na">setConnectionOptions</span><span class="p">(</span><span class="n">options</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">factory</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>配置 Channel</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="nd">@Bean</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">public</span><span class="w"> </span><span class="n">MessageChannel</span><span class="w"> </span><span class="nf">mqttInputChannel</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">DirectChannel</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nd">@Bean</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">public</span><span class="w"> </span><span class="n">MessageChannel</span><span class="w"> </span><span class="nf">mqttOutboundChannel</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">DirectChannel</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>Channel 用于消息的传递</p>
+<p>订阅消息</p>
+<p>让 Spring Integration 监听某个 Topic，收到消息后转发到 Channel</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="nd">@Bean</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">public</span><span class="w"> </span><span class="n">MessageProducer</span><span class="w"> </span><span class="nf">inbound</span><span class="p">(</span><span class="n">MqttPahoClientFactory</span><span class="w"> </span><span class="n">mqttClientFactory</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// Spring Integration 设配器，用来获取 MQTT Broker 发送的消息</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">MqttPahoMessageDrivenChannelAdapter</span><span class="w"> </span><span class="n">adapter</span><span class="w"> </span><span class="o">=</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="k">new</span><span class="w"> </span><span class="n">MqttPahoMessageDrivenChannelAdapter</span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                    </span><span class="s">&#34;mqttClientSub&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">mqttClientFactory</span><span class="p">,</span><span class="w"> </span><span class="s">&#34;test/topic&#34;</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">adapter</span><span class="p">.</span><span class="na">setCompletionTimeout</span><span class="p">(</span><span class="n">5000</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">adapter</span><span class="p">.</span><span class="na">setConverter</span><span class="p">(</span><span class="k">new</span><span class="w"> </span><span class="n">DefaultPahoMessageConverter</span><span class="p">());</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">adapter</span><span class="p">.</span><span class="na">setQos</span><span class="p">(</span><span class="n">1</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">adapter</span><span class="p">.</span><span class="na">setOutputChannel</span><span class="p">(</span><span class="n">mqttInputChannel</span><span class="p">());</span><span class="w"> </span><span class="c1">// 将从 Broker 订阅的消息发送到 mqttInputChannel 通道</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">adapter</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nd">@ServiceActivator</span><span class="p">(</span><span class="n">inputChannel</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&#34;mqttInputChannel&#34;</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">public</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">handleMessage</span><span class="p">(</span><span class="n">String</span><span class="w"> </span><span class="n">payload</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">System</span><span class="p">.</span><span class="na">out</span><span class="p">.</span><span class="na">println</span><span class="p">(</span><span class="s">&#34;收到消息: &#34;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">payload</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p><code>MessageProducer</code> 是一个非常核心的接口，用来从外部系统接收消息并送入 Spring Integration 消息通道组件中</p>
+<p>工作机制</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-markdown" data-lang="markdown"><span class="line"><span class="cl">┌────────────────────┐
+</span></span><span class="line"><span class="cl">│   外部系统（MQTT） │
+</span></span><span class="line"><span class="cl">└────────┬───────────┘
+</span></span><span class="line"><span class="cl">         │
+</span></span><span class="line"><span class="cl">         ▼
+</span></span><span class="line"><span class="cl">┌──────────────────────────────┐
+</span></span><span class="line"><span class="cl">│ MessageProducer（生产者）    │
+</span></span><span class="line"><span class="cl">│ 负责接收消息，并封装成       │
+</span></span><span class="line"><span class="cl">│ org.springframework.messaging.Message │
+</span></span><span class="line"><span class="cl">└────────┬─────────────────────┘
+</span></span><span class="line"><span class="cl">         │
+</span></span><span class="line"><span class="cl">         ▼
+</span></span><span class="line"><span class="cl">┌──────────────────────────────┐
+</span></span><span class="line"><span class="cl">│ MessageChannel（通道）        │
+</span></span><span class="line"><span class="cl">└────────┬─────────────────────┘
+</span></span><span class="line"><span class="cl">         │
+</span></span><span class="line"><span class="cl">         ▼
+</span></span><span class="line"><span class="cl">┌──────────────────────────────┐
+</span></span><span class="line"><span class="cl">│ MessageHandler（处理器/消费者）│
+</span></span><span class="line"><span class="cl">└──────────────────────────────┘
+</span></span></code></pre></div><p><code>spring-integration-mqtt</code> 中最经典的实现类是 <code>MqttPahoMessageDrivenChannelAdapter</code>，用于从 MQTT Broker 订阅主题，接收消息，然后将其发送到对应的 <code>Channel</code></p>
+<p><code>@ServiceActivator</code> 注解也是 Spring Integration 中的核心注解之一，负责监听某个通道，当有消息到达时就执行指定的方法或消息处理器</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="nd">@ServiceActivator</span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">inputChannel</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&#34;mqttInboundChannel&#34;</span><span class="p">,</span><span class="w"> </span><span class="c1">// 要监听的通道</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">outputChannel</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&#34;processedChannel&#34;</span><span class="p">,</span><span class="w">  </span><span class="c1">// 处理消息后转发的通道</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">requiresReply</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span><span class="w">               </span><span class="c1">// 是否要求返回值作为回复消息</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">async</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span><span class="w">                        </span><span class="c1">// 是否异步调用</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">)</span><span class="w">
+</span></span></span></code></pre></div><p>它可以和方法绑定</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="nd">@Component</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">MqttMessageReceiver</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nd">@ServiceActivator</span><span class="p">(</span><span class="n">inputChannel</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&#34;mqttInboundChannel&#34;</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">handleMessage</span><span class="p">(</span><span class="n">String</span><span class="w"> </span><span class="n">payload</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">System</span><span class="p">.</span><span class="na">out</span><span class="p">.</span><span class="na">println</span><span class="p">(</span><span class="s">&#34;接收到消息: &#34;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">payload</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w"> </span><span class="c1">// 将是消息最终处理器</span><span class="w">
+</span></span></span></code></pre></div><p>绑定到 MessageHandler Bean</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="nd">@Bean</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nd">@ServiceActivator</span><span class="p">(</span><span class="n">inputChannel</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&#34;mqttOutboundChannel&#34;</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">public</span><span class="w"> </span><span class="n">MessageHandler</span><span class="w"> </span><span class="nf">mqttOutbound</span><span class="p">(</span><span class="n">MqttPahoClientFactory</span><span class="w"> </span><span class="n">factory</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">MqttPahoMessageHandler</span><span class="w"> </span><span class="n">handler</span><span class="w"> </span><span class="o">=</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">new</span><span class="w"> </span><span class="n">MqttPahoMessageHandler</span><span class="p">(</span><span class="s">&#34;publisherClient&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">factory</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">handler</span><span class="p">.</span><span class="na">setAsync</span><span class="p">(</span><span class="kc">true</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">handler</span><span class="p">.</span><span class="na">setDefaultTopic</span><span class="p">(</span><span class="s">&#34;device/data&#34;</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">handler</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w"> </span><span class="c1">// 会调用调用 MessageHandler Bean 的 handlerMessage() 方法处理消息</span><span class="w">
+</span></span></span></code></pre></div><p>上面的代码就是一个向外部发送消息的处理器，会将从 <code>mqttOutboundChannel</code> 通道中的消息发送到 <code>device/data</code> 主题</p>
+<p><code>mqttOutboundChannel</code> 通道中的消息可以通过定义一个网关发送</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="nd">@MessagingGateway</span><span class="p">(</span><span class="n">defaultRequestChannel</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&#34;mqttOutboundChannel&#34;</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">public</span><span class="w"> </span><span class="kd">interface</span> <span class="nc">MqttSenderGateway</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// 发送消息到默认主题</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">sendToMqtt</span><span class="p">(</span><span class="n">String</span><span class="w"> </span><span class="n">payload</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// 发送消息到指定主题</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">sendToMqtt</span><span class="p">(</span><span class="nd">@Header</span><span class="p">(</span><span class="n">MqttHeaders</span><span class="p">.</span><span class="na">TOPIC</span><span class="p">)</span><span class="w"> </span><span class="n">String</span><span class="w"> </span><span class="n">topic</span><span class="p">,</span><span class="w"> </span><span class="n">String</span><span class="w"> </span><span class="n">payload</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// 指定 QoS</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">sendToMqtt</span><span class="p">(</span><span class="nd">@Header</span><span class="p">(</span><span class="n">MqttHeaders</span><span class="p">.</span><span class="na">TOPIC</span><span class="p">)</span><span class="w"> </span><span class="n">String</span><span class="w"> </span><span class="n">topic</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                    </span><span class="nd">@Header</span><span class="p">(</span><span class="n">MqttHeaders</span><span class="p">.</span><span class="na">QOS</span><span class="p">)</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">qos</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                    </span><span class="n">String</span><span class="w"> </span><span class="n">payload</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p><code>MessageProducer</code> 是从外部接收消息的核心接口，<code>MessageHandler</code> 就是 Spring Integration 处理或向外部发送消息的核心接口。在 Spring Integration 的世界里，一切最终处理或发送到外部系统的逻辑，都是通过 <code>MessageHandler</code> 来完成的</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-markdown" data-lang="markdown"><span class="line"><span class="cl">┌────────────────────┐
+</span></span><span class="line"><span class="cl">│ 外部系统（MQTT）   │
+</span></span><span class="line"><span class="cl">└────────┬───────────┘
+</span></span><span class="line"><span class="cl">         │
+</span></span><span class="line"><span class="cl">         ▼
+</span></span><span class="line"><span class="cl">┌──────────────────────────────┐
+</span></span><span class="line"><span class="cl">│ MessageProducer (入口)       │ ← 负责接收消息
+</span></span><span class="line"><span class="cl">└────────┬─────────────────────┘
+</span></span><span class="line"><span class="cl">         │
+</span></span><span class="line"><span class="cl">         ▼
+</span></span><span class="line"><span class="cl">┌──────────────────────────────┐
+</span></span><span class="line"><span class="cl">│ MessageChannel (管道)        │ ← 用于异步或同步传递消息
+</span></span><span class="line"><span class="cl">└────────┬─────────────────────┘
+</span></span><span class="line"><span class="cl">         │
+</span></span><span class="line"><span class="cl">         ▼
+</span></span><span class="line"><span class="cl">┌──────────────────────────────┐
+</span></span><span class="line"><span class="cl">│ MessageHandler (出口)        │ ← 负责处理或发送消息
+</span></span><span class="line"><span class="cl">└──────────────────────────────┘
+</span></span></code></pre></div><p>spring integration mqtt 中的典型实现类是 <code>MqttPahoMessageHandler</code></p>
+<p><code>@MessagingGateway</code> 是 Spring Integration 中最优雅、最高层的消息发送入口机制。它可以像调用普通方法一样，向 Spring Integration 的消息通道发送消息。</p>
+<p>我们如果使用 <code>MessageChannel</code> 手动发送消息</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="nd">@SpringBootApplication</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">DemoApplication</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kd">static</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">main</span><span class="p">(</span><span class="n">String</span><span class="o">[]</span><span class="w"> </span><span class="n">args</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kd">var</span><span class="w"> </span><span class="n">context</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">SpringApplication</span><span class="p">.</span><span class="na">run</span><span class="p">(</span><span class="n">DemoApplication</span><span class="p">.</span><span class="na">class</span><span class="p">,</span><span class="w"> </span><span class="n">args</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="c1">// 从容器中获取定义的通道</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">MessageChannel</span><span class="w"> </span><span class="n">channel</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">context</span><span class="p">.</span><span class="na">getBean</span><span class="p">(</span><span class="s">&#34;demoChannel&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">MessageChannel</span><span class="p">.</span><span class="na">class</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="c1">// 构建消息对象</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">Message</span><span class="o">&lt;</span><span class="n">String</span><span class="o">&gt;</span><span class="w"> </span><span class="n">message</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">MessageBuilder</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="na">withPayload</span><span class="p">(</span><span class="s">&#34;hello spring integration!&#34;</span><span class="p">)</span><span class="w"> </span><span class="c1">// 消息体</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="na">setHeader</span><span class="p">(</span><span class="s">&#34;sender&#34;</span><span class="p">,</span><span class="w"> </span><span class="s">&#34;manualTest&#34;</span><span class="p">)</span><span class="w">        </span><span class="c1">// 可选：添加自定义 header</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="na">build</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="c1">// 发送消息</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kt">boolean</span><span class="w"> </span><span class="n">sent</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">channel</span><span class="p">.</span><span class="na">send</span><span class="p">(</span><span class="n">message</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">System</span><span class="p">.</span><span class="na">out</span><span class="p">.</span><span class="na">println</span><span class="p">(</span><span class="s">&#34; 消息是否发送成功: &#34;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">sent</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="cm">/**
+</span></span></span><span class="line"><span class="cl"><span class="cm">     * 定义一个消息通道
+</span></span></span><span class="line"><span class="cl"><span class="cm">     */</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nd">@Bean</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="n">MessageChannel</span><span class="w"> </span><span class="nf">demoChannel</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">DirectChannel</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="cm">/**
+</span></span></span><span class="line"><span class="cl"><span class="cm">     * 定义消息消费者（监听 demoChannel）
+</span></span></span><span class="line"><span class="cl"><span class="cm">     */</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nd">@Bean</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nd">@ServiceActivator</span><span class="p">(</span><span class="n">inputChannel</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&#34;demoChannel&#34;</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="n">MessageHandler</span><span class="w"> </span><span class="nf">printMessageHandler</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">msg</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">System</span><span class="p">.</span><span class="na">out</span><span class="p">.</span><span class="na">println</span><span class="p">(</span><span class="s">&#34;收到消息: &#34;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">msg</span><span class="p">.</span><span class="na">getPayload</span><span class="p">());</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">System</span><span class="p">.</span><span class="na">out</span><span class="p">.</span><span class="na">println</span><span class="p">(</span><span class="s">&#34;Headers: &#34;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">msg</span><span class="p">.</span><span class="na">getHeaders</span><span class="p">());</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">};</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>这样使用十分麻烦，而有了 <code>@MessagingGateway</code> 我们只需要调用</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">mqttGateway</span><span class="p">.</span><span class="na">sendToMqtt</span><span class="p">(</span><span class="s">&#34;hello&#34;</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><p>Spring 会自动帮忙完成</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-markdown" data-lang="markdown"><span class="line"><span class="cl">方法调用 -&gt; 封装为 Message -&gt; 发送到指定 MessageChannel -&gt; MessageHandler 处理
+</span></span></code></pre></div><p><code>@MessagingGateway</code> 会为接口自动创建一个 <strong>代理类 (Proxy)</strong>，这个代理类会把方法调用<strong>转换成一条消息</strong>并发送到指定的通道</p>
+<p><code>@MessagingGateway</code> 定义一个消息网关（gateway）接口；<code>defaultRequestChannel</code> 表示默认发送到哪个通道；方法参数可以使用 <code>@Header</code> 来指定消息头；方法体留空，由 Spring 自动生成代理。</p>
+<p>整个的过程是</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-markdown" data-lang="markdown"><span class="line"><span class="cl">业务方法调用
+</span></span><span class="line"><span class="cl">   ↓
+</span></span><span class="line"><span class="cl">MessagingGateway 代理
+</span></span><span class="line"><span class="cl">   ↓
+</span></span><span class="line"><span class="cl">MessageChannel（mqttOutboundChannel）
+</span></span><span class="line"><span class="cl">   ↓
+</span></span><span class="line"><span class="cl">MqttPahoMessageHandler
+</span></span><span class="line"><span class="cl">   ↓
+</span></span><span class="line"><span class="cl">MQTT Broker
+</span></span></code></pre></div>
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

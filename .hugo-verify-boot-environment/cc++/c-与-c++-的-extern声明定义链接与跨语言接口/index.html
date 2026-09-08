@@ -1,0 +1,1310 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>C 与 C&#43;&#43; 的 extern：声明、定义、链接与跨语言接口 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="extern 最常被解释为“在别处定义”。这句话方向没错，却不足以指导实际工程：什么叫“别处”？为什么有的 extern 只是声明，有的却仍然是定义？为什么 C&#43;&#43; 的 const、头文件变量和 extern &quot;C&quot; 又让问题复杂起来？
+核心只有一句：extern 通常用于声明一个具有外部链接的实体，使多个翻译单元能引用同一份定义。它不负责创建存储，更不负责替你组织接口；声明、定义、预处理和链接器各有各的工作，混在一起只会制造重复定义或未定义引用。
+头文件：声明“有这样一个实体，类型和名字是这个” 源文件：定义“实体就在这里，程序中应有这一份” 链接器：把所有翻译单元对该外部实体的引用接到同一份定义 一、先建立翻译单元与链接属性的概念 一个 .c/.cpp 文件在 #include 和宏展开后的结果，称为翻译单元（translation unit）。各翻译单元先独立编译，再由链接器组合为可执行文件或库。
+因此，声明某个名字时至少应区分：
+概念 问题 示例 声明（declaration） 编译器是否已知实体的名字和类型？ extern int timeout; 定义（definition） 是否真正提供实体，或函数实现？ int timeout = 30; 链接属性（linkage） 其他翻译单元的同名声明能否指向它？ 外部链接、内部链接、无链接 作用域（scope） 名字能在当前源码的何处直接使用？ 块、文件、命名空间、类 extern 主要涉及“声明”和“外部链接”，不是存储期关键字。一个文件作用域变量即使不写 extern 也可具有静态存储期；反过来，写了 extern 也不意味着它在此处得到存储。
+二、最常见的组织方式：头文件声明，单个源文件定义 // config.h #pragma once extern int global_timeout; // config.cpp #include &#34;config.h&#34; int global_timeout = 30; // main.cpp #include &#34;config.h&#34; void run() { global_timeout = 10; } config.h 的 extern int global_timeout; 通常只是声明：它告诉每个包含者“存在一个这种类型、这种名字的对象”。config.cpp 中带初始化器的 int global_timeout = 30; 提供定义和存储。链接器将 main.cpp 中对该名字的使用解析到这个定义。
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/cc&#43;&#43;/c-%E4%B8%8E-c&#43;&#43;-%E7%9A%84-extern%E5%A3%B0%E6%98%8E%E5%AE%9A%E4%B9%89%E9%93%BE%E6%8E%A5%E4%B8%8E%E8%B7%A8%E8%AF%AD%E8%A8%80%E6%8E%A5%E5%8F%A3/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/cc&#43;&#43;/c-%E4%B8%8E-c&#43;&#43;-%E7%9A%84-extern%E5%A3%B0%E6%98%8E%E5%AE%9A%E4%B9%89%E9%93%BE%E6%8E%A5%E4%B8%8E%E8%B7%A8%E8%AF%AD%E8%A8%80%E6%8E%A5%E5%8F%A3/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="C 与 C&#43;&#43; 的 extern：声明、定义、链接与跨语言接口">
+  <meta property="og:description" content="extern 最常被解释为“在别处定义”。这句话方向没错，却不足以指导实际工程：什么叫“别处”？为什么有的 extern 只是声明，有的却仍然是定义？为什么 C&#43;&#43; 的 const、头文件变量和 extern &#34;C&#34; 又让问题复杂起来？
+核心只有一句：extern 通常用于声明一个具有外部链接的实体，使多个翻译单元能引用同一份定义。它不负责创建存储，更不负责替你组织接口；声明、定义、预处理和链接器各有各的工作，混在一起只会制造重复定义或未定义引用。
+头文件：声明“有这样一个实体，类型和名字是这个” 源文件：定义“实体就在这里，程序中应有这一份” 链接器：把所有翻译单元对该外部实体的引用接到同一份定义 一、先建立翻译单元与链接属性的概念 一个 .c/.cpp 文件在 #include 和宏展开后的结果，称为翻译单元（translation unit）。各翻译单元先独立编译，再由链接器组合为可执行文件或库。
+因此，声明某个名字时至少应区分：
+概念 问题 示例 声明（declaration） 编译器是否已知实体的名字和类型？ extern int timeout; 定义（definition） 是否真正提供实体，或函数实现？ int timeout = 30; 链接属性（linkage） 其他翻译单元的同名声明能否指向它？ 外部链接、内部链接、无链接 作用域（scope） 名字能在当前源码的何处直接使用？ 块、文件、命名空间、类 extern 主要涉及“声明”和“外部链接”，不是存储期关键字。一个文件作用域变量即使不写 extern 也可具有静态存储期；反过来，写了 extern 也不意味着它在此处得到存储。
+二、最常见的组织方式：头文件声明，单个源文件定义 // config.h #pragma once extern int global_timeout; // config.cpp #include &#34;config.h&#34; int global_timeout = 30; // main.cpp #include &#34;config.h&#34; void run() { global_timeout = 10; } config.h 的 extern int global_timeout; 通常只是声明：它告诉每个包含者“存在一个这种类型、这种名字的对象”。config.cpp 中带初始化器的 int global_timeout = 30; 提供定义和存储。链接器将 main.cpp 中对该名字的使用解析到这个定义。">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="c&amp;c&#43;&#43;">
+    <meta property="article:published_time" content="2026-08-28T10:05:00+08:00">
+    <meta property="article:modified_time" content="2026-08-28T10:05:00+08:00">
+
+  
+  <meta itemprop="name" content="C 与 C&#43;&#43; 的 extern：声明、定义、链接与跨语言接口">
+  <meta itemprop="description" content="extern 最常被解释为“在别处定义”。这句话方向没错，却不足以指导实际工程：什么叫“别处”？为什么有的 extern 只是声明，有的却仍然是定义？为什么 C&#43;&#43; 的 const、头文件变量和 extern &#34;C&#34; 又让问题复杂起来？
+核心只有一句：extern 通常用于声明一个具有外部链接的实体，使多个翻译单元能引用同一份定义。它不负责创建存储，更不负责替你组织接口；声明、定义、预处理和链接器各有各的工作，混在一起只会制造重复定义或未定义引用。
+头文件：声明“有这样一个实体，类型和名字是这个” 源文件：定义“实体就在这里，程序中应有这一份” 链接器：把所有翻译单元对该外部实体的引用接到同一份定义 一、先建立翻译单元与链接属性的概念 一个 .c/.cpp 文件在 #include 和宏展开后的结果，称为翻译单元（translation unit）。各翻译单元先独立编译，再由链接器组合为可执行文件或库。
+因此，声明某个名字时至少应区分：
+概念 问题 示例 声明（declaration） 编译器是否已知实体的名字和类型？ extern int timeout; 定义（definition） 是否真正提供实体，或函数实现？ int timeout = 30; 链接属性（linkage） 其他翻译单元的同名声明能否指向它？ 外部链接、内部链接、无链接 作用域（scope） 名字能在当前源码的何处直接使用？ 块、文件、命名空间、类 extern 主要涉及“声明”和“外部链接”，不是存储期关键字。一个文件作用域变量即使不写 extern 也可具有静态存储期；反过来，写了 extern 也不意味着它在此处得到存储。
+二、最常见的组织方式：头文件声明，单个源文件定义 // config.h #pragma once extern int global_timeout; // config.cpp #include &#34;config.h&#34; int global_timeout = 30; // main.cpp #include &#34;config.h&#34; void run() { global_timeout = 10; } config.h 的 extern int global_timeout; 通常只是声明：它告诉每个包含者“存在一个这种类型、这种名字的对象”。config.cpp 中带初始化器的 int global_timeout = 30; 提供定义和存储。链接器将 main.cpp 中对该名字的使用解析到这个定义。">
+  <meta itemprop="datePublished" content="2026-08-28T10:05:00+08:00">
+  <meta itemprop="dateModified" content="2026-08-28T10:05:00+08:00">
+  <meta itemprop="wordCount" content="490">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="C 与 C&#43;&#43; 的 extern：声明、定义、链接与跨语言接口">
+  <meta name="twitter:description" content="extern 最常被解释为“在别处定义”。这句话方向没错，却不足以指导实际工程：什么叫“别处”？为什么有的 extern 只是声明，有的却仍然是定义？为什么 C&#43;&#43; 的 const、头文件变量和 extern &#34;C&#34; 又让问题复杂起来？
+核心只有一句：extern 通常用于声明一个具有外部链接的实体，使多个翻译单元能引用同一份定义。它不负责创建存储，更不负责替你组织接口；声明、定义、预处理和链接器各有各的工作，混在一起只会制造重复定义或未定义引用。
+头文件：声明“有这样一个实体，类型和名字是这个” 源文件：定义“实体就在这里，程序中应有这一份” 链接器：把所有翻译单元对该外部实体的引用接到同一份定义 一、先建立翻译单元与链接属性的概念 一个 .c/.cpp 文件在 #include 和宏展开后的结果，称为翻译单元（translation unit）。各翻译单元先独立编译，再由链接器组合为可执行文件或库。
+因此，声明某个名字时至少应区分：
+概念 问题 示例 声明（declaration） 编译器是否已知实体的名字和类型？ extern int timeout; 定义（definition） 是否真正提供实体，或函数实现？ int timeout = 30; 链接属性（linkage） 其他翻译单元的同名声明能否指向它？ 外部链接、内部链接、无链接 作用域（scope） 名字能在当前源码的何处直接使用？ 块、文件、命名空间、类 extern 主要涉及“声明”和“外部链接”，不是存储期关键字。一个文件作用域变量即使不写 extern 也可具有静态存储期；反过来，写了 extern 也不意味着它在此处得到存储。
+二、最常见的组织方式：头文件声明，单个源文件定义 // config.h #pragma once extern int global_timeout; // config.cpp #include &#34;config.h&#34; int global_timeout = 30; // main.cpp #include &#34;config.h&#34; void run() { global_timeout = 10; } config.h 的 extern int global_timeout; 通常只是声明：它告诉每个包含者“存在一个这种类型、这种名字的对象”。config.cpp 中带初始化器的 int global_timeout = 30; 提供定义和存储。链接器将 main.cpp 中对该名字的使用解析到这个定义。">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">C 与 C&#43;&#43; 的 extern：声明、定义、链接与跨语言接口</h1>
+
+    
+      <div class="post-date">August 28, 2026</div>
+    
+
+    <div class="post-content">
+      <p><code>extern</code> 最常被解释为“在别处定义”。这句话方向没错，却不足以指导实际工程：什么叫“别处”？为什么有的 <code>extern</code> 只是声明，有的却仍然是定义？为什么 C++ 的 <code>const</code>、头文件变量和 <code>extern &quot;C&quot;</code> 又让问题复杂起来？</p>
+<p>核心只有一句：<code>extern</code> 通常用于声明一个具有<strong>外部链接</strong>的实体，使多个翻译单元能引用同一份定义。它不负责创建存储，更不负责替你组织接口；声明、定义、预处理和链接器各有各的工作，混在一起只会制造重复定义或未定义引用。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">头文件：声明“有这样一个实体，类型和名字是这个”
+</span></span><span class="line"><span class="cl">源文件：定义“实体就在这里，程序中应有这一份”
+</span></span><span class="line"><span class="cl">链接器：把所有翻译单元对该外部实体的引用接到同一份定义
+</span></span></code></pre></div><h2 id="一先建立翻译单元与链接属性的概念">一、先建立翻译单元与链接属性的概念</h2>
+<p>一个 <code>.c</code>/<code>.cpp</code> 文件在 <code>#include</code> 和宏展开后的结果，称为<strong>翻译单元</strong>（translation unit）。各翻译单元先独立编译，再由链接器组合为可执行文件或库。</p>
+<p>因此，声明某个名字时至少应区分：</p>
+<table>
+  <thead>
+      <tr>
+          <th>概念</th>
+          <th>问题</th>
+          <th>示例</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>声明（declaration）</td>
+          <td>编译器是否已知实体的名字和类型？</td>
+          <td><code>extern int timeout;</code></td>
+      </tr>
+      <tr>
+          <td>定义（definition）</td>
+          <td>是否真正提供实体，或函数实现？</td>
+          <td><code>int timeout = 30;</code></td>
+      </tr>
+      <tr>
+          <td>链接属性（linkage）</td>
+          <td>其他翻译单元的同名声明能否指向它？</td>
+          <td>外部链接、内部链接、无链接</td>
+      </tr>
+      <tr>
+          <td>作用域（scope）</td>
+          <td>名字能在当前源码的何处直接使用？</td>
+          <td>块、文件、命名空间、类</td>
+      </tr>
+  </tbody>
+</table>
+<p><code>extern</code> 主要涉及“声明”和“外部链接”，不是存储期关键字。一个文件作用域变量即使不写 <code>extern</code> 也可具有静态存储期；反过来，写了 <code>extern</code> 也不意味着它在此处得到存储。</p>
+<h2 id="二最常见的组织方式头文件声明单个源文件定义">二、最常见的组织方式：头文件声明，单个源文件定义</h2>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// config.h
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="cp">#pragma once
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="k">extern</span> <span class="kt">int</span> <span class="n">global_timeout</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// config.cpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="cp">#include</span> <span class="cpf">&#34;config.h&#34;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">global_timeout</span> <span class="o">=</span> <span class="mi">30</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// main.cpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="cp">#include</span> <span class="cpf">&#34;config.h&#34;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">run</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">global_timeout</span> <span class="o">=</span> <span class="mi">10</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p><code>config.h</code> 的 <code>extern int global_timeout;</code> 通常只是声明：它告诉每个包含者“存在一个这种类型、这种名字的对象”。<code>config.cpp</code> 中带初始化器的 <code>int global_timeout = 30;</code> 提供定义和存储。链接器将 <code>main.cpp</code> 中对该名字的使用解析到这个定义。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">config.h    -&gt; 可重复包含的接口声明
+</span></span><span class="line"><span class="cl">config.cpp  -&gt; 程序中唯一的对象定义
+</span></span><span class="line"><span class="cl">main.cpp    -&gt; 包含接口后使用同一个对象
+</span></span></code></pre></div><p>源文件中的定义也应包含自己的头文件。如此一来，若头文件将 <code>int</code> 改成 <code>long</code>、移入命名空间或添加限定符，定义文件会立即接受同一份声明检查，而不是悄悄和接口分叉。</p>
+<h2 id="三声明与定义四种写法必须分清">三、声明与定义：四种写法必须分清</h2>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">extern</span> <span class="kt">int</span> <span class="n">count</span><span class="p">;</span>      <span class="c1">// 声明；定义应在其他某处出现
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kt">int</span> <span class="n">count</span><span class="p">;</span>             <span class="c1">// 定义；零初始化
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kt">int</span> <span class="n">count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>         <span class="c1">// 定义；显式初始化
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">extern</span> <span class="kt">int</span> <span class="n">count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>  <span class="c1">// 仍是定义：初始化器使它定义对象
+</span></span></span></code></pre></div><p>最后一行最容易制造事故。下面的头文件并非“带默认值的声明”：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// bad_config.h
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">extern</span> <span class="kt">int</span> <span class="n">global_timeout</span> <span class="o">=</span> <span class="mi">30</span><span class="p">;</span> <span class="c1">// 定义，不只是声明
+</span></span></span></code></pre></div><p>每个包含它的翻译单元都会产生一个外部定义，最终通常导致多重定义链接错误。在 C++ 中，这也会违反单一定义规则（ODR）。正确的传统布局仍然是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// config.h
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">extern</span> <span class="kt">int</span> <span class="n">global_timeout</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// config.cpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kt">int</span> <span class="n">global_timeout</span> <span class="o">=</span> <span class="mi">30</span><span class="p">;</span>
+</span></span></code></pre></div><h3 id="1-暂定定义不是可依赖的头文件技巧">1. “暂定定义”不是可依赖的头文件技巧</h3>
+<p>在 C 中，文件作用域的 <code>int count;</code> 涉及历史上的暂定定义（tentative definition）规则；不同编译器和构建选项也曾对多个此类定义的合并方式有所差异。无论这些细节如何，头文件中放置非 <code>extern</code> 的全局变量定义都不是可靠的接口设计。</p>
+<p>若它应被共享：头文件写 <code>extern</code> 声明，恰好一个 <code>.c</code> 定义。若它不应被共享：放入一个源文件，并用文件作用域 <code>static</code> 隐藏。别把链接器曾经宽容的行为当成语言接口。</p>
+<h3 id="2-函数的情形">2. 函数的情形</h3>
+<p>普通文件/命名空间作用域函数默认通常具有外部链接：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">add</span><span class="p">(</span><span class="kt">int</span> <span class="n">left</span><span class="p">,</span> <span class="kt">int</span> <span class="n">right</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="n">left</span> <span class="o">+</span> <span class="n">right</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>这类函数声明前写 <code>extern</code> 合法，却通常没有额外意义：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">extern</span> <span class="kt">int</span> <span class="nf">add</span><span class="p">(</span><span class="kt">int</span> <span class="n">left</span><span class="p">,</span> <span class="kt">int</span> <span class="n">right</span><span class="p">);</span>
+</span></span></code></pre></div><p>项目代码一般直接把函数声明放在头文件即可。若函数只服务于当前 <code>.c/.cpp</code>，C 使用文件作用域 <code>static</code>，C++ 可使用 <code>static</code> 或匿名命名空间，而不是期待 <code>extern</code> 提供某种访问控制。</p>
+<h2 id="四常量inline-变量与头文件c-的额外规则">四、常量、<code>inline</code> 变量与头文件：C++ 的额外规则</h2>
+<h3 id="1-const-的默认链接属性">1. <code>const</code> 的默认链接属性</h3>
+<p>在 C++ 中，命名空间作用域的非 <code>volatile</code> <code>const</code> 对象默认具有内部链接，除非已有外部链接声明或另有规则：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// constants.cpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">const</span> <span class="kt">int</span> <span class="n">default_timeout</span> <span class="o">=</span> <span class="mi">30</span><span class="p">;</span> <span class="c1">// 默认内部链接
+</span></span></span></code></pre></div><p>若它需要被多个翻译单元共享，应在头文件作外部声明：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// constants.h
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">extern</span> <span class="k">const</span> <span class="kt">int</span> <span class="n">default_timeout</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// constants.cpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="cp">#include</span> <span class="cpf">&#34;constants.h&#34;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span><span class="k">const</span> <span class="kt">int</span> <span class="n">default_timeout</span> <span class="o">=</span> <span class="mi">30</span><span class="p">;</span>
+</span></span></code></pre></div><p>前面的声明使定义具有外部链接。定义处也可以写 <code>extern const int default_timeout = 30;</code>，但将声明放进头、定义放进源文件通常更清晰。</p>
+<p>这一点不能不加区分地搬到 C：C 与 C++ 对文件作用域 <code>const</code> 的默认链接规则不同。编写同时被两种语言包含的头文件时，应有意设计声明和定义位置，而不是依赖读者对某个默认规则的记忆。</p>
+<h3 id="2-c17-的内联变量">2. C++17 的内联变量</h3>
+<p>若确实希望在头文件中定义一个全程序共享的 C++ 变量，C++17 起可使用 <code>inline</code> 变量：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// constants.h
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kr">inline</span> <span class="k">constexpr</span> <span class="kt">int</span> <span class="n">default_timeout</span> <span class="o">=</span> <span class="mi">30</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">inline</span> <span class="n">std</span><span class="o">::</span><span class="n">atomic</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">&gt;</span> <span class="n">active_connections</span><span class="p">{</span><span class="mi">0</span><span class="p">};</span>
+</span></span></code></pre></div><p><code>inline</code> 在这里的含义不是“强制内联一段指令”，而是允许同一定义出现在多个翻译单元中，并使它们表示同一个实体。它适用于有意的头文件定义；不要把它和头文件 <code>static</code> 混为一谈——后者通常是每个翻译单元一份实体。</p>
+<h3 id="3-模板与-constexpr-函数">3. 模板与 <code>constexpr</code> 函数</h3>
+<p>C++ 模板的完整定义通常必须放在头文件，因为编译器需要在使用点实例化它。<code>constexpr</code> 函数和类内定义的成员函数也常放在头文件，并具有适合多翻译单元包含的规则。这些并不是“所有实现都可以塞进头文件”的通行证；普通非 <code>inline</code> 函数和变量仍应遵守相应的 ODR 与链接规则。</p>
+<h2 id="五extern-c语言链接不是定义在别处">五、<code>extern &quot;C&quot;</code>：语言链接，不是“定义在别处”</h2>
+<p>C++ 中还常见：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">extern</span> <span class="s">&#34;C&#34;</span> <span class="kt">int</span> <span class="n">c_library_sum</span><span class="p">(</span><span class="kt">int</span> <span class="n">left</span><span class="p">,</span> <span class="kt">int</span> <span class="n">right</span><span class="p">);</span>
+</span></span></code></pre></div><p>这里的 <code>&quot;C&quot;</code> 指定<strong>语言链接</strong>（language linkage）。它通常要求 C++ 编译器以与 C ABI 兼容的方式处理名称修饰和调用约定，从而让 C++ 调用 C 库，或让 C 调用某个 C++ 导出函数。</p>
+<p>可供 C 和 C++ 共同包含的头文件常这样写：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#ifdef __cplusplus
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span><span class="k">extern</span> <span class="s">&#34;C&#34;</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="cp">#endif
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">c_library_sum</span><span class="p">(</span><span class="kt">int</span> <span class="n">left</span><span class="p">,</span> <span class="kt">int</span> <span class="n">right</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="cp">#ifdef __cplusplus
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="cp">#endif
+</span></span></span></code></pre></div><p>它和普通的 <code>extern int value;</code> 有关联，却不是同一个教学重点：</p>
+<ul>
+<li>普通 <code>extern</code> 主要表达外部链接的声明。</li>
+<li><code>extern &quot;C&quot;</code> 主要指定语言链接与 ABI 约定。</li>
+</ul>
+<p><code>extern &quot;C&quot;</code> 不会把 C++ 类、函数重载、异常或标准库类型自动变成 C 接口。跨语言 API 应使用稳定的 C 兼容类型、明确的所有权规则和错误处理约定；写上两个引号并不能让 ABI 兼容性从天而降。</p>
+<h2 id="六常见链接错误按症状定位">六、常见链接错误，按症状定位</h2>
+<h3 id="1-undefined-reference--unresolved-external">1. <code>undefined reference</code> / unresolved external</h3>
+<p>编译器接受了声明，但链接器找不到定义。常见原因是：</p>
+<ul>
+<li>只写了 <code>extern</code> 声明，却从未提供定义；</li>
+<li>定义所在 <code>.c/.cpp</code> 没有加入构建目标；</li>
+<li>C++ 名字修饰与 C 库符号不匹配，漏写或误写 <code>extern &quot;C&quot;</code>；</li>
+<li>声明和定义的命名空间、签名、<code>const</code> 限定或导出属性不同。</li>
+</ul>
+<p>检查顺序应是：先确认正式头文件中的声明，再确认唯一的定义实际参与构建，最后检查链接命令和符号名称。不要先在某个调用点随手再写一条 <code>extern</code>，那只会掩盖接口没有被正确包含的问题。</p>
+<h3 id="2-multiple-definition--duplicate-symbol">2. multiple definition / duplicate symbol</h3>
+<p>同一个外部实体在多个翻译单元被定义。典型原因：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// bad.h
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kt">int</span> <span class="n">global_timeout</span> <span class="o">=</span> <span class="mi">30</span><span class="p">;</span>
+</span></span></code></pre></div><p>每个包含 <code>bad.h</code> 的 <code>.cpp</code> 都生成定义。改成 <code>static int</code> 虽能消除多重定义，却会制造每个翻译单元独立的状态；这不是共享变量的修复方案。应根据真正意图选择：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">唯一共享对象 -&gt; extern 声明 + 一个源文件定义
+</span></span><span class="line"><span class="cl">有意头文件共享对象（C++17+） -&gt; inline 变量
+</span></span><span class="line"><span class="cl">每个翻译单元独立对象 -&gt; static（并明确这是所需语义）
+</span></span></code></pre></div><h3 id="3-手写-extern-代替正式头文件">3. 手写 <code>extern</code> 代替正式头文件</h3>
+<p>在某个 <code>.cpp</code> 临时写：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">extern</span> <span class="kt">int</span> <span class="n">global_timeout</span><span class="p">;</span>
+</span></span></code></pre></div><p>或许能通过当前构建，但它可能与真实接口的命名空间、类型、<code>const</code>、导出属性或初始化约束不一致。应包含声明该实体的正式头文件，让定义和所有使用者共享一份声明；这不是仪式感，而是让编译器替你持续检查接口一致性。</p>
+<h2 id="七选择速查表">七、选择速查表</h2>
+<table>
+  <thead>
+      <tr>
+          <th>需求</th>
+          <th>合适的方式</th>
+          <th>不要误用</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>多个翻译单元共享一个可变变量</td>
+          <td>头文件 <code>extern</code> 声明 + 一个源文件定义</td>
+          <td>头文件普通变量定义</td>
+      </tr>
+      <tr>
+          <td>多个翻译单元使用普通函数</td>
+          <td>头文件函数声明 + 一个源文件定义</td>
+          <td>在每个调用点手写声明</td>
+      </tr>
+      <tr>
+          <td>头文件定义一个全程序唯一的 C++17 变量</td>
+          <td><code>inline</code> 变量</td>
+          <td>以 <code>static</code> 冒充共享对象</td>
+      </tr>
+      <tr>
+          <td>只让当前源文件使用实体</td>
+          <td>文件作用域 <code>static</code>；C++ 匿名命名空间</td>
+          <td><code>extern</code></td>
+      </tr>
+      <tr>
+          <td>调用 C 库或导出 C ABI</td>
+          <td><code>extern &quot;C&quot;</code> + C 兼容接口设计</td>
+          <td>以为它自动处理所有 ABI 问题</td>
+      </tr>
+  </tbody>
+</table>
+<h2 id="八总结">八、总结</h2>
+<p><code>extern</code> 的边界其实很明确：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">extern 声明：此处知道实体存在，并引用外部链接的那一份
+</span></span><span class="line"><span class="cl">定义：此处真正提供对象存储或函数实现
+</span></span><span class="line"><span class="cl">链接：将各翻译单元的声明和引用解析到定义
+</span></span></code></pre></div><p>记住三条即可避开大多数事故：</p>
+<ul>
+<li>变量共享的传统结构是“头文件声明、一个源文件定义”；带初始化器的 <code>extern</code> 仍可能是定义。</li>
+<li><code>extern</code> 不能替代头文件，也不能替代把定义文件加入构建系统。</li>
+<li><code>extern &quot;C&quot;</code> 是语言链接/ABI 工具，不是普通外部变量声明的强化版。</li>
+</ul>
+<p>当声明、定义和链接各自回到自己的位置，<code>extern</code> 就不再像链接器出错时临时念出的咒语；它只是跨翻译单元接口最朴素的一部分。</p>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

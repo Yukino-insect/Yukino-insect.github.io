@@ -1,0 +1,1401 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>通过 uiautomator2 和 ADB 控制一台已授权 Android 真机 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="如果一台 Android 真机已经由设备所有者明确授权，并开启了 USB 调试，那么可以通过 ADB 建立电脑与手机之间的调试通道，再用 uiautomator2 以 Python 控制界面。这很适合做回归测试、重复性验收、企业自有设备巡检，或复现某个稳定的操作流程。
+先说清楚边界：下文只讨论自己拥有或已获明确授权的设备、应用和测试数据。不要把 USB 调试授权、调试接口或自动化脚本用于绕过锁屏、窃取数据、操控他人设备或规避应用限制。能做某件事与有权做某件事是两回事；脚本不会替人承担后果，这一点倒是相当诚实。
+一、ADB 与 uiautomator2 各自做什么 ADB（Android Debug Bridge） 是 Android SDK Platform-Tools 中的调试工具。它在电脑上的客户端通过 USB 或已配对的网络调试通道，与设备上的 adbd 通信；常用于查看设备、执行 shell 命令、安装测试包、读取日志和转发端口。
+uiautomator2 是面向 Python 的 Android UI 自动化库。它会在设备端运行基于 Android UiAutomator 的 HTTP 服务，Python 客户端通过该服务查找控件、点击、输入、滑动、截图和读取界面层级。初始化与连接设备时，它通常借助 ADB 完成设备端组件的部署和通信建立。
+可以把职责理解为：
+Python 测试脚本 -&gt; uiautomator2 Python 客户端 -&gt; ADB：识别设备、部署组件、执行调试命令 -&gt; 手机上的 UiAutomator 服务 -&gt; Android 界面与目标应用 二者不是互相替代的关系：ADB 更接近设备调试与系统命令通道，uiautomator2 更适合按控件语义操作用户界面。一个可维护的自动化项目通常会同时使用它们。
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/randomthoughts/%E9%80%9A%E8%BF%87-uiautomator2-%E5%92%8C-adb-%E6%8E%A7%E5%88%B6%E4%B8%80%E5%8F%B0%E5%B7%B2%E6%8E%88%E6%9D%83-android-%E7%9C%9F%E6%9C%BA/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/randomthoughts/%E9%80%9A%E8%BF%87-uiautomator2-%E5%92%8C-adb-%E6%8E%A7%E5%88%B6%E4%B8%80%E5%8F%B0%E5%B7%B2%E6%8E%88%E6%9D%83-android-%E7%9C%9F%E6%9C%BA/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="通过 uiautomator2 和 ADB 控制一台已授权 Android 真机">
+  <meta property="og:description" content="如果一台 Android 真机已经由设备所有者明确授权，并开启了 USB 调试，那么可以通过 ADB 建立电脑与手机之间的调试通道，再用 uiautomator2 以 Python 控制界面。这很适合做回归测试、重复性验收、企业自有设备巡检，或复现某个稳定的操作流程。
+先说清楚边界：下文只讨论自己拥有或已获明确授权的设备、应用和测试数据。不要把 USB 调试授权、调试接口或自动化脚本用于绕过锁屏、窃取数据、操控他人设备或规避应用限制。能做某件事与有权做某件事是两回事；脚本不会替人承担后果，这一点倒是相当诚实。
+一、ADB 与 uiautomator2 各自做什么 ADB（Android Debug Bridge） 是 Android SDK Platform-Tools 中的调试工具。它在电脑上的客户端通过 USB 或已配对的网络调试通道，与设备上的 adbd 通信；常用于查看设备、执行 shell 命令、安装测试包、读取日志和转发端口。
+uiautomator2 是面向 Python 的 Android UI 自动化库。它会在设备端运行基于 Android UiAutomator 的 HTTP 服务，Python 客户端通过该服务查找控件、点击、输入、滑动、截图和读取界面层级。初始化与连接设备时，它通常借助 ADB 完成设备端组件的部署和通信建立。
+可以把职责理解为：
+Python 测试脚本 -&gt; uiautomator2 Python 客户端 -&gt; ADB：识别设备、部署组件、执行调试命令 -&gt; 手机上的 UiAutomator 服务 -&gt; Android 界面与目标应用 二者不是互相替代的关系：ADB 更接近设备调试与系统命令通道，uiautomator2 更适合按控件语义操作用户界面。一个可维护的自动化项目通常会同时使用它们。">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="randomthoughts">
+    <meta property="article:published_time" content="2026-08-26T21:20:00+08:00">
+    <meta property="article:modified_time" content="2026-08-26T21:20:00+08:00">
+
+  
+  <meta itemprop="name" content="通过 uiautomator2 和 ADB 控制一台已授权 Android 真机">
+  <meta itemprop="description" content="如果一台 Android 真机已经由设备所有者明确授权，并开启了 USB 调试，那么可以通过 ADB 建立电脑与手机之间的调试通道，再用 uiautomator2 以 Python 控制界面。这很适合做回归测试、重复性验收、企业自有设备巡检，或复现某个稳定的操作流程。
+先说清楚边界：下文只讨论自己拥有或已获明确授权的设备、应用和测试数据。不要把 USB 调试授权、调试接口或自动化脚本用于绕过锁屏、窃取数据、操控他人设备或规避应用限制。能做某件事与有权做某件事是两回事；脚本不会替人承担后果，这一点倒是相当诚实。
+一、ADB 与 uiautomator2 各自做什么 ADB（Android Debug Bridge） 是 Android SDK Platform-Tools 中的调试工具。它在电脑上的客户端通过 USB 或已配对的网络调试通道，与设备上的 adbd 通信；常用于查看设备、执行 shell 命令、安装测试包、读取日志和转发端口。
+uiautomator2 是面向 Python 的 Android UI 自动化库。它会在设备端运行基于 Android UiAutomator 的 HTTP 服务，Python 客户端通过该服务查找控件、点击、输入、滑动、截图和读取界面层级。初始化与连接设备时，它通常借助 ADB 完成设备端组件的部署和通信建立。
+可以把职责理解为：
+Python 测试脚本 -&gt; uiautomator2 Python 客户端 -&gt; ADB：识别设备、部署组件、执行调试命令 -&gt; 手机上的 UiAutomator 服务 -&gt; Android 界面与目标应用 二者不是互相替代的关系：ADB 更接近设备调试与系统命令通道，uiautomator2 更适合按控件语义操作用户界面。一个可维护的自动化项目通常会同时使用它们。">
+  <meta itemprop="datePublished" content="2026-08-26T21:20:00+08:00">
+  <meta itemprop="dateModified" content="2026-08-26T21:20:00+08:00">
+  <meta itemprop="wordCount" content="621">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="通过 uiautomator2 和 ADB 控制一台已授权 Android 真机">
+  <meta name="twitter:description" content="如果一台 Android 真机已经由设备所有者明确授权，并开启了 USB 调试，那么可以通过 ADB 建立电脑与手机之间的调试通道，再用 uiautomator2 以 Python 控制界面。这很适合做回归测试、重复性验收、企业自有设备巡检，或复现某个稳定的操作流程。
+先说清楚边界：下文只讨论自己拥有或已获明确授权的设备、应用和测试数据。不要把 USB 调试授权、调试接口或自动化脚本用于绕过锁屏、窃取数据、操控他人设备或规避应用限制。能做某件事与有权做某件事是两回事；脚本不会替人承担后果，这一点倒是相当诚实。
+一、ADB 与 uiautomator2 各自做什么 ADB（Android Debug Bridge） 是 Android SDK Platform-Tools 中的调试工具。它在电脑上的客户端通过 USB 或已配对的网络调试通道，与设备上的 adbd 通信；常用于查看设备、执行 shell 命令、安装测试包、读取日志和转发端口。
+uiautomator2 是面向 Python 的 Android UI 自动化库。它会在设备端运行基于 Android UiAutomator 的 HTTP 服务，Python 客户端通过该服务查找控件、点击、输入、滑动、截图和读取界面层级。初始化与连接设备时，它通常借助 ADB 完成设备端组件的部署和通信建立。
+可以把职责理解为：
+Python 测试脚本 -&gt; uiautomator2 Python 客户端 -&gt; ADB：识别设备、部署组件、执行调试命令 -&gt; 手机上的 UiAutomator 服务 -&gt; Android 界面与目标应用 二者不是互相替代的关系：ADB 更接近设备调试与系统命令通道，uiautomator2 更适合按控件语义操作用户界面。一个可维护的自动化项目通常会同时使用它们。">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">通过 uiautomator2 和 ADB 控制一台已授权 Android 真机</h1>
+
+    
+      <div class="post-date">August 26, 2026</div>
+    
+
+    <div class="post-content">
+      <p>如果一台 Android 真机已经由设备所有者明确授权，并开启了 USB 调试，那么可以通过 ADB 建立电脑与手机之间的调试通道，再用 <code>uiautomator2</code> 以 Python 控制界面。这很适合做回归测试、重复性验收、企业自有设备巡检，或复现某个稳定的操作流程。</p>
+<p>先说清楚边界：下文只讨论<strong>自己拥有或已获明确授权的设备、应用和测试数据</strong>。不要把 USB 调试授权、调试接口或自动化脚本用于绕过锁屏、窃取数据、操控他人设备或规避应用限制。能做某件事与有权做某件事是两回事；脚本不会替人承担后果，这一点倒是相当诚实。</p>
+<h2 id="一adb-与-uiautomator2-各自做什么">一、ADB 与 uiautomator2 各自做什么</h2>
+<p><strong>ADB（Android Debug Bridge）</strong> 是 Android SDK Platform-Tools 中的调试工具。它在电脑上的客户端通过 USB 或已配对的网络调试通道，与设备上的 <code>adbd</code> 通信；常用于查看设备、执行 shell 命令、安装测试包、读取日志和转发端口。</p>
+<p><strong>uiautomator2</strong> 是面向 Python 的 Android UI 自动化库。它会在设备端运行基于 Android UiAutomator 的 HTTP 服务，Python 客户端通过该服务查找控件、点击、输入、滑动、截图和读取界面层级。初始化与连接设备时，它通常借助 ADB 完成设备端组件的部署和通信建立。</p>
+<p>可以把职责理解为：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Python 测试脚本
+</span></span><span class="line"><span class="cl"> -&gt; uiautomator2 Python 客户端
+</span></span><span class="line"><span class="cl">   -&gt; ADB：识别设备、部署组件、执行调试命令
+</span></span><span class="line"><span class="cl">     -&gt; 手机上的 UiAutomator 服务
+</span></span><span class="line"><span class="cl">       -&gt; Android 界面与目标应用
+</span></span></code></pre></div><p>二者不是互相替代的关系：ADB 更接近设备调试与系统命令通道，<code>uiautomator2</code> 更适合按控件语义操作用户界面。一个可维护的自动化项目通常会同时使用它们。</p>
+<h2 id="二开始前授权环境与最小原则">二、开始前：授权、环境与最小原则</h2>
+<p>开始前应满足以下条件：</p>
+<ul>
+<li>手机已由所有者允许用于调试，且已经开启“开发者选项”和“USB 调试”。</li>
+<li>手机通过可信 USB 数据线连接电脑，并在手机弹出的 RSA 调试授权提示中确认这台电脑。</li>
+<li>电脑已安装 Android SDK Platform-Tools，终端可以执行 <code>adb</code>。</li>
+<li>已安装 Python 3.8 或更高版本，以及 <code>uiautomator2</code>。</li>
+<li>自动化目标、测试账号和测试数据属于你的授权范围。</li>
+</ul>
+<p>安装 Python 库：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">python -m pip install --upgrade uiautomator2
+</span></span><span class="line"><span class="cl">python -m uiautomator2 version
+</span></span></code></pre></div><p>如果 <code>adb</code> 提示找不到命令，可以直接使用 Platform-Tools 目录中的可执行文件，或把该目录加入系统的 <code>PATH</code>。不要从来历不明的网站下载一个叫 <code>adb.exe</code> 的文件就直接运行；调试工具拥有相当高的设备权限，谨慎一点并不多余。</p>
+<h3 id="1-用-adb-确认设备状态">1. 用 ADB 确认设备状态</h3>
+<p>连接手机后，先执行：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">adb devices -l
+</span></span></code></pre></div><p>正常情况下会看到类似结果：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">List of devices attached
+</span></span><span class="line"><span class="cl">R58N12345AB            device product:example model:Example_Phone device:example
+</span></span></code></pre></div><p>第二列的状态尤其重要：</p>
+<table>
+  <thead>
+      <tr>
+          <th>状态</th>
+          <th>含义</th>
+          <th>应对方式</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>device</code></td>
+          <td>已连接且已授权</td>
+          <td>可以继续操作</td>
+      </tr>
+      <tr>
+          <td><code>unauthorized</code></td>
+          <td>手机尚未授权当前电脑</td>
+          <td>解锁手机，确认 RSA 调试授权提示</td>
+      </tr>
+      <tr>
+          <td><code>offline</code></td>
+          <td>设备存在但调试连接不可用</td>
+          <td>重新插拔、重启 ADB 服务或检查线缆</td>
+      </tr>
+      <tr>
+          <td>无设备</td>
+          <td>电脑没有发现可用设备</td>
+          <td>检查 USB 调试、线缆、驱动和连接模式</td>
+      </tr>
+  </tbody>
+</table>
+<p>只看到序列号并不等于已经可控；必须看到 <code>device</code>。如果有多台设备，后续每条 ADB 命令都应指定序列号，避免把测试动作发给错误的手机：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">adb -s R58N12345AB shell getprop ro.product.model
+</span></span><span class="line"><span class="cl">adb -s R58N12345AB shell wm size
+</span></span></code></pre></div><p>在 Windows 上，可以使用 <code>where adb</code> 确认实际执行的是哪个 <code>adb.exe</code>。多套 Android SDK 同时存在时，版本不一致导致的“看起来连上了，实际很奇怪”并不罕见。</p>
+<h3 id="2-只在必要时重启-adb-服务">2. 只在必要时重启 ADB 服务</h3>
+<p>遇到设备卡在 <code>offline</code> 时，可以尝试：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">adb kill-server
+</span></span><span class="line"><span class="cl">adb start-server
+</span></span><span class="line"><span class="cl">adb devices -l
+</span></span></code></pre></div><p>这会影响当前电脑上所有 ADB 连接，所以在共享测试机或多人使用的环境里应先确认影响范围。排障不等于向周围的一切发送重启请求；这两个概念的差别，通常在别人正在跑测试时才变得格外明显。</p>
+<h2 id="三先用-adb-做低层验证">三、先用 ADB 做低层验证</h2>
+<p>在写 Python 自动化之前，先确认调试链路和设备基本信息。以下命令都是只读或低影响的检查：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">adb -s R58N12345AB get-state
+</span></span><span class="line"><span class="cl">adb -s R58N12345AB shell getprop ro.build.version.release
+</span></span><span class="line"><span class="cl">adb -s R58N12345AB shell dumpsys window <span class="p">|</span> findstr mCurrentFocus
+</span></span></code></pre></div><p>最后一条能帮助观察当前前台窗口。在 macOS/Linux 中，过滤命令通常是 <code>grep</code>，而 Windows PowerShell 可使用：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-powershell" data-lang="powershell"><span class="line"><span class="cl"><span class="n">adb</span> <span class="n">-s</span> <span class="n">R58N12345AB</span> <span class="n">shell</span> <span class="n">dumpsys</span> <span class="n">window</span> <span class="p">|</span> <span class="nb">Select-String</span> <span class="s1">&#39;mCurrentFocus&#39;</span>
+</span></span></code></pre></div><p>ADB 也能直接模拟一些基础输入，例如按返回键：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">adb -s R58N12345AB shell input keyevent KEYCODE_BACK
+</span></span></code></pre></div><p>它适合用在自动化恢复初始状态、唤起系统功能或辅助诊断中。不过，业务页面的点击和输入优先交给 <code>uiautomator2</code>，因为控件定位比绝对坐标可靠得多。</p>
+<h2 id="四连接-uiautomator2-真机">四、连接 <code>uiautomator2</code> 真机</h2>
+<p>建立最小项目：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">android-ui-test/
+</span></span><span class="line"><span class="cl">├── requirements.txt
+</span></span><span class="line"><span class="cl">└── smoke_test.py
+</span></span></code></pre></div><p><code>requirements.txt</code> 可以先只有一行：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">uiautomator2
+</span></span></code></pre></div><p>创建 <code>smoke_test.py</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="kn">import</span> <span class="nn">uiautomator2</span> <span class="k">as</span> <span class="nn">u2</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">SERIAL</span> <span class="o">=</span> <span class="s2">&#34;R58N12345AB&#34;</span>  <span class="c1"># 替换为 adb devices -l 中的真实序列号</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">d</span> <span class="o">=</span> <span class="n">u2</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">SERIAL</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nb">print</span><span class="p">(</span><span class="s2">&#34;设备信息：&#34;</span><span class="p">,</span> <span class="n">d</span><span class="o">.</span><span class="n">device_info</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nb">print</span><span class="p">(</span><span class="s2">&#34;当前前台应用：&#34;</span><span class="p">,</span> <span class="n">d</span><span class="o">.</span><span class="n">app_current</span><span class="p">())</span>
+</span></span><span class="line"><span class="cl"><span class="n">d</span><span class="o">.</span><span class="n">screenshot</span><span class="p">(</span><span class="s2">&#34;artifacts/connected.png&#34;</span><span class="p">)</span>
+</span></span></code></pre></div><p>首次连接时，<code>uiautomator2</code> 可能通过 ADB 向设备安装或启动所需组件，耗时会比后续连接更长。运行前创建 <code>artifacts</code> 目录，并执行：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">python smoke_test.py
+</span></span></code></pre></div><p>如果机器只连接了一台已授权设备，也可以使用：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">d</span> <span class="o">=</span> <span class="n">u2</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span>
+</span></span></code></pre></div><p>但在 CI、设备柜或有模拟器的开发机上，显式传入 <code>SERIAL</code> 更可靠。自动化最不应该依赖的东西之一，就是“它大概会选对”。</p>
+<p>若连接或初始化异常，可先检查：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">python -m uiautomator2 doctor
+</span></span><span class="line"><span class="cl">adb devices -l
+</span></span></code></pre></div><p>检查时应记录设备序列号、Android 版本、<code>uiautomator2</code> 版本和完整错误信息；只记录“连不上”对于后来排查几乎没有帮助。</p>
+<h2 id="五控件定位优先语义坐标只是最后手段">五、控件定位：优先语义，坐标只是最后手段</h2>
+<p>UI 自动化最常见的失败原因并非点击 API 不会用，而是定位方式太脆弱。屏幕分辨率、字体缩放、语言、刘海和页面布局变化都可能让坐标失效。</p>
+<p>优先级通常如下：</p>
+<ol>
+<li>稳定的 <code>resourceId</code>。</li>
+<li><code>content-desc</code>，在 <code>uiautomator2</code> 中通常用 <code>description</code> 定位。</li>
+<li>明确且稳定的可见文本。</li>
+<li>类名与层级等组合条件。</li>
+<li>坐标点击，仅用于没有可定位语义的特殊区域。</li>
+</ol>
+<p>假设自有测试应用中存在用户名输入框、密码输入框和登录按钮，可以这样写：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">PACKAGE</span> <span class="o">=</span> <span class="s2">&#34;com.example.demo&#34;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">d</span><span class="o">.</span><span class="n">app_start</span><span class="p">(</span><span class="n">PACKAGE</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">username</span> <span class="o">=</span> <span class="n">d</span><span class="p">(</span><span class="n">resourceId</span><span class="o">=</span><span class="sa">f</span><span class="s2">&#34;</span><span class="si">{</span><span class="n">PACKAGE</span><span class="si">}</span><span class="s2">:id/username&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="n">password</span> <span class="o">=</span> <span class="n">d</span><span class="p">(</span><span class="n">resourceId</span><span class="o">=</span><span class="sa">f</span><span class="s2">&#34;</span><span class="si">{</span><span class="n">PACKAGE</span><span class="si">}</span><span class="s2">:id/password&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="n">login_button</span> <span class="o">=</span> <span class="n">d</span><span class="p">(</span><span class="n">resourceId</span><span class="o">=</span><span class="sa">f</span><span class="s2">&#34;</span><span class="si">{</span><span class="n">PACKAGE</span><span class="si">}</span><span class="s2">:id/login&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">if</span> <span class="ow">not</span> <span class="n">username</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">timeout</span><span class="o">=</span><span class="mi">10</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">    <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&#34;用户名输入框未出现，页面可能没有成功打开&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">username</span><span class="o">.</span><span class="n">set_text</span><span class="p">(</span><span class="s2">&#34;test_user&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="n">password</span><span class="o">.</span><span class="n">set_text</span><span class="p">(</span><span class="s2">&#34;only-for-test&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="n">login_button</span><span class="o">.</span><span class="n">click</span><span class="p">()</span>
+</span></span></code></pre></div><p>如果应用能为自动化控件提供稳定的 <code>resource-id</code> 和无障碍描述，测试会省去大量不必要的猜测。应用开发者若只给视觉稿，不给可访问性语义，最终通常会由测试脚本用等待、坐标和运气来偿还这笔债。</p>
+<h3 id="1-文本描述与组合定位">1. 文本、描述与组合定位</h3>
+<p>常用选择器示例：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="c1"># 文本完全匹配</span>
+</span></span><span class="line"><span class="cl"><span class="n">d</span><span class="p">(</span><span class="n">text</span><span class="o">=</span><span class="s2">&#34;设置&#34;</span><span class="p">)</span><span class="o">.</span><span class="n">click</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 无障碍描述（content-desc）</span>
+</span></span><span class="line"><span class="cl"><span class="n">d</span><span class="p">(</span><span class="n">description</span><span class="o">=</span><span class="s2">&#34;搜索&#34;</span><span class="p">)</span><span class="o">.</span><span class="n">click</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 文本包含某个片段</span>
+</span></span><span class="line"><span class="cl"><span class="n">d</span><span class="p">(</span><span class="n">textContains</span><span class="o">=</span><span class="s2">&#34;保存&#34;</span><span class="p">)</span><span class="o">.</span><span class="n">click</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 多个条件组合</span>
+</span></span><span class="line"><span class="cl"><span class="n">d</span><span class="p">(</span><span class="n">className</span><span class="o">=</span><span class="s2">&#34;android.widget.TextView&#34;</span><span class="p">,</span> <span class="n">text</span><span class="o">=</span><span class="s2">&#34;确定&#34;</span><span class="p">)</span><span class="o">.</span><span class="n">click</span><span class="p">()</span>
+</span></span></code></pre></div><p>文本定位对系统设置页或临时验证很方便，但会受到多语言和文案改动影响。业务自动化中，稳定的 <code>resourceId</code> 通常优于文本。</p>
+<h3 id="2-等待条件不要用无意义的固定睡眠">2. 等待条件，不要用无意义的固定睡眠</h3>
+<p>网络、动画、设备性能和首屏加载时间都不稳定。与其在每一步后写很长的 <code>sleep</code>，不如等待真正关心的界面状态：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">success</span> <span class="o">=</span> <span class="n">d</span><span class="p">(</span><span class="n">resourceId</span><span class="o">=</span><span class="sa">f</span><span class="s2">&#34;</span><span class="si">{</span><span class="n">PACKAGE</span><span class="si">}</span><span class="s2">:id/welcome_title&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">if</span> <span class="ow">not</span> <span class="n">success</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">timeout</span><span class="o">=</span><span class="mi">15</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">    <span class="n">d</span><span class="o">.</span><span class="n">screenshot</span><span class="p">(</span><span class="s2">&#34;artifacts/login-failed.png&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">raise</span> <span class="ne">AssertionError</span><span class="p">(</span><span class="s2">&#34;登录后未进入预期页面&#34;</span><span class="p">)</span>
+</span></span></code></pre></div><p>短暂等待动画结束有时仍然合理，但它应是补充，不是同步策略。固定等待会让成功的测试变慢，让失败的测试也慢；它在公平地浪费每个人的时间。</p>
+<h3 id="3-输入滑动按键和截图">3. 输入、滑动、按键和截图</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="c1"># 清空再输入。必要时使用 send_keys 处理更复杂的输入场景。</span>
+</span></span><span class="line"><span class="cl"><span class="n">d</span><span class="p">(</span><span class="n">resourceId</span><span class="o">=</span><span class="sa">f</span><span class="s2">&#34;</span><span class="si">{</span><span class="n">PACKAGE</span><span class="si">}</span><span class="s2">:id/search&#34;</span><span class="p">)</span><span class="o">.</span><span class="n">set_text</span><span class="p">(</span><span class="s2">&#34;SQLite&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 按返回键</span>
+</span></span><span class="line"><span class="cl"><span class="n">d</span><span class="o">.</span><span class="n">press</span><span class="p">(</span><span class="s2">&#34;back&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 向上滑动，比例坐标比绝对像素稍耐分辨率变化</span>
+</span></span><span class="line"><span class="cl"><span class="n">d</span><span class="o">.</span><span class="n">swipe</span><span class="p">(</span><span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.8</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.2</span><span class="p">,</span> <span class="n">duration</span><span class="o">=</span><span class="mf">0.3</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 根据可滚动容器滚动到目标文本</span>
+</span></span><span class="line"><span class="cl"><span class="n">d</span><span class="p">(</span><span class="n">scrollable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">scroll</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">text</span><span class="o">=</span><span class="s2">&#34;关于我们&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 保存当前屏幕，便于失败诊断</span>
+</span></span><span class="line"><span class="cl"><span class="n">d</span><span class="o">.</span><span class="n">screenshot</span><span class="p">(</span><span class="s2">&#34;artifacts/current-screen.png&#34;</span><span class="p">)</span>
+</span></span></code></pre></div><p><code>set_text</code> 对一般输入框足够方便；如果遇到中文、特殊字符或输入法焦点问题，应先在目标设备上验证，再根据 <code>uiautomator2</code> 的输入法支持调整方案。不要因为一次输入失败就退回到模拟键盘逐字符敲击，那通常只会把偶发问题改造成稳定的慢问题。</p>
+<h2 id="六读取-ui-层级找到真正的定位信息">六、读取 UI 层级，找到真正的定位信息</h2>
+<p>当元素“明明在屏幕上，却找不到”时，截图只能告诉你看到了什么；UI 层级才能告诉你自动化框架实际看到了什么。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">xml</span> <span class="o">=</span> <span class="n">d</span><span class="o">.</span><span class="n">dump_hierarchy</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s2">&#34;artifacts/window.xml&#34;</span><span class="p">,</span> <span class="s2">&#34;w&#34;</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">&#34;utf-8&#34;</span><span class="p">)</span> <span class="k">as</span> <span class="n">file</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">file</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">xml</span><span class="p">)</span>
+</span></span></code></pre></div><p>在 XML 中重点寻找：</p>
+<ul>
+<li><code>resource-id</code></li>
+<li><code>text</code></li>
+<li><code>content-desc</code></li>
+<li><code>class</code></li>
+<li><code>clickable</code>、<code>enabled</code>、<code>scrollable</code></li>
+<li>元素边界 <code>bounds</code></li>
+</ul>
+<p>也可以安装元素查看工具辅助检查：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">python -m pip install uiautodev
+</span></span><span class="line"><span class="cl">uiautodev
+</span></span></code></pre></div><p>如果层级里根本没有目标控件，常见原因包括：目标其实是 WebView、内容属于自绘 Canvas、页面还未加载完成，或应用刻意限制了无障碍层级暴露。此时应先判断测试对象的技术形态，再选择 WebView 调试、应用测试桩或与研发协作增加可测性；不要急着把所有问题都归结为“选择器写错”。</p>
+<h2 id="七把一次操作写成可重复的冒烟测试">七、把一次操作写成可重复的冒烟测试</h2>
+<p>下面是一个自有应用登录冒烟测试的结构示例。它没有尝试替你处理验证码、风控或生产账号登录；这类流程应由系统提供测试环境、测试账号或明确的测试开关，而不是让自动化去对抗安全机制。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="kn">from</span> <span class="nn">pathlib</span> <span class="kn">import</span> <span class="n">Path</span>
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="nn">time</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="nn">uiautomator2</span> <span class="k">as</span> <span class="nn">u2</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">SERIAL</span> <span class="o">=</span> <span class="s2">&#34;R58N12345AB&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="n">PACKAGE</span> <span class="o">=</span> <span class="s2">&#34;com.example.demo&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="n">ARTIFACTS</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&#34;artifacts&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">def</span> <span class="nf">save_failure_artifacts</span><span class="p">(</span><span class="n">device</span><span class="p">:</span> <span class="n">u2</span><span class="o">.</span><span class="n">Device</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">timestamp</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="s2">&#34;%Y%m</span><span class="si">%d</span><span class="s2">-%H%M%S&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="n">ARTIFACTS</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="n">device</span><span class="o">.</span><span class="n">screenshot</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">ARTIFACTS</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&#34;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">-</span><span class="si">{</span><span class="n">timestamp</span><span class="si">}</span><span class="s2">.png&#34;</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">    <span class="p">(</span><span class="n">ARTIFACTS</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&#34;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">-</span><span class="si">{</span><span class="n">timestamp</span><span class="si">}</span><span class="s2">.xml&#34;</span><span class="p">)</span><span class="o">.</span><span class="n">write_text</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">        <span class="n">device</span><span class="o">.</span><span class="n">dump_hierarchy</span><span class="p">(),</span>
+</span></span><span class="line"><span class="cl">        <span class="n">encoding</span><span class="o">=</span><span class="s2">&#34;utf-8&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">def</span> <span class="nf">test_login_smoke</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">d</span> <span class="o">=</span> <span class="n">u2</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">SERIAL</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="n">d</span><span class="o">.</span><span class="n">implicitly_wait</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="n">d</span><span class="o">.</span><span class="n">app_stop</span><span class="p">(</span><span class="n">PACKAGE</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="n">d</span><span class="o">.</span><span class="n">app_start</span><span class="p">(</span><span class="n">PACKAGE</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">try</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="n">d</span><span class="p">(</span><span class="n">resourceId</span><span class="o">=</span><span class="sa">f</span><span class="s2">&#34;</span><span class="si">{</span><span class="n">PACKAGE</span><span class="si">}</span><span class="s2">:id/username&#34;</span><span class="p">)</span><span class="o">.</span><span class="n">set_text</span><span class="p">(</span><span class="s2">&#34;test_user&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="n">d</span><span class="p">(</span><span class="n">resourceId</span><span class="o">=</span><span class="sa">f</span><span class="s2">&#34;</span><span class="si">{</span><span class="n">PACKAGE</span><span class="si">}</span><span class="s2">:id/password&#34;</span><span class="p">)</span><span class="o">.</span><span class="n">set_text</span><span class="p">(</span><span class="s2">&#34;only-for-test&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="n">d</span><span class="p">(</span><span class="n">resourceId</span><span class="o">=</span><span class="sa">f</span><span class="s2">&#34;</span><span class="si">{</span><span class="n">PACKAGE</span><span class="si">}</span><span class="s2">:id/login&#34;</span><span class="p">)</span><span class="o">.</span><span class="n">click</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">        <span class="n">welcome</span> <span class="o">=</span> <span class="n">d</span><span class="p">(</span><span class="n">resourceId</span><span class="o">=</span><span class="sa">f</span><span class="s2">&#34;</span><span class="si">{</span><span class="n">PACKAGE</span><span class="si">}</span><span class="s2">:id/welcome_title&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="k">if</span> <span class="ow">not</span> <span class="n">welcome</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">timeout</span><span class="o">=</span><span class="mi">15</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">            <span class="k">raise</span> <span class="ne">AssertionError</span><span class="p">(</span><span class="s2">&#34;登录后未看到欢迎标题&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="n">save_failure_artifacts</span><span class="p">(</span><span class="n">d</span><span class="p">,</span> <span class="s2">&#34;login-failure&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="k">raise</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&#34;__main__&#34;</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">test_login_smoke</span><span class="p">()</span>
+</span></span></code></pre></div><p>这个示例刻意包含几个工程习惯：</p>
+<ul>
+<li>显式指定设备序列号，避免误操作其他设备。</li>
+<li>每次启动前停止目标应用，使初始状态尽量一致。</li>
+<li>使用控件标识而非点击固定像素。</li>
+<li>在失败时保存截图和页面层级，留下可诊断证据。</li>
+<li>使用专门的测试账号，绝不在代码中写入真实用户凭据。</li>
+</ul>
+<p>对于会产生业务副作用的动作，如提交订单、发送消息、删除记录，应在测试环境执行，并增加明确的环境检查、测试数据前缀和人工确认点。自动化不是让危险操作变得无声无息，而是让可预期的操作变得可重复、可追踪。</p>
+<h2 id="八常见问题与排查顺序">八、常见问题与排查顺序</h2>
+<h3 id="1-adb-devices-显示-unauthorized">1. <code>adb devices</code> 显示 <code>unauthorized</code></h3>
+<p>解锁手机，查看是否有 RSA 指纹授权弹窗。确认连接的是自己的可信电脑；若设备曾错误记住授权，可在手机开发者选项中撤销 USB 调试授权后重新连接。不要试图绕过授权弹窗——它存在的理由正是阻止未获许可的控制。</p>
+<h3 id="2-adb-找不到设备">2. ADB 找不到设备</h3>
+<p>按下面顺序排查：</p>
+<ol>
+<li>确认线缆支持数据传输，而不仅仅是充电。</li>
+<li>确认手机已开启 USB 调试，并已解锁。</li>
+<li>更换 USB 端口或线缆。</li>
+<li>在 Windows 上检查对应厂商 USB 驱动。</li>
+<li>执行 <code>adb kill-server</code>、<code>adb start-server</code> 后再次查看设备。</li>
+</ol>
+<h3 id="3-uiautomator2-无法连接或初始化">3. <code>uiautomator2</code> 无法连接或初始化</h3>
+<p>先确认 <code>adb -s &lt;serial&gt; get-state</code> 返回 <code>device</code>，再运行：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">python -m uiautomator2 doctor
+</span></span></code></pre></div><p>随后检查 Python 环境是否就是安装库的环境，并保留命令输出。若公司设备管理策略禁止安装辅助组件，应与设备管理员或测试环境负责人确认，不应绕过管理策略。</p>
+<h3 id="4-元素找不到或点击无效">4. 元素找不到或点击无效</h3>
+<p>依次检查：</p>
+<ol>
+<li>当前前台应用和页面是否正确，可用 <code>d.app_current()</code> 确认。</li>
+<li>目标元素是否已经出现，而不是仍在加载或被弹窗覆盖。</li>
+<li><code>dump_hierarchy()</code> 中是否存在目标的 <code>resource-id</code>、文本或描述。</li>
+<li>是否因为语言、深色模式、字体缩放或版本升级导致文本/布局变化。</li>
+<li>是否属于 WebView、自绘控件或系统受限界面。</li>
+</ol>
+<p>不要把“增加三秒 <code>sleep</code>”作为第一反应。它偶尔能掩盖时序问题，却很少解决定位问题。</p>
+<h3 id="5-出现-device-offline端口占用或偶发连接中断">5. 出现 <code>device offline</code>、端口占用或偶发连接中断</h3>
+<p>优先收集 <code>adb devices -l</code>、脚本日志、设备日志和失败截图。重连前确认没有另一套脚本在占用同一台设备；设备控制应有排他调度，尤其在共享真机池中。同一台手机被两个测试同时操作时，得到的往往不是并发，而是一场很难复盘的互相干扰。</p>
+<h2 id="九安全与稳定性清单">九、安全与稳定性清单</h2>
+<p>将下面几条作为每个真机自动化项目的基础约束：</p>
+<ul>
+<li>只登记并连接有明确授权的设备序列号。</li>
+<li>不在仓库、日志或截图中保存真实密码、令牌、手机号及其他敏感信息。</li>
+<li>使用独立测试账号与可清理的测试数据。</li>
+<li>对清除应用数据、卸载应用、删除内容、发消息和付款等动作加环境保护与显式确认。</li>
+<li>每次失败保存截图、UI XML、设备序列号、应用版本和错误堆栈。</li>
+<li>为每台共享设备设置占用锁或调度队列，禁止并发脚本互相操作。</li>
+<li>在完成测试后关闭 USB 调试，或至少撤销不再信任电脑的调试授权。</li>
+</ul>
+<h2 id="十总结">十、总结</h2>
+<p>通过 ADB 确认连接与授权，通过 <code>uiautomator2</code> 按界面语义执行操作，是控制已授权 Android 真机的一条清晰路径。真正决定脚本质量的，不是能否点到一个按钮，而是能否做到：设备选对、状态可控、元素定位稳定、失败留有证据、业务副作用被限制在授权的测试范围内。</p>
+<p>从一个“连接成功并截一张图”的脚本开始，再逐步加入页面对象、测试数据管理、失败归档和设备调度，会比一开始堆砌几百行坐标点击可靠得多。界面会变化，等待会波动，设备也会偶尔闹脾气；只有让脚本依赖语义和证据，自动化才不至于像一次侥幸成功的魔术。</p>
+<h2 id="参考资料">参考资料</h2>
+<ul>
+<li><a href="https://developer.android.com/tools/adb">Android Debug Bridge（ADB）官方文档</a>
+</li>
+<li><a href="https://github.com/openatx/uiautomator2">uiautomator2 官方项目与使用说明</a>
+</li>
+</ul>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

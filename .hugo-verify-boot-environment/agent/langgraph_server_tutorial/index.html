@@ -1,0 +1,1872 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LangGraph Server 教程：把 LangGraph Agent 运行成可调用服务 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="当前日期：2026-08-16
+LangGraph Server，也常在官方文档中以 Agent Server 的形式出现，是把 LangGraph 应用变成后端服务的运行时。它负责暴露 API、管理 assistants、threads、runs、checkpoint、store、后台任务和流式输出。换句话说，LangGraph 让你写出 agent 的“大脑和流程”，LangGraph Server 让它成为一个可以被前端、脚本、服务端系统稳定调用的后端。只写 graph 不部署服务，就像写好剧本但没人上台，多少有些浪费。
+目录 LangGraph Server 在 LangChain 中的作用 它解决的问题和满足的需求 核心概念：graph、assistant、thread、run、store 基础使用步骤：本地启动 Agent Server 基础使用步骤：通过 SDK 和 REST 调用 进阶使用步骤：应用结构与 langgraph.json 进阶使用步骤：持久化、队列、流式输出和后台任务 进阶使用步骤：部署方式 生产化建议 常见问题 总结 参考资料 1. LangGraph Server 在 LangChain 中的作用 LangGraph Server 是 LangGraph 应用的服务化运行层。它把一个或多个 graph 加载到 API server 中，并提供统一的远程调用接口。
+在 LangChain 生态中的位置：
+组件 作用 LangChain 模型、消息、工具、结构化输出等基础抽象 LangGraph 用 graph 编排有状态、多步骤、可循环 agent LangGraph Server / Agent Server 把 graph 作为服务运行，并提供 API LangGraph CLI 本地启动、构建、部署 Server LangGraph Studio 连接 Server 做可视化调试 LangSmith 追踪、评测、监控和部署管理 一句话：
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/agent/langgraph_server_tutorial/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/agent/langgraph_server_tutorial/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="LangGraph Server 教程：把 LangGraph Agent 运行成可调用服务">
+  <meta property="og:description" content="当前日期：2026-08-16
+LangGraph Server，也常在官方文档中以 Agent Server 的形式出现，是把 LangGraph 应用变成后端服务的运行时。它负责暴露 API、管理 assistants、threads、runs、checkpoint、store、后台任务和流式输出。换句话说，LangGraph 让你写出 agent 的“大脑和流程”，LangGraph Server 让它成为一个可以被前端、脚本、服务端系统稳定调用的后端。只写 graph 不部署服务，就像写好剧本但没人上台，多少有些浪费。
+目录 LangGraph Server 在 LangChain 中的作用 它解决的问题和满足的需求 核心概念：graph、assistant、thread、run、store 基础使用步骤：本地启动 Agent Server 基础使用步骤：通过 SDK 和 REST 调用 进阶使用步骤：应用结构与 langgraph.json 进阶使用步骤：持久化、队列、流式输出和后台任务 进阶使用步骤：部署方式 生产化建议 常见问题 总结 参考资料 1. LangGraph Server 在 LangChain 中的作用 LangGraph Server 是 LangGraph 应用的服务化运行层。它把一个或多个 graph 加载到 API server 中，并提供统一的远程调用接口。
+在 LangChain 生态中的位置：
+组件 作用 LangChain 模型、消息、工具、结构化输出等基础抽象 LangGraph 用 graph 编排有状态、多步骤、可循环 agent LangGraph Server / Agent Server 把 graph 作为服务运行，并提供 API LangGraph CLI 本地启动、构建、部署 Server LangGraph Studio 连接 Server 做可视化调试 LangSmith 追踪、评测、监控和部署管理 一句话：">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="agent">
+    <meta property="article:published_time" content="2026-08-16T22:56:35+08:00">
+    <meta property="article:modified_time" content="2026-08-16T22:56:35+08:00">
+
+  
+  <meta itemprop="name" content="LangGraph Server 教程：把 LangGraph Agent 运行成可调用服务">
+  <meta itemprop="description" content="当前日期：2026-08-16
+LangGraph Server，也常在官方文档中以 Agent Server 的形式出现，是把 LangGraph 应用变成后端服务的运行时。它负责暴露 API、管理 assistants、threads、runs、checkpoint、store、后台任务和流式输出。换句话说，LangGraph 让你写出 agent 的“大脑和流程”，LangGraph Server 让它成为一个可以被前端、脚本、服务端系统稳定调用的后端。只写 graph 不部署服务，就像写好剧本但没人上台，多少有些浪费。
+目录 LangGraph Server 在 LangChain 中的作用 它解决的问题和满足的需求 核心概念：graph、assistant、thread、run、store 基础使用步骤：本地启动 Agent Server 基础使用步骤：通过 SDK 和 REST 调用 进阶使用步骤：应用结构与 langgraph.json 进阶使用步骤：持久化、队列、流式输出和后台任务 进阶使用步骤：部署方式 生产化建议 常见问题 总结 参考资料 1. LangGraph Server 在 LangChain 中的作用 LangGraph Server 是 LangGraph 应用的服务化运行层。它把一个或多个 graph 加载到 API server 中，并提供统一的远程调用接口。
+在 LangChain 生态中的位置：
+组件 作用 LangChain 模型、消息、工具、结构化输出等基础抽象 LangGraph 用 graph 编排有状态、多步骤、可循环 agent LangGraph Server / Agent Server 把 graph 作为服务运行，并提供 API LangGraph CLI 本地启动、构建、部署 Server LangGraph Studio 连接 Server 做可视化调试 LangSmith 追踪、评测、监控和部署管理 一句话：">
+  <meta itemprop="datePublished" content="2026-08-16T22:56:35+08:00">
+  <meta itemprop="dateModified" content="2026-08-16T22:56:35+08:00">
+  <meta itemprop="wordCount" content="1288">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="LangGraph Server 教程：把 LangGraph Agent 运行成可调用服务">
+  <meta name="twitter:description" content="当前日期：2026-08-16
+LangGraph Server，也常在官方文档中以 Agent Server 的形式出现，是把 LangGraph 应用变成后端服务的运行时。它负责暴露 API、管理 assistants、threads、runs、checkpoint、store、后台任务和流式输出。换句话说，LangGraph 让你写出 agent 的“大脑和流程”，LangGraph Server 让它成为一个可以被前端、脚本、服务端系统稳定调用的后端。只写 graph 不部署服务，就像写好剧本但没人上台，多少有些浪费。
+目录 LangGraph Server 在 LangChain 中的作用 它解决的问题和满足的需求 核心概念：graph、assistant、thread、run、store 基础使用步骤：本地启动 Agent Server 基础使用步骤：通过 SDK 和 REST 调用 进阶使用步骤：应用结构与 langgraph.json 进阶使用步骤：持久化、队列、流式输出和后台任务 进阶使用步骤：部署方式 生产化建议 常见问题 总结 参考资料 1. LangGraph Server 在 LangChain 中的作用 LangGraph Server 是 LangGraph 应用的服务化运行层。它把一个或多个 graph 加载到 API server 中，并提供统一的远程调用接口。
+在 LangChain 生态中的位置：
+组件 作用 LangChain 模型、消息、工具、结构化输出等基础抽象 LangGraph 用 graph 编排有状态、多步骤、可循环 agent LangGraph Server / Agent Server 把 graph 作为服务运行，并提供 API LangGraph CLI 本地启动、构建、部署 Server LangGraph Studio 连接 Server 做可视化调试 LangSmith 追踪、评测、监控和部署管理 一句话：">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">LangGraph Server 教程：把 LangGraph Agent 运行成可调用服务</h1>
+
+    
+      <div class="post-date">August 16, 2026</div>
+    
+
+    <div class="post-content">
+      <p>当前日期：2026-08-16</p>
+<p>LangGraph Server，也常在官方文档中以 Agent Server 的形式出现，是把 LangGraph 应用变成后端服务的运行时。它负责暴露 API、管理 assistants、threads、runs、checkpoint、store、后台任务和流式输出。换句话说，LangGraph 让你写出 agent 的“大脑和流程”，LangGraph Server 让它成为一个可以被前端、脚本、服务端系统稳定调用的后端。只写 graph 不部署服务，就像写好剧本但没人上台，多少有些浪费。</p>
+<h2 id="目录">目录</h2>
+<ol>
+<li>LangGraph Server 在 LangChain 中的作用</li>
+<li>它解决的问题和满足的需求</li>
+<li>核心概念：graph、assistant、thread、run、store</li>
+<li>基础使用步骤：本地启动 Agent Server</li>
+<li>基础使用步骤：通过 SDK 和 REST 调用</li>
+<li>进阶使用步骤：应用结构与 <code>langgraph.json</code></li>
+<li>进阶使用步骤：持久化、队列、流式输出和后台任务</li>
+<li>进阶使用步骤：部署方式</li>
+<li>生产化建议</li>
+<li>常见问题</li>
+<li>总结</li>
+<li>参考资料</li>
+</ol>
+<h2 id="1-langgraph-server-在-langchain-中的作用">1. LangGraph Server 在 LangChain 中的作用</h2>
+<p>LangGraph Server 是 LangGraph 应用的服务化运行层。它把一个或多个 graph 加载到 API server 中，并提供统一的远程调用接口。</p>
+<p>在 LangChain 生态中的位置：</p>
+<table>
+  <thead>
+      <tr>
+          <th>组件</th>
+          <th>作用</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>LangChain</td>
+          <td>模型、消息、工具、结构化输出等基础抽象</td>
+      </tr>
+      <tr>
+          <td>LangGraph</td>
+          <td>用 graph 编排有状态、多步骤、可循环 agent</td>
+      </tr>
+      <tr>
+          <td>LangGraph Server / Agent Server</td>
+          <td>把 graph 作为服务运行，并提供 API</td>
+      </tr>
+      <tr>
+          <td>LangGraph CLI</td>
+          <td>本地启动、构建、部署 Server</td>
+      </tr>
+      <tr>
+          <td>LangGraph Studio</td>
+          <td>连接 Server 做可视化调试</td>
+      </tr>
+      <tr>
+          <td>LangSmith</td>
+          <td>追踪、评测、监控和部署管理</td>
+      </tr>
+  </tbody>
+</table>
+<p>一句话：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">LangGraph Server = 面向 agent 工作负载的 API runtime。
+</span></span></code></pre></div><h2 id="2-它解决的问题和满足的需求">2. 它解决的问题和满足的需求</h2>
+<p>一个 LangGraph graph 在 Python 进程里可以直接 <code>.invoke()</code>，但真实应用通常还需要：</p>
+<ol>
+<li>前端通过 HTTP 调用。</li>
+<li>多用户会话隔离。</li>
+<li>多轮上下文和 checkpoint。</li>
+<li>后台长任务。</li>
+<li>实时 streaming。</li>
+<li>多 assistant 配置。</li>
+<li>生产部署、扩缩容和日志。</li>
+<li>与 LangSmith tracing/evaluation 集成。</li>
+</ol>
+<p>LangGraph Server 正是为这些问题设计的。</p>
+<table>
+  <thead>
+      <tr>
+          <th>需求</th>
+          <th>Server 提供的能力</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>多轮对话</td>
+          <td>threads</td>
+      </tr>
+      <tr>
+          <td>不同 agent 配置</td>
+          <td>assistants</td>
+      </tr>
+      <tr>
+          <td>发起一次任务</td>
+          <td>runs</td>
+      </tr>
+      <tr>
+          <td>恢复中断执行</td>
+          <td>checkpoint/persistence</td>
+      </tr>
+      <tr>
+          <td>长任务</td>
+          <td>background runs / task queue</td>
+      </tr>
+      <tr>
+          <td>实时输出</td>
+          <td>streaming</td>
+      </tr>
+      <tr>
+          <td>长期记忆</td>
+          <td>store</td>
+      </tr>
+      <tr>
+          <td>服务化调用</td>
+          <td>REST API / SDK</td>
+      </tr>
+      <tr>
+          <td>可视化调试</td>
+          <td>Studio 连接</td>
+      </tr>
+      <tr>
+          <td>生产观测</td>
+          <td>LangSmith traces</td>
+      </tr>
+  </tbody>
+</table>
+<h2 id="3-核心概念graphassistantthreadrunstore">3. 核心概念：graph、assistant、thread、run、store</h2>
+<h3 id="31-graph">3.1 Graph</h3>
+<p>Graph 是你的 agent 流程蓝图。它可以是：</p>
+<ol>
+<li>LangGraph 编写的 StateGraph。</li>
+<li>已编译的 <code>CompiledGraph</code>。</li>
+<li>工厂函数动态创建的 graph。</li>
+<li>通过 Functional API 或 wrapper 接入的其他框架 agent。</li>
+</ol>
+<p>在 Server 中部署 graph，通常要在 <code>langgraph.json</code> 里声明：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;$schema&#34;</span><span class="p">:</span> <span class="s2">&#34;https://langgra.ph/schema.json&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;dependencies&#34;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&#34;.&#34;</span><span class="p">],</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;graphs&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;research&#34;</span><span class="p">:</span> <span class="s2">&#34;./agent/research.py:graph&#34;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">},</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;env&#34;</span><span class="p">:</span> <span class="s2">&#34;.env&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><h3 id="32-assistant">3.2 Assistant</h3>
+<p>Assistant 是 graph 的一个配置实例。它不是另一个 graph，而是同一个 graph 的不同运行配置。</p>
+<p>例如：</p>
+<table>
+  <thead>
+      <tr>
+          <th>Assistant</th>
+          <th>Graph</th>
+          <th>配置</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>fast</code></td>
+          <td><code>research</code></td>
+          <td>小模型、少搜索</td>
+      </tr>
+      <tr>
+          <td><code>deep</code></td>
+          <td><code>research</code></td>
+          <td>大模型、多搜索</td>
+      </tr>
+      <tr>
+          <td><code>strict</code></td>
+          <td><code>research</code></td>
+          <td>强制 JSON 输出</td>
+      </tr>
+  </tbody>
+</table>
+<h3 id="33-thread">3.3 Thread</h3>
+<p>Thread 是会话容器，用于保存一段多轮交互的状态。每次用户输入和 agent 响应可以作为一个 run 加入同一个 thread。</p>
+<p>适合：</p>
+<ol>
+<li>聊天应用。</li>
+<li>多轮研究任务。</li>
+<li>human-in-the-loop。</li>
+<li>需要 checkpoint 恢复的工作流。</li>
+</ol>
+<h3 id="34-run">3.4 Run</h3>
+<p>Run 是一次执行。你可以对某个 thread 和 assistant 发起 run。</p>
+<p>运行模式可能包括：</p>
+<ol>
+<li>等待完成。</li>
+<li>流式读取事件。</li>
+<li>后台运行。</li>
+<li>中断后恢复。</li>
+</ol>
+<h3 id="35-store">3.5 Store</h3>
+<p>Store 是长期数据或 memory 的存储层。它不同于 thread state：</p>
+<table>
+  <thead>
+      <tr>
+          <th>类型</th>
+          <th>生命周期</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Thread state</td>
+          <td>某个 thread 内</td>
+      </tr>
+      <tr>
+          <td>Checkpoint</td>
+          <td>graph 执行恢复所需</td>
+      </tr>
+      <tr>
+          <td>Store</td>
+          <td>可跨 thread 保存</td>
+      </tr>
+  </tbody>
+</table>
+<p>Store 可以配合 semantic search、TTL 等能力。</p>
+<h2 id="4-基础使用步骤本地启动-agent-server">4. 基础使用步骤：本地启动 Agent Server</h2>
+<h3 id="41-准备环境">4.1 准备环境</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-powershell" data-lang="powershell"><span class="line"><span class="cl"><span class="n">mkdir</span> <span class="n">D:</span><span class="p">\</span><span class="n">learning</span><span class="p">\</span><span class="n">Python</span><span class="p">\</span><span class="n">agent</span><span class="p">\</span><span class="n">server_demo</span>
+</span></span><span class="line"><span class="cl"><span class="nb">cd </span><span class="n">D:</span><span class="p">\</span><span class="n">learning</span><span class="p">\</span><span class="n">Python</span><span class="p">\</span><span class="n">agent</span><span class="p">\</span><span class="n">server_demo</span>
+</span></span><span class="line"><span class="cl"><span class="n">python</span> <span class="n">-m</span> <span class="n">venv</span> <span class="p">.</span><span class="py">venv</span>
+</span></span><span class="line"><span class="cl"><span class="p">.\.</span><span class="n">venv</span><span class="p">\</span><span class="n">Scripts</span><span class="p">\</span><span class="n">Activate</span><span class="p">.</span><span class="py">ps1</span>
+</span></span></code></pre></div><h3 id="42-安装-cli">4.2 安装 CLI</h3>
+<p>本地快速开发：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-powershell" data-lang="powershell"><span class="line"><span class="cl"><span class="n">pip</span> <span class="n">install</span> <span class="n">-U</span> <span class="s2">&#34;langgraph-cli[inmem]&#34;</span>
+</span></span></code></pre></div><h3 id="43-创建应用">4.3 创建应用</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-powershell" data-lang="powershell"><span class="line"><span class="cl"><span class="n">langgraph</span> <span class="n">new</span> <span class="p">.</span> <span class="p">-</span><span class="n">-template</span> <span class="nb">new-langgraph</span><span class="n">-project-python</span>
+</span></span><span class="line"><span class="cl"><span class="n">pip</span> <span class="n">install</span> <span class="n">-e</span> <span class="p">.</span>
+</span></span></code></pre></div><p>如果使用 <code>uv</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-powershell" data-lang="powershell"><span class="line"><span class="cl"><span class="n">uv</span> <span class="n">sync</span>
+</span></span></code></pre></div><h3 id="44-配置环境变量">4.4 配置环境变量</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-powershell" data-lang="powershell"><span class="line"><span class="cl"><span class="nb">Copy-Item</span> <span class="p">.</span><span class="py">env</span><span class="p">.</span><span class="py">example</span> <span class="p">.</span><span class="py">env</span>
+</span></span></code></pre></div><p><code>.env</code>：</p>
+<pre tabindex="0"><code class="language-dotenv" data-lang="dotenv">OPENAI_API_KEY=sk-...
+LANGSMITH_API_KEY=lsv2_...
+LANGSMITH_TRACING=true
+LANGSMITH_PROJECT=server-demo
+</code></pre><h3 id="45-启动本地-server">4.5 启动本地 Server</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-powershell" data-lang="powershell"><span class="line"><span class="cl"><span class="n">langgraph</span> <span class="n">dev</span>
+</span></span></code></pre></div><p>默认地址通常是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">API: http://127.0.0.1:2024
+</span></span><span class="line"><span class="cl">API Docs: http://127.0.0.1:2024/docs
+</span></span><span class="line"><span class="cl">Studio: https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024
+</span></span></code></pre></div><p><code>langgraph dev</code> 的特点：</p>
+<ol>
+<li>不需要 Docker。</li>
+<li>启动快。</li>
+<li>支持热重载。</li>
+<li>支持调试端口。</li>
+<li>适合开发和测试。</li>
+<li>本地状态保存在本地目录。</li>
+</ol>
+<h3 id="46-使用-docker-方式启动">4.6 使用 Docker 方式启动</h3>
+<p>更接近部署环境：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-powershell" data-lang="powershell"><span class="line"><span class="cl"><span class="n">pip</span> <span class="n">install</span> <span class="n">-U</span> <span class="nb">langgraph-cli</span>
+</span></span><span class="line"><span class="cl"><span class="n">langgraph</span> <span class="n">up</span> <span class="p">-</span><span class="n">-port</span> <span class="mf">8123</span>
+</span></span></code></pre></div><p>访问：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">http://127.0.0.1:8123/docs
+</span></span></code></pre></div><p><code>langgraph up</code> 会使用 Docker 启动 API server，并可以接入本地或外部 Postgres 等服务。它比 <code>dev</code> 更接近运行时形态，但开发迭代没有 <code>dev</code> 那么轻。</p>
+<h2 id="5-基础使用步骤通过-sdk-和-rest-调用">5. 基础使用步骤：通过 SDK 和 REST 调用</h2>
+<h3 id="51-安装-sdk">5.1 安装 SDK</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-powershell" data-lang="powershell"><span class="line"><span class="cl"><span class="n">pip</span> <span class="n">install</span> <span class="n">-U</span> <span class="nb">langgraph-sdk</span>
+</span></span></code></pre></div><h3 id="52-同步-sdk-调用">5.2 同步 SDK 调用</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="kn">from</span> <span class="nn">langgraph_sdk</span> <span class="kn">import</span> <span class="n">get_sync_client</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">client</span> <span class="o">=</span> <span class="n">get_sync_client</span><span class="p">(</span><span class="n">url</span><span class="o">=</span><span class="s2">&#34;http://127.0.0.1:2024&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">assistants</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">assistants</span><span class="o">.</span><span class="n">search</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="n">assistant_id</span> <span class="o">=</span> <span class="n">assistants</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s2">&#34;assistant_id&#34;</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">thread</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">threads</span><span class="o">.</span><span class="n">create</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="n">thread_id</span> <span class="o">=</span> <span class="n">thread</span><span class="p">[</span><span class="s2">&#34;thread_id&#34;</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">result</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">runs</span><span class="o">.</span><span class="n">wait</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="n">thread_id</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">assistant_id</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nb">input</span><span class="o">=</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="s2">&#34;messages&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">            <span class="p">{</span><span class="s2">&#34;role&#34;</span><span class="p">:</span> <span class="s2">&#34;user&#34;</span><span class="p">,</span> <span class="s2">&#34;content&#34;</span><span class="p">:</span> <span class="s2">&#34;请解释 LangGraph Server 的作用。&#34;</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl">        <span class="p">]</span>
+</span></span><span class="line"><span class="cl">    <span class="p">},</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nb">print</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+</span></span></code></pre></div><h3 id="53-异步-sdk-调用">5.3 异步 SDK 调用</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="kn">import</span> <span class="nn">asyncio</span>
+</span></span><span class="line"><span class="cl"><span class="kn">from</span> <span class="nn">langgraph_sdk</span> <span class="kn">import</span> <span class="n">get_client</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">async</span> <span class="k">def</span> <span class="nf">main</span><span class="p">():</span>
+</span></span><span class="line"><span class="cl">    <span class="n">client</span> <span class="o">=</span> <span class="n">get_client</span><span class="p">(</span><span class="n">url</span><span class="o">=</span><span class="s2">&#34;http://127.0.0.1:2024&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="n">assistants</span> <span class="o">=</span> <span class="k">await</span> <span class="n">client</span><span class="o">.</span><span class="n">assistants</span><span class="o">.</span><span class="n">search</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="n">assistant_id</span> <span class="o">=</span> <span class="n">assistants</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s2">&#34;assistant_id&#34;</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">thread</span> <span class="o">=</span> <span class="k">await</span> <span class="n">client</span><span class="o">.</span><span class="n">threads</span><span class="o">.</span><span class="n">create</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="n">thread_id</span> <span class="o">=</span> <span class="n">thread</span><span class="p">[</span><span class="s2">&#34;thread_id&#34;</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">client</span><span class="o">.</span><span class="n">runs</span><span class="o">.</span><span class="n">wait</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">        <span class="n">thread_id</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="n">assistant_id</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nb">input</span><span class="o">=</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="s2">&#34;messages&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">                <span class="p">{</span><span class="s2">&#34;role&#34;</span><span class="p">:</span> <span class="s2">&#34;user&#34;</span><span class="p">,</span> <span class="s2">&#34;content&#34;</span><span class="p">:</span> <span class="s2">&#34;用两句话说明 Agent Server。&#34;</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl">            <span class="p">]</span>
+</span></span><span class="line"><span class="cl">        <span class="p">},</span>
+</span></span><span class="line"><span class="cl">    <span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nb">print</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">asyncio</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">main</span><span class="p">())</span>
+</span></span></code></pre></div><h3 id="54-rest-api-调用思路">5.4 REST API 调用思路</h3>
+<p>本地服务启动后打开：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">http://127.0.0.1:2024/docs
+</span></span></code></pre></div><p>你会看到 OpenAPI 文档。典型流程：</p>
+<ol>
+<li>创建 thread。</li>
+<li>查找或创建 assistant。</li>
+<li>对 thread + assistant 创建 run。</li>
+<li>等待结果或消费 stream。</li>
+</ol>
+<p>REST 比 SDK 更通用，适合前端、非 Python 服务、Postman 测试；SDK 更省心，适合 Python/JS 项目。</p>
+<h3 id="55-输入格式取决于-state">5.5 输入格式取决于 state</h3>
+<p>如果你的 graph state 是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">TypedDict</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">State</span><span class="p">(</span><span class="n">TypedDict</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">    <span class="n">question</span><span class="p">:</span> <span class="nb">str</span>
+</span></span></code></pre></div><p>输入应该像：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;question&#34;</span><span class="p">:</span> <span class="s2">&#34;LangGraph Server 是什么？&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>如果你的 graph 使用 messages：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;messages&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;role&#34;</span><span class="p">:</span> <span class="s2">&#34;user&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;content&#34;</span><span class="p">:</span> <span class="s2">&#34;LangGraph Server 是什么？&#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">]</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>不要把所有教程里的 <code>messages</code> 当成万能输入。它常见，但不是法律。幸好目前还没人为这个立法。</p>
+<h2 id="6-进阶使用步骤应用结构与-langgraphjson">6. 进阶使用步骤：应用结构与 <code>langgraph.json</code></h2>
+<h3 id="61-推荐项目结构">6.1 推荐项目结构</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">my-agent/
+</span></span><span class="line"><span class="cl">  agent/
+</span></span><span class="line"><span class="cl">    __init__.py
+</span></span><span class="line"><span class="cl">    state.py
+</span></span><span class="line"><span class="cl">    tools.py
+</span></span><span class="line"><span class="cl">    nodes.py
+</span></span><span class="line"><span class="cl">    graph.py
+</span></span><span class="line"><span class="cl">  tests/
+</span></span><span class="line"><span class="cl">    test_graph.py
+</span></span><span class="line"><span class="cl">  .env
+</span></span><span class="line"><span class="cl">  pyproject.toml
+</span></span><span class="line"><span class="cl">  langgraph.json
+</span></span></code></pre></div><p>职责划分：</p>
+<table>
+  <thead>
+      <tr>
+          <th>文件</th>
+          <th>作用</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>state.py</code></td>
+          <td>定义 State、reducer、配置 schema</td>
+      </tr>
+      <tr>
+          <td><code>tools.py</code></td>
+          <td>定义工具</td>
+      </tr>
+      <tr>
+          <td><code>nodes.py</code></td>
+          <td>定义 graph 节点函数</td>
+      </tr>
+      <tr>
+          <td><code>graph.py</code></td>
+          <td>组装并 compile graph</td>
+      </tr>
+      <tr>
+          <td><code>langgraph.json</code></td>
+          <td>告诉 Server 加载哪个 graph</td>
+      </tr>
+      <tr>
+          <td><code>.env</code></td>
+          <td>API key、环境变量</td>
+      </tr>
+  </tbody>
+</table>
+<h3 id="62-导出-compiled-graph">6.2 导出 compiled graph</h3>
+<p>推荐方式：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="c1"># agent/graph.py</span>
+</span></span><span class="line"><span class="cl"><span class="kn">from</span> <span class="nn">langgraph.graph</span> <span class="kn">import</span> <span class="n">StateGraph</span><span class="p">,</span> <span class="n">START</span><span class="p">,</span> <span class="n">END</span>
+</span></span><span class="line"><span class="cl"><span class="kn">from</span> <span class="nn">agent.state</span> <span class="kn">import</span> <span class="n">State</span>
+</span></span><span class="line"><span class="cl"><span class="kn">from</span> <span class="nn">agent.nodes</span> <span class="kn">import</span> <span class="n">call_model</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">builder</span> <span class="o">=</span> <span class="n">StateGraph</span><span class="p">(</span><span class="n">State</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="n">builder</span><span class="o">.</span><span class="n">add_node</span><span class="p">(</span><span class="s2">&#34;call_model&#34;</span><span class="p">,</span> <span class="n">call_model</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="n">builder</span><span class="o">.</span><span class="n">add_edge</span><span class="p">(</span><span class="n">START</span><span class="p">,</span> <span class="s2">&#34;call_model&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="n">builder</span><span class="o">.</span><span class="n">add_edge</span><span class="p">(</span><span class="s2">&#34;call_model&#34;</span><span class="p">,</span> <span class="n">END</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">graph</span> <span class="o">=</span> <span class="n">builder</span><span class="o">.</span><span class="n">compile</span><span class="p">()</span>
+</span></span></code></pre></div><p><code>langgraph.json</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;$schema&#34;</span><span class="p">:</span> <span class="s2">&#34;https://langgra.ph/schema.json&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;dependencies&#34;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&#34;.&#34;</span><span class="p">],</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;graphs&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;agent&#34;</span><span class="p">:</span> <span class="s2">&#34;./agent/graph.py:graph&#34;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">},</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;env&#34;</span><span class="p">:</span> <span class="s2">&#34;.env&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;python_version&#34;</span><span class="p">:</span> <span class="s2">&#34;3.11&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><h3 id="63-使用-graph-工厂函数">6.3 使用 graph 工厂函数</h3>
+<p>如果必须根据配置动态创建 graph，可以导出工厂函数：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="kn">from</span> <span class="nn">langchain_core.runnables</span> <span class="kn">import</span> <span class="n">RunnableConfig</span>
+</span></span><span class="line"><span class="cl"><span class="kn">from</span> <span class="nn">langgraph.graph</span> <span class="kn">import</span> <span class="n">StateGraph</span><span class="p">,</span> <span class="n">START</span><span class="p">,</span> <span class="n">END</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">def</span> <span class="nf">make_graph</span><span class="p">(</span><span class="n">config</span><span class="p">:</span> <span class="n">RunnableConfig</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">    <span class="n">model_name</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&#34;configurable&#34;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&#34;model&#34;</span><span class="p">,</span> <span class="s2">&#34;gpt-4.1-mini&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">builder</span> <span class="o">=</span> <span class="n">StateGraph</span><span class="p">(</span><span class="nb">dict</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">def</span> <span class="nf">node</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="nb">dict</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="p">{</span><span class="s2">&#34;model&#34;</span><span class="p">:</span> <span class="n">model_name</span><span class="p">,</span> <span class="o">**</span><span class="n">state</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">builder</span><span class="o">.</span><span class="n">add_node</span><span class="p">(</span><span class="s2">&#34;node&#34;</span><span class="p">,</span> <span class="n">node</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="n">builder</span><span class="o">.</span><span class="n">add_edge</span><span class="p">(</span><span class="n">START</span><span class="p">,</span> <span class="s2">&#34;node&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="n">builder</span><span class="o">.</span><span class="n">add_edge</span><span class="p">(</span><span class="s2">&#34;node&#34;</span><span class="p">,</span> <span class="n">END</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="n">builder</span><span class="o">.</span><span class="n">compile</span><span class="p">()</span>
+</span></span></code></pre></div><p>配置：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;$schema&#34;</span><span class="p">:</span> <span class="s2">&#34;https://langgra.ph/schema.json&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;dependencies&#34;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&#34;.&#34;</span><span class="p">],</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;graphs&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;agent&#34;</span><span class="p">:</span> <span class="s2">&#34;./agent/graph.py:make_graph&#34;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">},</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;env&#34;</span><span class="p">:</span> <span class="s2">&#34;.env&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>官方更推荐导出已经编译的 graph，因为 Server 可以在容器启动时加载一次并复用；工厂函数适合确实需要 per-run 定制的场景。</p>
+<h3 id="64-多-graph-服务">6.4 多 graph 服务</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;$schema&#34;</span><span class="p">:</span> <span class="s2">&#34;https://langgra.ph/schema.json&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;dependencies&#34;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&#34;.&#34;</span><span class="p">],</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;graphs&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;planner&#34;</span><span class="p">:</span> <span class="s2">&#34;./agent/planner.py:graph&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;researcher&#34;</span><span class="p">:</span> <span class="s2">&#34;./agent/researcher.py:graph&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;writer&#34;</span><span class="p">:</span> <span class="s2">&#34;./agent/writer.py:graph&#34;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">},</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;env&#34;</span><span class="p">:</span> <span class="s2">&#34;.env&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>适合把多个相关 agent 放在一个服务中，但不要无节制堆叠。graph 太多会让配置、权限、部署边界变得含糊。</p>
+<h2 id="7-进阶使用步骤持久化队列流式输出和后台任务">7. 进阶使用步骤：持久化、队列、流式输出和后台任务</h2>
+<h3 id="71-持久化与-checkpoint">7.1 持久化与 checkpoint</h3>
+<p>Agent Server 需要保存：</p>
+<ol>
+<li>assistants。</li>
+<li>threads。</li>
+<li>runs。</li>
+<li>thread state。</li>
+<li>long-term memory。</li>
+<li>background task queue 状态。</li>
+</ol>
+<p>LangSmith Cloud 部署会替你管理数据库。如果部署在自己的基础设施上，你需要自己配置 Postgres、Redis 等服务。</p>
+<h3 id="72-postgres">7.2 Postgres</h3>
+<p>在自托管 standalone server 中，<code>DATABASE_URI</code> 通常指向 Postgres。它用于保存 server 数据、thread state、long-term memory 和队列状态。</p>
+<p>示意：</p>
+<pre tabindex="0"><code class="language-dotenv" data-lang="dotenv">DATABASE_URI=postgres://user:password@localhost:5432/langgraph
+</code></pre><p>同一个 Postgres 实例可以服务多个部署，但不同部署应该使用不同数据库，避免数据混用。</p>
+<h3 id="73-redis">7.3 Redis</h3>
+<p><code>REDIS_URI</code> 常用于 pub-sub broker，以支持后台 runs 的实时 streaming。</p>
+<p>示意：</p>
+<pre tabindex="0"><code class="language-dotenv" data-lang="dotenv">REDIS_URI=redis://localhost:6379/0
+</code></pre><p>多个部署可以共享同一个 Redis 实例，但应使用不同 database number。</p>
+<h3 id="74-streaming">7.4 Streaming</h3>
+<p>Streaming 可以让客户端实时收到：</p>
+<ol>
+<li>节点进度。</li>
+<li>模型 token。</li>
+<li>工具调用事件。</li>
+<li>中间状态。</li>
+<li>最终结果。</li>
+</ol>
+<p>适合：</p>
+<ol>
+<li>聊天 UI。</li>
+<li>长时间 research agent。</li>
+<li>后台任务进度条。</li>
+<li>调试复杂 graph。</li>
+</ol>
+<h3 id="75-后台任务">7.5 后台任务</h3>
+<p>Agent Server 支持后台运行思路，适合耗时任务：</p>
+<ol>
+<li>深度研究。</li>
+<li>多文档分析。</li>
+<li>批量工具调用。</li>
+<li>定时任务。</li>
+<li>需要稍后查询结果的任务。</li>
+</ol>
+<p>在生产环境中，后台任务必须关注：</p>
+<ol>
+<li>队列长度。</li>
+<li>worker 数量。</li>
+<li>超时策略。</li>
+<li>重试策略。</li>
+<li>幂等性。</li>
+<li>优雅关闭与 run draining。</li>
+</ol>
+<p>这些听起来不像教程开头最迷人的部分，但它们决定系统会不会在真正有用户时突然变得很有个性。</p>
+<h2 id="8-进阶使用步骤部署方式">8. 进阶使用步骤：部署方式</h2>
+<p>截至 2026-08-16，官方文档中的部署拓扑主要包括：</p>
+<table>
+  <thead>
+      <tr>
+          <th>方式</th>
+          <th>说明</th>
+          <th>适合场景</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>LangSmith Deployment Cloud</td>
+          <td>LangChain 托管控制面、数据面和数据库</td>
+          <td>快速上线、少运维</td>
+      </tr>
+      <tr>
+          <td>Hybrid</td>
+          <td>LangChain 管控制面，你运行 Agent Server 和数据面</td>
+          <td>agent workload 留在自己 VPC</td>
+      </tr>
+      <tr>
+          <td>Self-hosted with control plane</td>
+          <td>自己在 Kubernetes 中运行 LangSmith 和 Deployment</td>
+          <td>企业、数据驻留、完整自控</td>
+      </tr>
+      <tr>
+          <td>Standalone Agent Server</td>
+          <td>无控制面，用 Docker/Compose/Kubernetes 直接运行 Agent Server</td>
+          <td>轻量自托管、已有平台</td>
+      </tr>
+  </tbody>
+</table>
+<h3 id="81-部署到-langsmith-cloud">8.1 部署到 LangSmith Cloud</h3>
+<p>要求：</p>
+<ol>
+<li>LangSmith 账号。</li>
+<li>有部署权限的 API key。</li>
+<li>项目有 <code>langgraph.json</code>。</li>
+<li>环境变量配置完整。</li>
+</ol>
+<p>命令：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-powershell" data-lang="powershell"><span class="line"><span class="cl"><span class="n">langgraph</span> <span class="n">deploy</span>
+</span></span></code></pre></div><p>指定名称：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-powershell" data-lang="powershell"><span class="line"><span class="cl"><span class="n">langgraph</span> <span class="n">deploy</span> <span class="p">-</span><span class="n">-name</span> <span class="nb">research-agent</span>
+</span></span></code></pre></div><p>查看日志：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-powershell" data-lang="powershell"><span class="line"><span class="cl"><span class="n">langgraph</span> <span class="n">deploy</span> <span class="n">logs</span> <span class="o">-f</span> <span class="p">-</span><span class="n">-name</span> <span class="nb">research-agent</span>
+</span></span></code></pre></div><p>Cloud 部署适合学习生产流程和小团队快速落地。</p>
+<h3 id="82-构建镜像后自托管">8.2 构建镜像后自托管</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-powershell" data-lang="powershell"><span class="line"><span class="cl"><span class="n">langgraph</span> <span class="n">build</span> <span class="n">-t</span> <span class="nb">research-agent</span><span class="err">:</span><span class="n">latest</span>
+</span></span></code></pre></div><p>然后将镜像推送到你的 registry，由 Kubernetes、Docker 或其他平台运行。</p>
+<h3 id="83-standalone-server">8.3 Standalone server</h3>
+<p>Standalone server 不依赖 LangSmith Deployment control plane。你需要自己管理：</p>
+<ol>
+<li>Agent Server 容器。</li>
+<li>Postgres。</li>
+<li>Redis。</li>
+<li>Secret。</li>
+<li>日志。</li>
+<li>扩缩容。</li>
+<li>健康检查。</li>
+<li>滚动更新。</li>
+</ol>
+<p>最低环境变量通常包括：</p>
+<pre tabindex="0"><code class="language-dotenv" data-lang="dotenv">DATABASE_URI=postgres://...
+REDIS_URI=redis://...
+LANGSMITH_API_KEY=lsv2_...
+LANGGRAPH_CLOUD_LICENSE_KEY=...
+LANGSMITH_ENDPOINT=https://api.smith.langchain.com
+</code></pre><p>如果 traces 要发送到 self-hosted LangSmith，<code>LANGSMITH_ENDPOINT</code> 应指向自托管 LangSmith API 地址，末尾不要加斜杠。</p>
+<h3 id="84-生产推荐路径">8.4 生产推荐路径</h3>
+<p>官方文档更推荐生产级 standalone 使用 Kubernetes 和维护的 Helm chart。Docker 或非 Kubernetes 也能跑，但你要自己处理队列扩缩容、优雅下线、API/queue 分离、版本升级等细节。</p>
+<h2 id="9-生产化建议">9. 生产化建议</h2>
+<h3 id="91-区分环境">9.1 区分环境</h3>
+<p>至少区分：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">dev
+</span></span><span class="line"><span class="cl">staging
+</span></span><span class="line"><span class="cl">prod
+</span></span></code></pre></div><p>并使用不同：</p>
+<ol>
+<li>LangSmith project。</li>
+<li>API key。</li>
+<li>deployment name。</li>
+<li>database。</li>
+<li>Redis DB number。</li>
+<li>secrets。</li>
+</ol>
+<h3 id="92-固定依赖版本">9.2 固定依赖版本</h3>
+<p>不要在生产镜像里完全依赖浮动最新版：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-toml" data-lang="toml"><span class="line"><span class="cl"><span class="nx">dependencies</span> <span class="p">=</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">  <span class="s2">&#34;langchain&gt;=1.0,&lt;2&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="s2">&#34;langgraph&gt;=1.0,&lt;2&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="s2">&#34;langchain-openai&gt;=1.0,&lt;2&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">]</span>
+</span></span></code></pre></div><p>具体版本范围要根据项目实际测试结果决定。核心原则是：生产部署应可复现。</p>
+<h3 id="93-给-graph-加保护">9.3 给 graph 加保护</h3>
+<p>常见保护：</p>
+<ol>
+<li>最大迭代次数。</li>
+<li>最大工具调用次数。</li>
+<li>单次工具超时。</li>
+<li>总 run 超时。</li>
+<li>输出 schema 校验。</li>
+<li>敏感工具权限校验。</li>
+<li>用户输入长度限制。</li>
+</ol>
+<h3 id="94-设计鉴权和租户隔离">9.4 设计鉴权和租户隔离</h3>
+<p>如果服务对外提供：</p>
+<ol>
+<li>不要公开无鉴权 API。</li>
+<li>不要让用户任意访问别人的 thread。</li>
+<li>thread、store、metadata 要带租户信息。</li>
+<li>工具调用前检查权限。</li>
+<li>Studio 对生产环境的访问要受控。</li>
+</ol>
+<h3 id="95-接入-langsmith">9.5 接入 LangSmith</h3>
+<p>生产中建议开启：</p>
+<ol>
+<li>tracing。</li>
+<li>error monitoring。</li>
+<li>feedback。</li>
+<li>online evaluation。</li>
+<li>关键数据集的 offline regression。</li>
+</ol>
+<h3 id="96-健康检查和日志">9.6 健康检查和日志</h3>
+<p>至少检查：</p>
+<ol>
+<li><code>/ok</code> 健康检查。</li>
+<li>API server 日志。</li>
+<li>worker 日志。</li>
+<li>Postgres 连接。</li>
+<li>Redis 连接。</li>
+<li>队列积压。</li>
+<li>latency。</li>
+<li>error rate。</li>
+</ol>
+<h3 id="97-路由暴露面">9.7 路由暴露面</h3>
+<p>生产中可以考虑禁用不需要的 meta/docs 路由：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;$schema&#34;</span><span class="p">:</span> <span class="s2">&#34;https://langgra.ph/schema.json&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;dependencies&#34;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&#34;.&#34;</span><span class="p">],</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;graphs&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;agent&#34;</span><span class="p">:</span> <span class="s2">&#34;./agent/graph.py:graph&#34;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">},</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;http&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;disable_meta&#34;</span><span class="p">:</span> <span class="kc">true</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>这样可以减少暴露的服务信息。健康检查 <code>/ok</code> 仍可用于编排系统。</p>
+<h2 id="10-常见问题">10. 常见问题</h2>
+<h3 id="101-langgraph-server-和-langserve-有什么区别">10.1 LangGraph Server 和 LangServe 有什么区别？</h3>
+<table>
+  <thead>
+      <tr>
+          <th>项目</th>
+          <th>LangGraph Server</th>
+          <th>LangServe</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>核心对象</td>
+          <td>graph / assistant / thread / run</td>
+          <td>Runnable / LCEL chain</td>
+      </tr>
+      <tr>
+          <td>状态管理</td>
+          <td>原生支持 thread/checkpoint</td>
+          <td>需自行设计</td>
+      </tr>
+      <tr>
+          <td>Agent 工作负载</td>
+          <td>更适合</td>
+          <td>简单场景可用</td>
+      </tr>
+      <tr>
+          <td>Studio</td>
+          <td>原生连接</td>
+          <td>不作为主要路径</td>
+      </tr>
+      <tr>
+          <td>部署路线</td>
+          <td>LangSmith Deployment / Agent Server</td>
+          <td>FastAPI 服务</td>
+      </tr>
+      <tr>
+          <td>新项目推荐</td>
+          <td>更推荐</td>
+          <td>适合旧项目或简单 API</td>
+      </tr>
+  </tbody>
+</table>
+<h3 id="102-langgraph-dev-和-langgraph-up-怎么选">10.2 <code>langgraph dev</code> 和 <code>langgraph up</code> 怎么选？</h3>
+<table>
+  <thead>
+      <tr>
+          <th>命令</th>
+          <th>特点</th>
+          <th>适合</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>langgraph dev</code></td>
+          <td>无 Docker、热重载、启动快</td>
+          <td>开发和调试</td>
+      </tr>
+      <tr>
+          <td><code>langgraph up</code></td>
+          <td>Docker、本地 API server、更接近部署</td>
+          <td>本地集成测试、镜像验证</td>
+      </tr>
+  </tbody>
+</table>
+<h3 id="103-server-启动时报导入错误">10.3 Server 启动时报导入错误</h3>
+<p>检查：</p>
+<ol>
+<li>是否安装项目：<code>pip install -e .</code>。</li>
+<li><code>dependencies</code> 是否包含 <code>&quot;.&quot;</code>。</li>
+<li><code>graphs</code> 路径是否正确。</li>
+<li>Python 包是否有 <code>__init__.py</code>。</li>
+<li>当前虚拟环境是否正确。</li>
+</ol>
+<h3 id="104-thread-不保留上下文">10.4 Thread 不保留上下文</h3>
+<p>可能原因：</p>
+<ol>
+<li>每次请求都创建了新 thread。</li>
+<li>graph state 没有保存 messages。</li>
+<li>没有正确使用 checkpointer。</li>
+<li>客户端没有传同一个 thread id。</li>
+</ol>
+<h3 id="105-本地能跑部署后失败">10.5 本地能跑，部署后失败</h3>
+<p>优先检查：</p>
+<ol>
+<li><code>.env</code> 是否在部署环境存在。</li>
+<li>secret 是否正确注入。</li>
+<li>Docker 镜像是否包含本地包。</li>
+<li>外部工具服务是否可访问。</li>
+<li>Python 版本是否一致。</li>
+<li>依赖版本是否漂移。</li>
+<li>LangSmith endpoint 区域是否正确。</li>
+</ol>
+<h3 id="106-是否必须使用-langsmith-deployment">10.6 是否必须使用 LangSmith Deployment？</h3>
+<p>不是。你可以 standalone 自托管 Agent Server。但如果你不想自己管理 Postgres、Redis、队列、部署、扩缩容和控制面，LangSmith Deployment 会更省心。所谓自由，很多时候意味着自己修凌晨三点的服务。选择前最好诚实一点。</p>
+<h2 id="11-总结">11. 总结</h2>
+<p>LangGraph Server 是把 LangGraph agent 工程化的关键一层。它让 graph 不只是本地函数，而是有 API、有 thread、有 assistant、有 run、有持久化、有流式输出、有部署路径的服务。</p>
+<p>你应该掌握：</p>
+<ol>
+<li>用 <code>langgraph dev</code> 启动本地 Agent Server。</li>
+<li>用 Studio 和 <code>/docs</code> 调试服务。</li>
+<li>用 SDK 创建 thread、选择 assistant、发起 run。</li>
+<li>用 <code>langgraph.json</code> 声明 graph、依赖和环境变量。</li>
+<li>理解 assistant、thread、run、store 的区别。</li>
+<li>用 <code>langgraph build</code> 和 <code>langgraph deploy</code> 进入部署流程。</li>
+<li>生产环境中认真处理鉴权、持久化、队列、日志、评测和扩缩容。</li>
+</ol>
+<p>如果只想写一个 demo，直接 <code>.invoke()</code> 就够了。但如果你想让 agent 被真实用户调用，LangGraph Server 就是必须认真学习的部分。服务化不是炫技，它只是把“能跑”变成“能被可靠调用”。</p>
+<h2 id="12-参考资料">12. 参考资料</h2>
+<ul>
+<li>Agent Server 官方文档：https://docs.langchain.com/langsmith/agent-server</li>
+<li>LangGraph 本地服务教程：https://docs.langchain.com/oss/python/langgraph/local-server</li>
+<li>LangGraph CLI 官方文档：https://docs.langchain.com/langsmith/cli</li>
+<li>LangSmith Application Structure：https://docs.langchain.com/langsmith/application-structure</li>
+<li>LangSmith Deployment 官方文档：https://docs.langchain.com/langsmith/deployment</li>
+<li>LangSmith Cloud deploy quickstart：https://docs.langchain.com/langsmith/deployment-quickstart</li>
+<li>Standalone Agent Server 自托管文档：https://docs.langchain.com/langsmith/deploy-standalone-server</li>
+</ul>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

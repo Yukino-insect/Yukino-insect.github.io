@@ -1,0 +1,1539 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Elasticsearch基础 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="最近找实习面试被面试官拷打了 ES，所以补一下这块的知识。
+在我的认知里，ES 主要用于电商项目或日志处理中，为用户提供强大的搜索服务。
+这篇文章只保留入门阶段最应该先理解的内容：基础概念、分词器、mapping、索引库操作和文档写入。查询、聚合和 Spring 集成已经拆到独立文章里，否则这篇会长得像一份不太体面的复习提纲。
+基础概念 ES 使用的是倒排索引。这个概念是相对于正向索引而言的。
+MySQL 就是典型的使用正向索引的例子。直接通过索引字段查询目标数据。但是如果涉及模糊查询，正向索引就比较慢了。
+MySQL 通过索引查询的过程涉及到了索引的底层结构 B&#43; 树
+当我们使用 ES 搜索数据时，倒排索引起到什么作用呢？
+首先，用户输入的文本将被分词器分词，得到相应的词项
+词项（Term）：利用分词算法，将文档数据或用户查询时输入的文字分解成的具备一定含义的词或字。
+接着 ES 会拿着词项在倒排索引表中查找。其中每一个词条都会对应一组文档 id 集合。
+最后拿着文档 id，类似于随机访问一样查询具体文档。
+需要注意的是，倒排索引不是在创建 index 时生成的。它是在 refresh 时，由 Lucene segment 创建的。
+ES 的文档存储结构在逻辑上是 docID 对齐的数组，当我们通过倒排索引拿到 docID 之后，可以快速的随机访问文档内容，它不像关系数据库那样会有一个正向索引的过程。
+理解了倒排索引的概念后，我们来看一下 ES 中的一些基础概念
+Document：文档。ES 是面向文档存储的。文档可以是数据库中的一条商品数据、一个订单信息等任何数据。文档数据被序列化成 JSON 格式后会存入 ES。
+Field：字段。JSON 文档中会包含很多字段，类似于 MySQL 中的列
+Index：索引。索引类似于 MySQL 中的表。在 ES 中，相同类型的文档集合组成了索引。
+mapping：映射。类似于 MySQL 中的约束。
+ES 的使用 使用 ES 的第一步是到官网下载相关软件包。我选择的是 Elasticsearch 8.10.x 版本和与之对应的 Kibana。
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/elasticsearch/elasticsearch%E5%9F%BA%E7%A1%80/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/elasticsearch/elasticsearch%E5%9F%BA%E7%A1%80/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="Elasticsearch基础">
+  <meta property="og:description" content="最近找实习面试被面试官拷打了 ES，所以补一下这块的知识。
+在我的认知里，ES 主要用于电商项目或日志处理中，为用户提供强大的搜索服务。
+这篇文章只保留入门阶段最应该先理解的内容：基础概念、分词器、mapping、索引库操作和文档写入。查询、聚合和 Spring 集成已经拆到独立文章里，否则这篇会长得像一份不太体面的复习提纲。
+基础概念 ES 使用的是倒排索引。这个概念是相对于正向索引而言的。
+MySQL 就是典型的使用正向索引的例子。直接通过索引字段查询目标数据。但是如果涉及模糊查询，正向索引就比较慢了。
+MySQL 通过索引查询的过程涉及到了索引的底层结构 B&#43; 树
+当我们使用 ES 搜索数据时，倒排索引起到什么作用呢？
+首先，用户输入的文本将被分词器分词，得到相应的词项
+词项（Term）：利用分词算法，将文档数据或用户查询时输入的文字分解成的具备一定含义的词或字。
+接着 ES 会拿着词项在倒排索引表中查找。其中每一个词条都会对应一组文档 id 集合。
+最后拿着文档 id，类似于随机访问一样查询具体文档。
+需要注意的是，倒排索引不是在创建 index 时生成的。它是在 refresh 时，由 Lucene segment 创建的。
+ES 的文档存储结构在逻辑上是 docID 对齐的数组，当我们通过倒排索引拿到 docID 之后，可以快速的随机访问文档内容，它不像关系数据库那样会有一个正向索引的过程。
+理解了倒排索引的概念后，我们来看一下 ES 中的一些基础概念
+Document：文档。ES 是面向文档存储的。文档可以是数据库中的一条商品数据、一个订单信息等任何数据。文档数据被序列化成 JSON 格式后会存入 ES。
+Field：字段。JSON 文档中会包含很多字段，类似于 MySQL 中的列
+Index：索引。索引类似于 MySQL 中的表。在 ES 中，相同类型的文档集合组成了索引。
+mapping：映射。类似于 MySQL 中的约束。
+ES 的使用 使用 ES 的第一步是到官网下载相关软件包。我选择的是 Elasticsearch 8.10.x 版本和与之对应的 Kibana。">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="elasticsearch">
+    <meta property="article:published_time" content="2025-12-14T20:07:16+08:00">
+    <meta property="article:modified_time" content="2025-12-14T20:07:16+08:00">
+
+  
+  <meta itemprop="name" content="Elasticsearch基础">
+  <meta itemprop="description" content="最近找实习面试被面试官拷打了 ES，所以补一下这块的知识。
+在我的认知里，ES 主要用于电商项目或日志处理中，为用户提供强大的搜索服务。
+这篇文章只保留入门阶段最应该先理解的内容：基础概念、分词器、mapping、索引库操作和文档写入。查询、聚合和 Spring 集成已经拆到独立文章里，否则这篇会长得像一份不太体面的复习提纲。
+基础概念 ES 使用的是倒排索引。这个概念是相对于正向索引而言的。
+MySQL 就是典型的使用正向索引的例子。直接通过索引字段查询目标数据。但是如果涉及模糊查询，正向索引就比较慢了。
+MySQL 通过索引查询的过程涉及到了索引的底层结构 B&#43; 树
+当我们使用 ES 搜索数据时，倒排索引起到什么作用呢？
+首先，用户输入的文本将被分词器分词，得到相应的词项
+词项（Term）：利用分词算法，将文档数据或用户查询时输入的文字分解成的具备一定含义的词或字。
+接着 ES 会拿着词项在倒排索引表中查找。其中每一个词条都会对应一组文档 id 集合。
+最后拿着文档 id，类似于随机访问一样查询具体文档。
+需要注意的是，倒排索引不是在创建 index 时生成的。它是在 refresh 时，由 Lucene segment 创建的。
+ES 的文档存储结构在逻辑上是 docID 对齐的数组，当我们通过倒排索引拿到 docID 之后，可以快速的随机访问文档内容，它不像关系数据库那样会有一个正向索引的过程。
+理解了倒排索引的概念后，我们来看一下 ES 中的一些基础概念
+Document：文档。ES 是面向文档存储的。文档可以是数据库中的一条商品数据、一个订单信息等任何数据。文档数据被序列化成 JSON 格式后会存入 ES。
+Field：字段。JSON 文档中会包含很多字段，类似于 MySQL 中的列
+Index：索引。索引类似于 MySQL 中的表。在 ES 中，相同类型的文档集合组成了索引。
+mapping：映射。类似于 MySQL 中的约束。
+ES 的使用 使用 ES 的第一步是到官网下载相关软件包。我选择的是 Elasticsearch 8.10.x 版本和与之对应的 Kibana。">
+  <meta itemprop="datePublished" content="2025-12-14T20:07:16+08:00">
+  <meta itemprop="dateModified" content="2025-12-14T20:07:16+08:00">
+  <meta itemprop="wordCount" content="849">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Elasticsearch基础">
+  <meta name="twitter:description" content="最近找实习面试被面试官拷打了 ES，所以补一下这块的知识。
+在我的认知里，ES 主要用于电商项目或日志处理中，为用户提供强大的搜索服务。
+这篇文章只保留入门阶段最应该先理解的内容：基础概念、分词器、mapping、索引库操作和文档写入。查询、聚合和 Spring 集成已经拆到独立文章里，否则这篇会长得像一份不太体面的复习提纲。
+基础概念 ES 使用的是倒排索引。这个概念是相对于正向索引而言的。
+MySQL 就是典型的使用正向索引的例子。直接通过索引字段查询目标数据。但是如果涉及模糊查询，正向索引就比较慢了。
+MySQL 通过索引查询的过程涉及到了索引的底层结构 B&#43; 树
+当我们使用 ES 搜索数据时，倒排索引起到什么作用呢？
+首先，用户输入的文本将被分词器分词，得到相应的词项
+词项（Term）：利用分词算法，将文档数据或用户查询时输入的文字分解成的具备一定含义的词或字。
+接着 ES 会拿着词项在倒排索引表中查找。其中每一个词条都会对应一组文档 id 集合。
+最后拿着文档 id，类似于随机访问一样查询具体文档。
+需要注意的是，倒排索引不是在创建 index 时生成的。它是在 refresh 时，由 Lucene segment 创建的。
+ES 的文档存储结构在逻辑上是 docID 对齐的数组，当我们通过倒排索引拿到 docID 之后，可以快速的随机访问文档内容，它不像关系数据库那样会有一个正向索引的过程。
+理解了倒排索引的概念后，我们来看一下 ES 中的一些基础概念
+Document：文档。ES 是面向文档存储的。文档可以是数据库中的一条商品数据、一个订单信息等任何数据。文档数据被序列化成 JSON 格式后会存入 ES。
+Field：字段。JSON 文档中会包含很多字段，类似于 MySQL 中的列
+Index：索引。索引类似于 MySQL 中的表。在 ES 中，相同类型的文档集合组成了索引。
+mapping：映射。类似于 MySQL 中的约束。
+ES 的使用 使用 ES 的第一步是到官网下载相关软件包。我选择的是 Elasticsearch 8.10.x 版本和与之对应的 Kibana。">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">Elasticsearch基础</h1>
+
+    
+      <div class="post-date">December 14, 2025</div>
+    
+
+    <div class="post-content">
+      <p>最近找实习面试被面试官拷打了 ES，所以补一下这块的知识。</p>
+<p>在我的认知里，ES 主要用于电商项目或日志处理中，为用户提供强大的搜索服务。</p>
+<p>这篇文章只保留入门阶段最应该先理解的内容：基础概念、分词器、mapping、索引库操作和文档写入。查询、聚合和 Spring 集成已经拆到独立文章里，否则这篇会长得像一份不太体面的复习提纲。</p>
+<h2 id="基础概念">基础概念</h2>
+<p>ES 使用的是<strong>倒排索引</strong>。这个概念是相对于<strong>正向索引</strong>而言的。</p>
+<p>MySQL 就是典型的使用正向索引的例子。直接通过索引字段查询目标数据。但是如果涉及模糊查询，正向索引就比较慢了。</p>
+<blockquote>
+<p>MySQL 通过索引查询的过程涉及到了索引的底层结构 B+ 树</p></blockquote>
+<p>当我们使用 ES 搜索数据时，倒排索引起到什么作用呢？</p>
+<ol>
+<li>
+<p>首先，用户输入的文本将被分词器分词，得到相应的词项</p>
+<blockquote>
+<p><strong>词项（Term）</strong>：利用<strong>分词算法</strong>，将文档数据或用户查询时输入的文字分解成的具备一定含义的词或字。</p></blockquote>
+</li>
+<li>
+<p>接着 ES 会拿着词项在倒排索引表中查找。其中每一个词条都会对应一组文档 id 集合。</p>
+</li>
+<li>
+<p>最后拿着文档 id，类似于随机访问一样查询具体文档。</p>
+</li>
+</ol>
+<blockquote>
+<p>需要注意的是，<strong>倒排索引不是在创建 index 时生成的。它是在 refresh 时，由 Lucene segment 创建的。</strong></p>
+<p><strong>ES 的文档存储结构在逻辑上是 docID 对齐的数组，当我们通过倒排索引拿到 docID 之后，可以快速的随机访问文档内容，它不像关系数据库那样会有一个正向索引的过程。</strong></p></blockquote>
+<p>理解了倒排索引的概念后，我们来看一下 ES 中的一些基础概念</p>
+<ul>
+<li>
+<p><strong>Document</strong>：文档。ES 是面向文档存储的。文档可以是数据库中的一条商品数据、一个订单信息等任何数据。文档数据被序列化成 JSON 格式后会存入 ES。</p>
+</li>
+<li>
+<p><strong>Field</strong>：字段。JSON 文档中会包含很多字段，类似于 MySQL 中的列</p>
+</li>
+<li>
+<p><strong>Index</strong>：索引。索引类似于 MySQL 中的表。在 ES 中，相同类型的文档集合组成了索引。</p>
+</li>
+<li>
+<p><strong>mapping</strong>：映射。类似于 MySQL 中的约束。</p>
+</li>
+</ul>
+<h2 id="es-的使用">ES 的使用</h2>
+<p>使用 ES 的第一步是到官网下载相关软件包。我选择的是 Elasticsearch 8.10.x 版本和与之对应的 Kibana。</p>
+<p>ES 和 Kibana 的关系就像 MySQL Server 和 MySQL Client 一样。ES 是分布式搜索与分析引擎，负责存储和计算。而 Kibana 是其官方提供的可视化与管理界面，通过调用 ES API 提供查询、分析和运维能力，其本身并不存储业务数据。</p>
+<p>下载好之后就可以在本地运行这两个组件。</p>
+<p>需要注意的是，ES 底层是 Java 开发的。ES 需要在 Java 环境中运行，ES 默认会直接运行在自己提供的 JVM 上，不需要我们自己提供。但是默认的 JVM 堆内存比较大，应该调小一点。调整堆大小的配置文件在 <code>./config/jvm.options</code> 中。</p>
+<p>当 Kibana 启动完毕访问该应用时，第一次登录需要输入一串 token。这个 token 会在你第一次启动 ES 时打印到终端，同时打印出来的还有登录密码。</p>
+<p>登录成功后，我们可以在 Kibana 界面搜索栏中搜索 DevTools，DevTools 是用来编写 DSL 操作 ES 的。</p>
+<h2 id="分词器">分词器</h2>
+<p>分词器是 ES 的核心，它只在文本被分析的阶段使用。这个阶段主要发生在倒排索引构建阶段和查询文本的解析阶段。但是ES 默认提供的分词器对中文支持不友好，所以我们需要配置 IK 分词器作为中文分词器。</p>
+<p>请自行搜索如何下载安装 IK 分词器。</p>
+<p>我们在创建索引时显式指定 IK 分词器。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">PUT /cartoons
+</span></span></span><span class="line"><span class="cl"><span class="err">{
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;mappings&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;properties&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;name&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">        &#34;type&#34;: &#34;text&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">        &#34;analyzer&#34;: &#34;ik_max_word&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">        &#34;search_analyzer&#34;: &#34;ik_smart&#34;
+</span></span></span><span class="line"><span class="cl"><span class="err">      }
+</span></span></span><span class="line"><span class="cl"><span class="err">    }
+</span></span></span><span class="line"><span class="cl"><span class="err">  }
+</span></span></span><span class="line"><span class="cl"><span class="err">}
+</span></span></span></code></pre></div><p><code>analyzer</code> 配置的是<strong>写入数据时使用的分词器</strong>；<code>search_analyzer</code> 配置的是<strong>查询数据时使用的分词器</strong>。</p>
+<ul>
+<li>
+<p><code>ik_max_word</code> 模式常用于 <code>analyzer</code>，它的特点是尽可能的细分。</p>
+</li>
+<li>
+<p><code>ik_smart</code> 模式常用于 <code>search_analyzer</code>，它的特点是每个语义只保留一个最合理的词，词最少，且分词精准、干净。</p>
+</li>
+</ul>
+<p>为什么搜索和写入需要配置两个模式？<strong>主要是因为 ES 在写入文档时会使用 <code>analyzer</code> 分词，并在 refresh 后由 Lucene segment 生成倒排索引；搜索时，查询文本会被 <code>search_analyzer</code> 分词，再通过词项去查倒排索引。</strong></p>
+<p>我们可以使用 <code>_analyze</code> API 手动测试分词效果</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">GET /_analyze
+</span></span></span><span class="line"><span class="cl"><span class="err">{
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;analyzer&#34;: &#34;ik_max_word&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;text&#34;: &#34;我永远喜欢雪之下雪乃&#34;
+</span></span></span><span class="line"><span class="cl"><span class="err">}
+</span></span></span></code></pre></div><p>会返回类似</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;tokens&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;token&#34;</span><span class="p">:</span> <span class="s2">&#34;我&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;start_offset&#34;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;end_offset&#34;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;type&#34;</span><span class="p">:</span> <span class="s2">&#34;CN_CHAR&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;position&#34;</span><span class="p">:</span> <span class="mi">0</span>
+</span></span><span class="line"><span class="cl">    <span class="p">},</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;token&#34;</span><span class="p">:</span> <span class="s2">&#34;永远&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;start_offset&#34;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;end_offset&#34;</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;type&#34;</span><span class="p">:</span> <span class="s2">&#34;CN_WORD&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;position&#34;</span><span class="p">:</span> <span class="mi">1</span>
+</span></span><span class="line"><span class="cl">    <span class="p">},</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;token&#34;</span><span class="p">:</span> <span class="s2">&#34;喜欢&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;start_offset&#34;</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;end_offset&#34;</span><span class="p">:</span> <span class="mi">5</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;type&#34;</span><span class="p">:</span> <span class="s2">&#34;CN_WORD&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;position&#34;</span><span class="p">:</span> <span class="mi">2</span>
+</span></span><span class="line"><span class="cl">    <span class="p">},</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;token&#34;</span><span class="p">:</span> <span class="s2">&#34;雪&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;start_offset&#34;</span><span class="p">:</span> <span class="mi">5</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;end_offset&#34;</span><span class="p">:</span> <span class="mi">6</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;type&#34;</span><span class="p">:</span> <span class="s2">&#34;CN_CHAR&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;position&#34;</span><span class="p">:</span> <span class="mi">3</span>
+</span></span><span class="line"><span class="cl">    <span class="p">},</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;token&#34;</span><span class="p">:</span> <span class="s2">&#34;之下&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;start_offset&#34;</span><span class="p">:</span> <span class="mi">6</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;end_offset&#34;</span><span class="p">:</span> <span class="mi">8</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;type&#34;</span><span class="p">:</span> <span class="s2">&#34;CN_WORD&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;position&#34;</span><span class="p">:</span> <span class="mi">4</span>
+</span></span><span class="line"><span class="cl">    <span class="p">},</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;token&#34;</span><span class="p">:</span> <span class="s2">&#34;下雪&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;start_offset&#34;</span><span class="p">:</span> <span class="mi">7</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;end_offset&#34;</span><span class="p">:</span> <span class="mi">9</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;type&#34;</span><span class="p">:</span> <span class="s2">&#34;CN_WORD&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;position&#34;</span><span class="p">:</span> <span class="mi">5</span>
+</span></span><span class="line"><span class="cl">    <span class="p">},</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;token&#34;</span><span class="p">:</span> <span class="s2">&#34;乃&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;start_offset&#34;</span><span class="p">:</span> <span class="mi">9</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;end_offset&#34;</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;type&#34;</span><span class="p">:</span> <span class="s2">&#34;CN_CHAR&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;position&#34;</span><span class="p">:</span> <span class="mi">6</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">]</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>需要强调的是，分词器也是按规则行使的，它的分词规则主要来自：</p>
+<ul>
+<li>内置词典</li>
+<li>自定义词典</li>
+<li>停用词词典</li>
+</ul>
+<blockquote>
+<p>IK 分词器是靠词典文件驱动的</p></blockquote>
+<p>它的使用顺序是</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">- IK 内置词典
+</span></span><span class="line"><span class="cl">- 自定义词典
+</span></span><span class="line"><span class="cl">- 分词策略（max_word / smart）
+</span></span><span class="line"><span class="cl">- 停用词过滤
+</span></span><span class="line"><span class="cl">- 输出 token
+</span></span></code></pre></div><p>其中内置词典一般我们是不会动的。然后是自定义词典，我们为什么要有自定义词典呢？</p>
+<p>在互联网大行其道的时代，过一段时间就会兴起一些网络流行词，这些词在 IK 分词器的内置词典中是没有的所以需要我们手动配置它。还有就是停用词。如果使用者不允许搜索停用词的相关内容，就需要在 IK 分词器的停用词配置文件中写明。</p>
+<blockquote>
+<p>自定义词典文件的规则是每一个词项写一行</p></blockquote>
+<p>这些配置都可以在 IK 分词器目录下的 config 中的配置文件中声明。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-xml" data-lang="xml"><span class="line"><span class="cl"><span class="cp">&lt;?xml version=&#34;1.0&#34; encoding=&#34;UTF-8&#34;?&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="cp">&lt;!DOCTYPE properties SYSTEM &#34;http://java.sun.com/dtd/properties.dtd&#34;&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="nt">&lt;properties&gt;</span>
+</span></span><span class="line"><span class="cl">	<span class="nt">&lt;comment&gt;</span>IK Analyzer 扩展配置<span class="nt">&lt;/comment&gt;</span>
+</span></span><span class="line"><span class="cl">	<span class="c">&lt;!--用户可以在这里配置自己的扩展字典 --&gt;</span>
+</span></span><span class="line"><span class="cl">	<span class="nt">&lt;entry</span> <span class="na">key=</span><span class="s">&#34;ext_dict&#34;</span><span class="nt">&gt;&lt;/entry&gt;</span>
+</span></span><span class="line"><span class="cl">	 <span class="c">&lt;!--用户可以在这里配置自己的扩展停止词字典--&gt;</span>
+</span></span><span class="line"><span class="cl">	<span class="nt">&lt;entry</span> <span class="na">key=</span><span class="s">&#34;ext_stopwords&#34;</span><span class="nt">&gt;&lt;/entry&gt;</span>
+</span></span><span class="line"><span class="cl">	<span class="c">&lt;!--用户可以在这里配置远程扩展字典 --&gt;</span>
+</span></span><span class="line"><span class="cl">	<span class="c">&lt;!-- &lt;entry key=&#34;remote_ext_dict&#34;&gt;words_location&lt;/entry&gt; --&gt;</span>
+</span></span><span class="line"><span class="cl">	<span class="c">&lt;!--用户可以在这里配置远程扩展停止词字典--&gt;</span>
+</span></span><span class="line"><span class="cl">	<span class="c">&lt;!-- &lt;entry key=&#34;remote_ext_stopwords&#34;&gt;words_location&lt;/entry&gt; --&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="nt">&lt;/properties&gt;</span>
+</span></span></code></pre></div><h2 id="mapping-与基础-dsl">Mapping 与基础 DSL</h2>
+<p>ES 对外提供了 RESTful API，而查询条件是通过 JSON 格式的 DSL 来描述的。</p>
+<h3 id="索引库操作">索引库操作</h3>
+<p>我们先来看一下 ES 的整个约束结构</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;settings&#34;</span><span class="p">:</span> <span class="p">{</span> <span class="err">...</span> <span class="p">},</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;mappings&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;dynamic&#34;</span><span class="p">:</span> <span class="kc">true</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;properties&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;field_name&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&#34;type&#34;</span><span class="p">:</span> <span class="s2">&#34;...&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&#34;fields&#34;</span><span class="p">:</span> <span class="p">{</span> <span class="err">...</span> <span class="p">},</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&#34;analyzer&#34;</span><span class="p">:</span> <span class="s2">&#34;...&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&#34;search_analyzer&#34;</span><span class="p">:</span> <span class="s2">&#34;...&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&#34;index&#34;</span><span class="p">:</span> <span class="kc">true</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&#34;doc_values&#34;</span><span class="p">:</span> <span class="kc">true</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&#34;store&#34;</span><span class="p">:</span> <span class="kc">false</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&#34;null_value&#34;</span><span class="p">:</span> <span class="s2">&#34;...&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&#34;ignore_above&#34;</span><span class="p">:</span> <span class="mi">256</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&#34;copy_to&#34;</span><span class="p">:</span> <span class="s2">&#34;...&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&#34;norms&#34;</span><span class="p">:</span> <span class="kc">true</span>
+</span></span><span class="line"><span class="cl">      <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p><code>mappings</code> 是定义约束的最上层，是所有字段约束的总入口。</p>
+<h3 id="dynamic"><code>dynamic</code></h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="s2">&#34;dynamic&#34;</span><span class="err">:</span> <span class="kc">true</span> <span class="err">|</span> <span class="kc">false</span> <span class="err">|</span> <span class="s2">&#34;strict&#34;</span>
+</span></span></code></pre></div><ul>
+<li>
+<p><code>true</code> 的行为是，当写入未知字段时，自动推断字段类型，然后自动将该字段加入 mapping。</p>
+</li>
+<li>
+<p><code>false</code> 代表，未定义字段是不进入 mapping，但原始字段和值仍然写进 <code>_source</code>，但是不可以搜索、排序聚合。</p>
+</li>
+<li>
+<p><code>strict</code> 的行为是当出现未定义字段时，直接拒绝写入，返回错误。这样可以防止脏数据，防止 mapping 被污染，它可以定义在全局，也可以定义在字段局部。</p>
+</li>
+</ul>
+<p><code>dynamic</code> 是 ES 中控制未定义字段写入行为的全局或局部策略，用来决定是否自动生成 mapping、是否忽略字段或直接拒绝写入，是 mapping 的第一道约束门。</p>
+<h3 id="properties"><code>properties</code></h3>
+<p>字段级约束有哪些：</p>
+<p>类型约束 <code>type</code> 它是最根本的约束，它决定了字段底层使用哪种 Lucene Field 以及是否支持分词，是否支持排序聚合，使用哪种存储结构。常见的类型约束有：</p>
+<p>type：字段数据类型，常见的简单类型有：</p>
+<ul>
+<li>
+<p>字符串：<strong>text</strong>（可分词的文本）、<strong>keyword</strong>（不可分词）</p>
+</li>
+<li>
+<p>数值：long、integer、short、byte、double、float、</p>
+</li>
+<li>
+<p>布尔：boolean</p>
+</li>
+<li>
+<p>日期：date</p>
+</li>
+<li>
+<p>对象：object</p>
+</li>
+</ul>
+<h3 id="fields"><code>fields</code></h3>
+<p><code>fields</code> 是在 mapping 阶段定义的索引层概念，用于将同一个字段以多种方式建立索引，从而支持全文检索、精确匹配、排序和聚合等不同查询需求；查询和返回阶段只是对这些索引结构的使用。</p>
+<h3 id="analyzer"><code>analyzer</code></h3>
+<p>定义写入时的分词器，决定文本被如何拆分成 token</p>
+<h3 id="search_analyzer"><code>search_analyzer</code></h3>
+<p>定义查询时分词器，决定搜索时查询时分词器该如何分词</p>
+<h3 id="index"><code>index</code></h3>
+<p>当字段 <code>index:false</code> 时，ES 不会为该字段建立倒排索引，字段仍会存入 <code>_source</code>，是否还能排序或聚合取决于 <code>doc_values</code>，但该字段永远不能用于搜索条件。</p>
+<h3 id="doc_values"><code>doc_values</code></h3>
+<p><code>doc_values</code> 用于决定字段是否以列式结构存储，从而支持高效的排序、聚合和脚本取值；在实践中它主要用于不可分词（如 keyword、numeric、date）字段，其本质与是否分词无关，而是与按文档取字段值的访问模式有关。</p>
+<p><code>doc_values</code> 之所以能高效取值，是因为它将字段值按 docID 顺序以列式结构存储在磁盘上，并通过 mmap 映射到进程地址空间，使得 ES 可以直接、顺序或近似 O(1) 地按文档访问字段值，而无需反向遍历倒排索引或将数据加载到 JVM 堆中。
+借助列式布局、docID 对齐、OS 页缓存以及高效的编码方式，<code>doc_values</code> 成为了排序、聚合和脚本计算性能的根本基础。<code>doc_values</code> 本身只是是否启用该结构的配置开关，具体的数据布局与编码策略由 Lucene 内部根据字段类型自动决定。</p>
+<h3 id="store"><code>store</code></h3>
+<p>默认 <code>_source</code> 存的是<strong>整条原始 JSON</strong>。返回字段时，先读整个 <code>_source</code>，再解析 JSON，得到最终的结果。</p>
+<p><code>store</code> 用于决定字段是否以独立的 stored field 形式存储，从而在查询结果中可以不依赖 <code>_source</code> 直接返回该字段值；它不参与搜索、排序或聚合，主要用于优化字段取回路径，在 <code>_source</code> 很大或被禁用的场景下才有明显价值。</p>
+<h3 id="null_value"><code>null_value</code></h3>
+<p>当字段为 null 时，可以将 null 值替换成 <code>null_value</code> 指定值写入索引</p>
+<h3 id="ignore_above"><code>ignore_above</code></h3>
+<p><code>ignore_above</code> 常用于 <code>keyword</code> 字段，表示当字符串长度超过指定值时，该字段不会被写入索引，也不会进入 <code>doc_values</code>。原始值仍然保留在 <code>_source</code> 中，但不能通过该字段过滤、排序或聚合。</p>
+<h3 id="copy_to"><code>copy_to</code></h3>
+<p><code>copy_to</code> 用于把多个字段的内容复制到一个统一字段中建立索引。常见场景是把 <code>title</code>、<code>subtitle</code>、<code>description</code> 写入一个 <code>all</code> 字段，然后对 <code>all</code> 做一次 <code>match</code>，避免在查询时使用过多字段的 <code>multi_match</code>。</p>
+<h3 id="norms"><code>norms</code></h3>
+<p><code>norms</code> 通过记录字段长度等信息，在 BM25 等相关性算法中对评分进行归一化，使短字段比长字段更容易获得高分，从而显著影响搜索结果的排序。</p>
+<p>这些 mapping 参数本质是在“写入阶段”定义字段如何被拆分、索引、存储和评分，一旦写入就不可更改，是 ES 中最重要的结构性约束。</p>
+<p>我们可以使用如下命令进行相关操作</p>
+<ul>
+<li>创建索引库：PUT /索引库名</li>
+<li>查询索引库：GET /索引库名</li>
+<li>删除索引库：DELETE /索引库名</li>
+<li>修改索引库：PUT /索引库名/_mapping</li>
+</ul>
+<p>例如创建索引：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">PUT /users
+</span></span></span><span class="line"><span class="cl"><span class="err">{
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;mappings&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;properties&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;id&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">        &#34;type&#34;: &#34;keyword&#34;
+</span></span></span><span class="line"><span class="cl"><span class="err">      },
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;name&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">        &#34;type&#34;: &#34;text&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">        &#34;analyzer&#34;: &#34;ik_max_word&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">        &#34;search_analyzer&#34;: &#34;ik_smart&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">        &#34;fields&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">          &#34;keyword&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">            &#34;type&#34;: &#34;keyword&#34;
+</span></span></span><span class="line"><span class="cl"><span class="err">          }
+</span></span></span><span class="line"><span class="cl"><span class="err">        }
+</span></span></span><span class="line"><span class="cl"><span class="err">      },
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;age&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">        &#34;type&#34;: &#34;integer&#34;
+</span></span></span><span class="line"><span class="cl"><span class="err">      },
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;createdAt&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">        &#34;type&#34;: &#34;date&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">        &#34;format&#34;: &#34;yyyy-MM-dd HH:mm:ss||epoch_millis&#34;
+</span></span></span><span class="line"><span class="cl"><span class="err">      }
+</span></span></span><span class="line"><span class="cl"><span class="err">    }
+</span></span></span><span class="line"><span class="cl"><span class="err">  }
+</span></span></span><span class="line"><span class="cl"><span class="err">}
+</span></span></span></code></pre></div><p><strong>Elasticsearch 的文档约束（mapping）一旦确定，已存在字段的核心属性（类型、分词、索引方式等）基本不可修改；允许的修改仅限于向前兼容的操作，如新增字段或为已有字段新增 multi-field。若需要真正修改字段定义，唯一安全方式是新建索引并通过 reindex 重建数据。</strong></p>
+<h2 id="文档操作">文档操作</h2>
+<p>了解了索引操作后，再来了解一下文档操作。文档本质上就是一个 JSON对象。大概长这样</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;_index&#34;</span><span class="p">:</span> <span class="s2">&#34;user&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;_id&#34;</span><span class="p">:</span> <span class="s2">&#34;1&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;_version&#34;</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;_seq_no&#34;</span><span class="p">:</span> <span class="mi">15</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;_primary_term&#34;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;found&#34;</span><span class="p">:</span> <span class="kc">true</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;_source&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;user&#34;</span><span class="p">:</span> <span class="s2">&#34;zhangsan&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;age&#34;</span><span class="p">:</span> <span class="mi">18</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;tags&#34;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&#34;java&#34;</span><span class="p">,</span> <span class="s2">&#34;es&#34;</span><span class="p">],</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;address&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;city&#34;</span><span class="p">:</span> <span class="s2">&#34;beijing&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;code&#34;</span><span class="p">:</span> <span class="s2">&#34;100000&#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">},</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;createTime&#34;</span><span class="p">:</span> <span class="s2">&#34;2025-12-17T10:00:00&#34;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>文档信息包括了一部分元数据和我们真正需要的文档内容 <code>_source</code>。</p>
+<p>返回的元数据包括 <code>_index</code> 索引名、<code>_id</code> 文档主键、<code>_version</code> 版本号、<code>_seq_no</code> 并发控制序号、<code>_primary_term</code>、<code>found</code> 是否存在等。</p>
+<p>我们在新增文档时，是不需要填写这些元数据的，我们只需要按照 mapping 规则填写正确的 <code>_source</code> 部分即可。</p>
+<p>下面来看一下文档的相关操作：</p>
+<ul>
+<li>查询文档 GET /索引/_doc /文档 id</li>
+<li>更新文档 POST /索引/_update/文档 id</li>
+<li>插入文档 POST /索引/_update/文档 id</li>
+<li>DELETE /索引/_doc/文档 id</li>
+</ul>
+<blockquote>
+<p>这里列举一些 ES 向外暴露的 RESTful 接口路径</p>
+<ul>
+<li><code>_doc</code> —— 文档的统一入口</li>
+<li><code>_create</code> —— 防止覆盖的安全写入</li>
+<li><code>_update</code> —— 局部更新（但不是原地）</li>
+<li><code>_delete</code> —— 删除文档</li>
+<li><code>_bulk</code> —— 批量操作</li>
+<li><code>_mget</code> —— 批量按 ID 查询</li>
+<li><code>_search</code> —— 搜索入口（倒排索引）</li>
+<li><code>_update_by_query</code> —— 批量更新</li>
+<li><code>_delete_by_query</code> —— 批量删除</li>
+</ul></blockquote>
+<p>在新增文档时，推荐显式指定 <code>_id</code>。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">PUT /user/_doc/1
+</span></span></span><span class="line"><span class="cl"><span class="err">{
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;id&#34;: 1,
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;user&#34;: &#34;zhangsan&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;age&#34;: 18,
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;tags&#34;: [&#34;java&#34;, &#34;es&#34;],
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;address&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;city&#34;: &#34;beijing&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;code&#34;: &#34;100000&#34;
+</span></span></span><span class="line"><span class="cl"><span class="err">  },
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;createTime&#34;: &#34;2025-12-17T10:00:00&#34;
+</span></span></span><span class="line"><span class="cl"><span class="err">}
+</span></span></span></code></pre></div><p>如果不指定 <code>_id</code>，ES 会为每个文档自动生成一个。注意，URL 中的 <code>1</code> 才是 ES 里的 <code>_id</code>，JSON 中的 <code>id</code> 是我们规定的业务字段。<strong>生产时比较建议将两者统一。因为这样，我们在更新该条文档时可以保证幂等，同时在更改查询删除时也可以直接按 <code>_id</code> 查找。</strong></p>
+<p>在 REST 的语义中，<code>POST</code> 代表由服务端生成资源标识符。ES 的 <code>POST user/_doc</code> 是遵守 REST 语义的，因此该操作不能指定 <code>_id</code>，<code>_id</code> 由 ES 自动生成。如果同样的一条数据使用 <code>POST</code> 新增可能会生成两个文档，这样不能保证幂等。而 <code>PUT user/_doc/1</code> 则代表将指定的资源变成我给定的状态，这可以显示的标明相关信息。</p>
+<p>当我们在执行 <code>PUT</code>、<code>DELETE</code> 等更新删除操作时，并不会操作原数据。在 ES 中，文档是存在于 segment 的，它是 Lucene 的最小索引单元。一旦生成就不会变了。</p>
+<p>当我们执行 PUT 更新时，ES 会在 segment 定位原来的文档，标记该文档为删除。但数据仍然存在磁盘中并没有做任何操作。ES 最终会生成一个新的文档写入新的 segment。DELETE 同样如此。</p>
+<h3 id="批量操作">批量操作</h3>
+<p>我们很容易想到，将多个 HTTP 请求合并成一次网络请求可以极大提升性能，减少网络开销。ES 中的批量操作就是起到这样的作用。</p>
+<p>Bulk 的核心路径</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">POST /_bulk
+</span></span></span></code></pre></div><p>限定索引</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">POST /user/_bulk
+</span></span></span></code></pre></div><p>它的请求格式</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">POST /_bulk
+</span></span></span><span class="line"><span class="cl"><span class="err">{ &#34;index&#34;:  { &#34;_index&#34;: &#34;user&#34;, &#34;_id&#34;: &#34;1&#34; } }
+</span></span></span><span class="line"><span class="cl"><span class="err">{ &#34;name&#34;: &#34;zhangsan&#34;, &#34;age&#34;: 18 }
+</span></span></span><span class="line"><span class="cl"><span class="err">{ &#34;update&#34;: { &#34;_index&#34;: &#34;user&#34;, &#34;_id&#34;: &#34;2&#34; } }
+</span></span></span><span class="line"><span class="cl"><span class="err">{ &#34;doc&#34;: { &#34;age&#34;: 20 } }
+</span></span></span><span class="line"><span class="cl"><span class="err">{ &#34;delete&#34;: { &#34;_index&#34;: &#34;user&#34;, &#34;_id&#34;: &#34;3&#34; } }
+</span></span></span></code></pre></div><p>Bulk 的书写规则是奇数行操作元数据，偶数行操作文档内容（delete 操作没有）。每行必须是完整 JSON。每行结尾必须换行。</p>
+<h2 id="延伸阅读">延伸阅读</h2>
+<ul>
+<li><a href="/elasticsearch/elasticsearch%E6%9F%A5%E8%AF%A2dsl/">Elasticsearch查询DSL</a>
+：整理 <code>match</code>、<code>term</code>、<code>bool</code>、排序、分页、高亮和地理查询。</li>
+<li><a href="/elasticsearch/elasticsearch%E8%81%9A%E5%90%88%E6%9F%A5%E8%AF%A2/">Elasticsearch聚合查询</a>
+：整理 Bucket、Metric 和 Pipeline 聚合。</li>
+<li><a href="/elasticsearch/elasticsearch-java-client-%E4%B8%8E-spring-%E9%9B%86%E6%88%90/">Elasticsearch Java Client 与 Spring 集成</a>
+：整理 Spring Boot 中使用官方 Java Client 的方式。</li>
+</ul>
+<h2 id="参考">参考</h2>
+<ul>
+<li><a href="https://blog.csdn.net/w1014074794/article/details/120523550">https://blog.csdn.net/w1014074794/article/details/120523550</a>
+</li>
+<li><a href="https://www.jianshu.com/p/70d1c3045c11">https://www.jianshu.com/p/70d1c3045c11</a>
+</li>
+<li><a href="https://www.cnblogs.com/buchizicai/p/17093719.html">https://www.cnblogs.com/buchizicai/p/17093719.html</a>
+</li>
+</ul>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

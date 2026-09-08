@@ -1,0 +1,1575 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>前端如何调试、查看日志与寻找错误：从现象到根因的实战流程 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="前端排错并不是盯着控制台里一行红字，然后期待它自己交代罪行。一个看似简单的“按钮没反应”，可能来自事件没有绑定、状态没有更新、接口失败、响应数据不符合约定，或渲染条件把结果隐藏了。高效调试的关键，是把模糊现象逐步缩小为可验证的假设。
+这篇文章以浏览器 DevTools 为主，结合 Vue 3 项目说明如何查看日志、复现问题、定位运行时错误和网络错误，并给出可用于生产环境的最小监控思路。
+一、先建立排错路径，而不是四处猜测 遇到问题时，先回答三个问题：
+现象是什么：在哪个页面、经过什么操作、得到什么结果。 预期是什么：正常情况下页面、接口或状态应该如何变化。 边界在哪里：问题发生在浏览器、前端代码、网络传输，还是服务端。 可以把常见问题按数据流拆开：
+用户操作 -&gt; 事件处理函数 -&gt; 前端状态 / 参数组装 -&gt; HTTP 请求 -&gt; 服务端响应 -&gt; 数据转换 -&gt; 组件重新渲染 每一层都能通过证据确认。只要逐层验证，就不必凭感觉同时修改多个地方；那种做法通常只会让原本清楚的问题失去现场。
+1. 写出最小复现步骤 不要用“偶尔打不开”作为问题描述。应该记录可重复的步骤，例如：
+使用测试账号进入“文章列表”。 输入关键字 Vue 并点击搜索。 第一次列表正常显示；快速再点击两次搜索后，加载状态一直不消失。 同时记录环境：浏览器和版本、页面地址、账号角色、网络条件、发生时间，以及是否只在生产环境出现。时间、请求 ID 和用户操作顺序，往往比一句“有 bug”有用得多。
+2. 一次只验证一个假设 例如列表没有更新时，可以按顺序验证：
+点击事件是否执行？ 请求是否真的发出？ 响应状态和内容是否正确？ 响应数据是否写入状态？ 模板绑定的是否就是这份状态？ 每步都能用断点、日志或 Network 面板确认。若事件根本没有执行，就没有必要先怀疑后端接口；这个顺序并不华丽，却能避免大部分无效劳动。
+二、浏览器 DevTools：先熟悉四个核心面板 在 Chrome、Edge 等 Chromium 浏览器中按 F12 或 Ctrl &#43; Shift &#43; I 打开开发者工具。不同浏览器名称略有差异，但核心能力相近。
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/vue/03-engineering/04-%E5%89%8D%E7%AB%AF%E8%B0%83%E8%AF%95%E6%97%A5%E5%BF%97%E4%B8%8E%E9%94%99%E8%AF%AF%E5%AE%9A%E4%BD%8D/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/vue/03-engineering/04-%E5%89%8D%E7%AB%AF%E8%B0%83%E8%AF%95%E6%97%A5%E5%BF%97%E4%B8%8E%E9%94%99%E8%AF%AF%E5%AE%9A%E4%BD%8D/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="前端如何调试、查看日志与寻找错误：从现象到根因的实战流程">
+  <meta property="og:description" content="前端排错并不是盯着控制台里一行红字，然后期待它自己交代罪行。一个看似简单的“按钮没反应”，可能来自事件没有绑定、状态没有更新、接口失败、响应数据不符合约定，或渲染条件把结果隐藏了。高效调试的关键，是把模糊现象逐步缩小为可验证的假设。
+这篇文章以浏览器 DevTools 为主，结合 Vue 3 项目说明如何查看日志、复现问题、定位运行时错误和网络错误，并给出可用于生产环境的最小监控思路。
+一、先建立排错路径，而不是四处猜测 遇到问题时，先回答三个问题：
+现象是什么：在哪个页面、经过什么操作、得到什么结果。 预期是什么：正常情况下页面、接口或状态应该如何变化。 边界在哪里：问题发生在浏览器、前端代码、网络传输，还是服务端。 可以把常见问题按数据流拆开：
+用户操作 -&gt; 事件处理函数 -&gt; 前端状态 / 参数组装 -&gt; HTTP 请求 -&gt; 服务端响应 -&gt; 数据转换 -&gt; 组件重新渲染 每一层都能通过证据确认。只要逐层验证，就不必凭感觉同时修改多个地方；那种做法通常只会让原本清楚的问题失去现场。
+1. 写出最小复现步骤 不要用“偶尔打不开”作为问题描述。应该记录可重复的步骤，例如：
+使用测试账号进入“文章列表”。 输入关键字 Vue 并点击搜索。 第一次列表正常显示；快速再点击两次搜索后，加载状态一直不消失。 同时记录环境：浏览器和版本、页面地址、账号角色、网络条件、发生时间，以及是否只在生产环境出现。时间、请求 ID 和用户操作顺序，往往比一句“有 bug”有用得多。
+2. 一次只验证一个假设 例如列表没有更新时，可以按顺序验证：
+点击事件是否执行？ 请求是否真的发出？ 响应状态和内容是否正确？ 响应数据是否写入状态？ 模板绑定的是否就是这份状态？ 每步都能用断点、日志或 Network 面板确认。若事件根本没有执行，就没有必要先怀疑后端接口；这个顺序并不华丽，却能避免大部分无效劳动。
+二、浏览器 DevTools：先熟悉四个核心面板 在 Chrome、Edge 等 Chromium 浏览器中按 F12 或 Ctrl &#43; Shift &#43; I 打开开发者工具。不同浏览器名称略有差异，但核心能力相近。">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="vue">
+    <meta property="article:published_time" content="2026-09-05T10:00:00+08:00">
+    <meta property="article:modified_time" content="2026-09-05T10:00:00+08:00">
+
+  
+  <meta itemprop="name" content="前端如何调试、查看日志与寻找错误：从现象到根因的实战流程">
+  <meta itemprop="description" content="前端排错并不是盯着控制台里一行红字，然后期待它自己交代罪行。一个看似简单的“按钮没反应”，可能来自事件没有绑定、状态没有更新、接口失败、响应数据不符合约定，或渲染条件把结果隐藏了。高效调试的关键，是把模糊现象逐步缩小为可验证的假设。
+这篇文章以浏览器 DevTools 为主，结合 Vue 3 项目说明如何查看日志、复现问题、定位运行时错误和网络错误，并给出可用于生产环境的最小监控思路。
+一、先建立排错路径，而不是四处猜测 遇到问题时，先回答三个问题：
+现象是什么：在哪个页面、经过什么操作、得到什么结果。 预期是什么：正常情况下页面、接口或状态应该如何变化。 边界在哪里：问题发生在浏览器、前端代码、网络传输，还是服务端。 可以把常见问题按数据流拆开：
+用户操作 -&gt; 事件处理函数 -&gt; 前端状态 / 参数组装 -&gt; HTTP 请求 -&gt; 服务端响应 -&gt; 数据转换 -&gt; 组件重新渲染 每一层都能通过证据确认。只要逐层验证，就不必凭感觉同时修改多个地方；那种做法通常只会让原本清楚的问题失去现场。
+1. 写出最小复现步骤 不要用“偶尔打不开”作为问题描述。应该记录可重复的步骤，例如：
+使用测试账号进入“文章列表”。 输入关键字 Vue 并点击搜索。 第一次列表正常显示；快速再点击两次搜索后，加载状态一直不消失。 同时记录环境：浏览器和版本、页面地址、账号角色、网络条件、发生时间，以及是否只在生产环境出现。时间、请求 ID 和用户操作顺序，往往比一句“有 bug”有用得多。
+2. 一次只验证一个假设 例如列表没有更新时，可以按顺序验证：
+点击事件是否执行？ 请求是否真的发出？ 响应状态和内容是否正确？ 响应数据是否写入状态？ 模板绑定的是否就是这份状态？ 每步都能用断点、日志或 Network 面板确认。若事件根本没有执行，就没有必要先怀疑后端接口；这个顺序并不华丽，却能避免大部分无效劳动。
+二、浏览器 DevTools：先熟悉四个核心面板 在 Chrome、Edge 等 Chromium 浏览器中按 F12 或 Ctrl &#43; Shift &#43; I 打开开发者工具。不同浏览器名称略有差异，但核心能力相近。">
+  <meta itemprop="datePublished" content="2026-09-05T10:00:00+08:00">
+  <meta itemprop="dateModified" content="2026-09-05T10:00:00+08:00">
+  <meta itemprop="wordCount" content="916">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="前端如何调试、查看日志与寻找错误：从现象到根因的实战流程">
+  <meta name="twitter:description" content="前端排错并不是盯着控制台里一行红字，然后期待它自己交代罪行。一个看似简单的“按钮没反应”，可能来自事件没有绑定、状态没有更新、接口失败、响应数据不符合约定，或渲染条件把结果隐藏了。高效调试的关键，是把模糊现象逐步缩小为可验证的假设。
+这篇文章以浏览器 DevTools 为主，结合 Vue 3 项目说明如何查看日志、复现问题、定位运行时错误和网络错误，并给出可用于生产环境的最小监控思路。
+一、先建立排错路径，而不是四处猜测 遇到问题时，先回答三个问题：
+现象是什么：在哪个页面、经过什么操作、得到什么结果。 预期是什么：正常情况下页面、接口或状态应该如何变化。 边界在哪里：问题发生在浏览器、前端代码、网络传输，还是服务端。 可以把常见问题按数据流拆开：
+用户操作 -&gt; 事件处理函数 -&gt; 前端状态 / 参数组装 -&gt; HTTP 请求 -&gt; 服务端响应 -&gt; 数据转换 -&gt; 组件重新渲染 每一层都能通过证据确认。只要逐层验证，就不必凭感觉同时修改多个地方；那种做法通常只会让原本清楚的问题失去现场。
+1. 写出最小复现步骤 不要用“偶尔打不开”作为问题描述。应该记录可重复的步骤，例如：
+使用测试账号进入“文章列表”。 输入关键字 Vue 并点击搜索。 第一次列表正常显示；快速再点击两次搜索后，加载状态一直不消失。 同时记录环境：浏览器和版本、页面地址、账号角色、网络条件、发生时间，以及是否只在生产环境出现。时间、请求 ID 和用户操作顺序，往往比一句“有 bug”有用得多。
+2. 一次只验证一个假设 例如列表没有更新时，可以按顺序验证：
+点击事件是否执行？ 请求是否真的发出？ 响应状态和内容是否正确？ 响应数据是否写入状态？ 模板绑定的是否就是这份状态？ 每步都能用断点、日志或 Network 面板确认。若事件根本没有执行，就没有必要先怀疑后端接口；这个顺序并不华丽，却能避免大部分无效劳动。
+二、浏览器 DevTools：先熟悉四个核心面板 在 Chrome、Edge 等 Chromium 浏览器中按 F12 或 Ctrl &#43; Shift &#43; I 打开开发者工具。不同浏览器名称略有差异，但核心能力相近。">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">前端如何调试、查看日志与寻找错误：从现象到根因的实战流程</h1>
+
+    
+      <div class="post-date">September 5, 2026</div>
+    
+
+    <div class="post-content">
+      <p>前端排错并不是盯着控制台里一行红字，然后期待它自己交代罪行。一个看似简单的“按钮没反应”，可能来自事件没有绑定、状态没有更新、接口失败、响应数据不符合约定，或渲染条件把结果隐藏了。高效调试的关键，是把模糊现象逐步缩小为<strong>可验证的假设</strong>。</p>
+<p>这篇文章以浏览器 DevTools 为主，结合 Vue 3 项目说明如何查看日志、复现问题、定位运行时错误和网络错误，并给出可用于生产环境的最小监控思路。</p>
+<h2 id="一先建立排错路径而不是四处猜测">一、先建立排错路径，而不是四处猜测</h2>
+<p>遇到问题时，先回答三个问题：</p>
+<ol>
+<li><strong>现象是什么</strong>：在哪个页面、经过什么操作、得到什么结果。</li>
+<li><strong>预期是什么</strong>：正常情况下页面、接口或状态应该如何变化。</li>
+<li><strong>边界在哪里</strong>：问题发生在浏览器、前端代码、网络传输，还是服务端。</li>
+</ol>
+<p>可以把常见问题按数据流拆开：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">用户操作
+</span></span><span class="line"><span class="cl">  -&gt; 事件处理函数
+</span></span><span class="line"><span class="cl">    -&gt; 前端状态 / 参数组装
+</span></span><span class="line"><span class="cl">      -&gt; HTTP 请求
+</span></span><span class="line"><span class="cl">        -&gt; 服务端响应
+</span></span><span class="line"><span class="cl">          -&gt; 数据转换
+</span></span><span class="line"><span class="cl">            -&gt; 组件重新渲染
+</span></span></code></pre></div><p>每一层都能通过证据确认。只要逐层验证，就不必凭感觉同时修改多个地方；那种做法通常只会让原本清楚的问题失去现场。</p>
+<h3 id="1-写出最小复现步骤">1. 写出最小复现步骤</h3>
+<p>不要用“偶尔打不开”作为问题描述。应该记录可重复的步骤，例如：</p>
+<ol>
+<li>使用测试账号进入“文章列表”。</li>
+<li>输入关键字 <code>Vue</code> 并点击搜索。</li>
+<li>第一次列表正常显示；快速再点击两次搜索后，加载状态一直不消失。</li>
+</ol>
+<p>同时记录环境：浏览器和版本、页面地址、账号角色、网络条件、发生时间，以及是否只在生产环境出现。时间、请求 ID 和用户操作顺序，往往比一句“有 bug”有用得多。</p>
+<h3 id="2-一次只验证一个假设">2. 一次只验证一个假设</h3>
+<p>例如列表没有更新时，可以按顺序验证：</p>
+<ul>
+<li>点击事件是否执行？</li>
+<li>请求是否真的发出？</li>
+<li>响应状态和内容是否正确？</li>
+<li>响应数据是否写入状态？</li>
+<li>模板绑定的是否就是这份状态？</li>
+</ul>
+<p>每步都能用断点、日志或 Network 面板确认。若事件根本没有执行，就没有必要先怀疑后端接口；这个顺序并不华丽，却能避免大部分无效劳动。</p>
+<h2 id="二浏览器-devtools先熟悉四个核心面板">二、浏览器 DevTools：先熟悉四个核心面板</h2>
+<p>在 Chrome、Edge 等 Chromium 浏览器中按 <code>F12</code> 或 <code>Ctrl + Shift + I</code> 打开开发者工具。不同浏览器名称略有差异，但核心能力相近。</p>
+<table>
+  <thead>
+      <tr>
+          <th>面板</th>
+          <th>主要用途</th>
+          <th>适合回答的问题</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>Console</code></td>
+          <td>日志、异常、表达式求值</td>
+          <td>代码执行到哪里、变量是什么、报错来自哪里？</td>
+      </tr>
+      <tr>
+          <td><code>Sources</code></td>
+          <td>源码、断点、调用栈</td>
+          <td>哪一行触发了错误、谁调用了它？</td>
+      </tr>
+      <tr>
+          <td><code>Network</code></td>
+          <td>请求、响应、资源加载</td>
+          <td>请求是否发出、参数是否正确、为何失败？</td>
+      </tr>
+      <tr>
+          <td><code>Elements</code></td>
+          <td>DOM 与样式</td>
+          <td>元素是否渲染、CSS 是否被覆盖、事件是否绑定？</td>
+      </tr>
+  </tbody>
+</table>
+<p>调试前建议开启两个选项：</p>
+<ul>
+<li>Console 的 <strong>Preserve log</strong>：页面跳转或刷新后保留日志，适合排查登录跳转、白屏和初始化失败。</li>
+<li>Network 的 <strong>Preserve log</strong>：保留跳转前的请求；必要时勾选 <strong>Disable cache</strong>，避免缓存掩盖资源更新或请求结果。</li>
+</ul>
+<p><code>Disable cache</code> 只在 DevTools 保持打开时生效，不应把“关缓存”当作线上问题的修复方案。缓存本身没有错，错的是没有判断它是否参与了问题。</p>
+<h2 id="三console让日志成为证据而不是噪声">三、Console：让日志成为证据，而不是噪声</h2>
+<h3 id="1-使用正确的日志级别">1. 使用正确的日志级别</h3>
+<p>不要把所有信息都写成 <code>console.log</code>。至少区分以下语义：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">debug</span><span class="p">(</span><span class="s1">&#39;[post-search] keyword changed&#39;</span><span class="p">,</span> <span class="p">{</span> <span class="nx">keyword</span> <span class="p">})</span>
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">info</span><span class="p">(</span><span class="s1">&#39;[post-search] request started&#39;</span><span class="p">,</span> <span class="p">{</span> <span class="nx">requestId</span><span class="p">,</span> <span class="nx">keyword</span> <span class="p">})</span>
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">warn</span><span class="p">(</span><span class="s1">&#39;[post-search] empty result&#39;</span><span class="p">,</span> <span class="p">{</span> <span class="nx">requestId</span><span class="p">,</span> <span class="nx">keyword</span> <span class="p">})</span>
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">error</span><span class="p">(</span><span class="s1">&#39;[post-search] request failed&#39;</span><span class="p">,</span> <span class="p">{</span> <span class="nx">requestId</span><span class="p">,</span> <span class="nx">error</span> <span class="p">})</span>
+</span></span></code></pre></div><ul>
+<li><code>debug</code>：只在排查时需要的细节。</li>
+<li><code>info</code>：关键流程的正常节点，例如请求开始、登录完成。</li>
+<li><code>warn</code>：不符合预期但系统还能继续处理的情况。</li>
+<li><code>error</code>：需要关注的失败，例如未捕获异常、关键请求失败。</li>
+</ul>
+<p>给日志加上模块前缀和关键上下文，筛选时可以直接搜索 <code>[post-search]</code>。不要只打印“失败了”；至少带上操作、参数摘要、请求 ID、状态码和原始错误对象。密码、token、身份证号和完整响应正文等敏感信息则不应该出现在日志里。</p>
+<h3 id="2-查看对象时要注意延迟展开">2. 查看对象时要注意“延迟展开”</h3>
+<p>下面的写法很常见：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">payload</span> <span class="o">=</span> <span class="p">{</span> <span class="nx">page</span>: <span class="kt">1</span><span class="p">,</span> <span class="nx">keyword</span><span class="o">:</span> <span class="s1">&#39;Vue&#39;</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;payload&#39;</span><span class="p">,</span> <span class="nx">payload</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">payload</span><span class="p">.</span><span class="nx">page</span> <span class="o">=</span> <span class="mi">2</span>
+</span></span></code></pre></div><p>在某些开发者工具中，稍后展开日志对象时看到的可能是修改后的对象状态。若要保留当时的快照，可以输出拷贝：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;payload snapshot&#39;</span><span class="p">,</span> <span class="p">{</span> <span class="p">...</span><span class="nx">payload</span> <span class="p">})</span>
+</span></span></code></pre></div><p>对嵌套对象可以使用 <code>structuredClone(payload)</code>；但它不能复制函数等特殊值。调试时最重要的是知道：控制台展示的对象未必等于打印那一刻的对象。</p>
+<h3 id="3-在-console-中直接验证表达式">3. 在 Console 中直接验证表达式</h3>
+<p>断点暂停后或页面正常运行时，可以在 Console 输入表达式检查当前上下文：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="nx">location</span><span class="p">.</span><span class="nx">href</span>
+</span></span><span class="line"><span class="cl"><span class="nx">localStorage</span><span class="p">.</span><span class="nx">getItem</span><span class="p">(</span><span class="s1">&#39;token&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nb">document</span><span class="p">.</span><span class="nx">querySelector</span><span class="p">(</span><span class="s1">&#39;#search-input&#39;</span><span class="p">)</span><span class="o">?</span><span class="p">.</span><span class="nx">value</span>
+</span></span></code></pre></div><p>这适合快速验证 DOM、存储和简单变量。对于会修改状态的表达式要格外克制；调试现场已经够脆弱，没必要亲手把证据改掉。</p>
+<h2 id="四sources-断点停止猜测查看真实执行路径">四、Sources 断点：停止猜测，查看真实执行路径</h2>
+<p>日志适合观察流程，断点适合检查某一刻的完整现场。打开 <code>Sources</code>，找到对应的 TypeScript、Vue 或 JavaScript 源文件，在行号处单击即可设置断点。</p>
+<h3 id="1-优先在边界处下断点">1. 优先在边界处下断点</h3>
+<p>比起在每一行都停住，更推荐从这些边界开始：</p>
+<ul>
+<li>点击、输入、提交等事件处理函数入口。</li>
+<li>请求函数调用前后。</li>
+<li>响应数据转换处。</li>
+<li>状态赋值处。</li>
+<li>抛出异常或显示错误提示处。</li>
+</ul>
+<p>例如搜索函数：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">async</span> <span class="kd">function</span> <span class="nx">searchPosts</span><span class="p">(</span><span class="nx">keyword</span>: <span class="kt">string</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">const</span> <span class="nx">requestId</span> <span class="o">=</span> <span class="nx">crypto</span><span class="p">.</span><span class="nx">randomUUID</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">const</span> <span class="nx">response</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">fetch</span><span class="p">(</span><span class="sb">`/api/posts?keyword=</span><span class="si">${</span><span class="nb">encodeURIComponent</span><span class="p">(</span><span class="nx">keyword</span><span class="p">)</span><span class="si">}</span><span class="sb">`</span><span class="p">,</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">headers</span><span class="o">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="s1">&#39;X-Request-Id&#39;</span><span class="o">:</span> <span class="nx">requestId</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">})</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nx">response</span><span class="p">.</span><span class="nx">ok</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">throw</span> <span class="k">new</span> <span class="nb">Error</span><span class="p">(</span><span class="sb">`搜索失败：</span><span class="si">${</span><span class="nx">response</span><span class="p">.</span><span class="nx">status</span><span class="si">}</span><span class="sb">`</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">return</span> <span class="nx">response</span><span class="p">.</span><span class="nx">json</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>可以先在 <code>fetch</code> 前停住确认 <code>keyword</code> 和请求地址，再在 <code>response.ok</code> 处确认状态码。若请求没有到达此处，沿调用栈向上查找；若到达但状态码异常，再转到 Network 检查完整请求和响应。</p>
+<h3 id="2-读懂暂停后的四类信息">2. 读懂暂停后的四类信息</h3>
+<p>代码暂停后，不要只盯着当前行：</p>
+<ul>
+<li><strong>Scope / 作用域</strong>：查看局部变量、闭包变量和模块变量的实际值。</li>
+<li><strong>Call Stack / 调用栈</strong>：从当前函数向上看是谁调用了它；第一段属于自己业务代码的栈帧通常最值得看。</li>
+<li><strong>Breakpoints</strong>：管理、启用或禁用已有断点。</li>
+<li><strong>Watch / 监视表达式</strong>：持续观察 <code>loading.value</code>、<code>route.query.keyword</code> 等关键表达式。</li>
+</ul>
+<p>单步执行快捷键的含义也应分清：</p>
+<table>
+  <thead>
+      <tr>
+          <th>操作</th>
+          <th>常见快捷键</th>
+          <th>用途</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Step over</td>
+          <td><code>F10</code></td>
+          <td>执行当前行，但不进入被调用函数</td>
+      </tr>
+      <tr>
+          <td>Step into</td>
+          <td><code>F11</code></td>
+          <td>进入当前行调用的函数</td>
+      </tr>
+      <tr>
+          <td>Step out</td>
+          <td><code>Shift + F11</code></td>
+          <td>执行完当前函数并返回调用处</td>
+      </tr>
+      <tr>
+          <td>Resume</td>
+          <td><code>F8</code></td>
+          <td>继续运行到下一个断点</td>
+      </tr>
+  </tbody>
+</table>
+<p>进入第三方库、框架运行时代码后若与问题无关，使用 Step out 返回业务代码即可。调试不是一次源码考古，先定位职责边界更有效。</p>
+<h3 id="3-条件断点和-logpoint">3. 条件断点和 Logpoint</h3>
+<p>循环或频繁触发的函数不适合普通断点，否则页面会不停暂停。可以右键断点，改成：</p>
+<ul>
+<li><strong>条件断点</strong>：只在 <code>page === 3</code>、<code>userId === targetId</code> 时暂停。</li>
+<li><strong>Logpoint</strong>：不暂停，只输出例如 <code>加载第 {page} 页</code> 的信息。</li>
+</ul>
+<p>这两种方式尤其适合排查偶发错误、滚动加载和复杂表单。它们让观测范围足够窄，而不是制造更多干扰。</p>
+<h3 id="4-让浏览器在异常发生时暂停">4. 让浏览器在异常发生时暂停</h3>
+<p>在 Sources 的暂停设置中启用 <strong>Pause on exceptions</strong>。建议先选择“仅在未捕获异常时暂停”；若异常被框架或 <code>try...catch</code> 吞掉，再临时切换到“所有异常”。</p>
+<p>它很适合解决“控制台有错误，但不知道是哪一段代码最先出错”的问题。暂停时查看调用栈和变量，再决定异常是预期分支还是应该修复的缺陷。</p>
+<h2 id="五network接口问题不能只看状态码">五、Network：接口问题不能只看状态码</h2>
+<p>打开 Network，按类型筛选 <code>Fetch/XHR</code>，然后复现操作。点开单个请求后，按以下顺序检查。</p>
+<h3 id="1-先确认请求是否存在">1. 先确认请求是否存在</h3>
+<p>如果 Network 中没有请求，问题通常在前端：事件没有触发、条件提前 <code>return</code>、防抖没有执行、代码在请求前抛出了异常。</p>
+<p>如果请求存在，继续检查它的时间、状态和发起方（Initiator）。同一个接口出现多次时，Initiator 能帮助找到重复调用的函数或组件。</p>
+<h3 id="2-核对请求的五项内容">2. 核对请求的五项内容</h3>
+<table>
+  <thead>
+      <tr>
+          <th>项目</th>
+          <th>要检查什么</th>
+          <th>常见错误</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>URL 与方法</td>
+          <td>路径、查询参数、<code>GET</code>/<code>POST</code></td>
+          <td>请求了旧地址、参数没有编码</td>
+      </tr>
+      <tr>
+          <td>Request Headers</td>
+          <td><code>Authorization</code>、<code>Content-Type</code>、追踪 ID</td>
+          <td>token 缺失、JSON 请求却未声明类型</td>
+      </tr>
+      <tr>
+          <td>Payload</td>
+          <td>请求体字段和类型</td>
+          <td><code>page</code> 传成字符串、字段名不一致</td>
+      </tr>
+      <tr>
+          <td>Status Code</td>
+          <td>HTTP 状态与重定向</td>
+          <td><code>401</code> 未登录、<code>403</code> 无权限、<code>404</code> 地址错误、<code>5xx</code> 服务端失败</td>
+      </tr>
+      <tr>
+          <td>Response / Preview</td>
+          <td>返回内容和业务错误码</td>
+          <td>HTTP 200 但业务 <code>code</code> 表示失败</td>
+      </tr>
+  </tbody>
+</table>
+<p>HTTP <code>200</code> 不等于业务成功。例如服务端可能返回：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;code&#34;</span><span class="p">:</span> <span class="s2">&#34;VALIDATION_ERROR&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;message&#34;</span><span class="p">:</span> <span class="s2">&#34;keyword 长度不能超过 50&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;data&#34;</span><span class="p">:</span> <span class="kc">null</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>前端应根据项目约定处理业务状态，而不是只写 <code>response.ok</code>。接口契约若没有明确，排错会反复变成猜谜；这件事本身就值得被修复。</p>
+<h3 id="3-区分几类常见网络失败">3. 区分几类常见网络失败</h3>
+<ul>
+<li><strong><code>401</code> / <code>403</code></strong>：登录态、权限或跨域预检相关配置可能有问题。先确认请求是否带了正确凭证，再看服务端日志。</li>
+<li><strong><code>404</code></strong>：路径、环境变量、代理前缀或 history 路由配置可能错误。</li>
+<li><strong><code>429</code></strong>：请求过快或重复请求，检查防抖、按钮禁用、重试策略。</li>
+<li><strong><code>5xx</code></strong>：请求通常已到服务端；保存请求 ID、时间、参数摘要，交给后端查对应日志。</li>
+<li><strong><code>(failed)</code> / <code>CORS</code></strong>：可能是网络中断、证书、DNS、浏览器跨域策略或服务没有响应。Console 往往有更具体原因。</li>
+<li><strong>请求长期 Pending</strong>：检查接口耗时、取消逻辑、网关连接与浏览器并发限制，不要让 <code>loading</code> 永远停留。</li>
+</ul>
+<p>排查跨域时要记住：浏览器报 CORS，不表示“前端加一个请求头”就能解决。是否允许来源、方法、请求头和凭证，是服务端响应决定的；前端需要做的是确认真实 Origin、请求方式及预检请求，而不是伪造答案。</p>
+<h3 id="4-使用-copy-as-curl-复现请求">4. 使用 “Copy as cURL” 复现请求</h3>
+<p>在 Network 中右键请求可选择 <strong>Copy as cURL</strong>。将它在终端执行，能帮助区分：</p>
+<ul>
+<li>cURL 成功、浏览器失败：更可能是 CORS、Cookie、浏览器扩展或前端请求配置。</li>
+<li>两者都失败：更可能是接口、环境或服务端数据问题。</li>
+</ul>
+<p>复制的命令可能包含 Cookie、Authorization 等敏感凭证。不要把原样命令贴进工单、聊天记录或公开文档；发送前应脱敏。</p>
+<h2 id="六dom样式与事件页面没显示不一定是没渲染">六、DOM、样式与事件：页面“没显示”不一定是没渲染</h2>
+<p>在 Elements 面板选择页面元素，检查以下事项：</p>
+<ol>
+<li>DOM 节点是否真的存在。</li>
+<li>是否被 <code>display: none</code>、<code>visibility: hidden</code>、<code>opacity: 0</code> 或条件渲染隐藏。</li>
+<li>尺寸是否为零，或被父元素的 <code>overflow: hidden</code> 裁掉。</li>
+<li><code>z-index</code> 和定位上下文是否让元素被遮住。</li>
+<li>Computed 样式最终来自哪一条规则，是否被覆盖。</li>
+</ol>
+<p>右键元素可使用 <strong>Break on</strong>，例如在子树发生变化时暂停。它适合排查“某个弹窗刚出现就消失”“列表 DOM 被谁清空”的问题。</p>
+<p>事件问题还可以在 Elements 的 Event Listeners 中检查监听器。更直接的做法是在事件处理函数入口打断点，并确认遮罩层、<code>pointer-events</code>、禁用状态或表单默认提交是否拦截了点击。</p>
+<h2 id="七vue-3-项目的专门检查点">七、Vue 3 项目的专门检查点</h2>
+<p>Vue 会帮你管理 DOM，但不会替你判断状态是否放对、数据是否符合预期。</p>
+<h3 id="1-先看组件树和响应式状态">1. 先看组件树和响应式状态</h3>
+<p>安装 Vue Devtools 后，可在浏览器扩展面板中查看组件树、<code>props</code>、<code>data</code>、组合式状态和 Pinia 状态。它适合快速确认：</p>
+<ul>
+<li>当前页面是否挂载了预期组件。</li>
+<li>父组件传给子组件的 <code>props</code> 是否正确。</li>
+<li><code>ref</code>、<code>computed</code> 对应的值有没有变化。</li>
+<li>Pinia 中的数据是否更新，而页面是否订阅到它。</li>
+</ul>
+<p>工具提供的是观察窗口，不是解释器。看到 <code>posts</code> 有值而列表为空时，仍要回到模板检查 <code>v-if</code>、<code>v-for</code>、过滤条件和键值。</p>
+<h3 id="2-常见响应式误区">2. 常见响应式误区</h3>
+<p>错误示例：从 <code>reactive</code> 对象解构后直接使用，可能丢失响应式连接。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">state</span> <span class="o">=</span> <span class="nx">reactive</span><span class="p">({</span> <span class="nx">keyword</span><span class="o">:</span> <span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="nx">loading</span>: <span class="kt">false</span> <span class="p">})</span>
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="p">{</span> <span class="nx">keyword</span><span class="p">,</span> <span class="nx">loading</span> <span class="p">}</span> <span class="o">=</span> <span class="nx">state</span>
+</span></span></code></pre></div><p>推荐使用 <code>toRefs</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">state</span> <span class="o">=</span> <span class="nx">reactive</span><span class="p">({</span> <span class="nx">keyword</span><span class="o">:</span> <span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="nx">loading</span>: <span class="kt">false</span> <span class="p">})</span>
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="p">{</span> <span class="nx">keyword</span><span class="p">,</span> <span class="nx">loading</span> <span class="p">}</span> <span class="o">=</span> <span class="nx">toRefs</span><span class="p">(</span><span class="nx">state</span><span class="p">)</span>
+</span></span></code></pre></div><p>另一个高频问题是异步竞态：较早发出的请求反而较晚返回，覆盖了新搜索结果。可以使用序号忽略过期响应：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kd">let</span> <span class="nx">latestRequest</span> <span class="o">=</span> <span class="mi">0</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">async</span> <span class="kd">function</span> <span class="nx">loadPosts</span><span class="p">(</span><span class="nx">keyword</span>: <span class="kt">string</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">const</span> <span class="nx">requestNo</span> <span class="o">=</span> <span class="o">++</span><span class="nx">latestRequest</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">loading</span><span class="p">.</span><span class="nx">value</span> <span class="o">=</span> <span class="kc">true</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">try</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">const</span> <span class="nx">data</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">searchPosts</span><span class="p">(</span><span class="nx">keyword</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="p">(</span><span class="nx">requestNo</span> <span class="o">!==</span> <span class="nx">latestRequest</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="k">return</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">posts</span><span class="p">.</span><span class="nx">value</span> <span class="o">=</span> <span class="nx">data</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span> <span class="k">catch</span> <span class="p">(</span><span class="nx">error</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="p">(</span><span class="nx">requestNo</span> <span class="o">===</span> <span class="nx">latestRequest</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">console</span><span class="p">.</span><span class="nx">error</span><span class="p">(</span><span class="s1">&#39;[post-list] load failed&#39;</span><span class="p">,</span> <span class="p">{</span> <span class="nx">keyword</span><span class="p">,</span> <span class="nx">error</span> <span class="p">})</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">errorMessage</span><span class="p">.</span><span class="nx">value</span> <span class="o">=</span> <span class="s1">&#39;加载失败，请稍后重试&#39;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span> <span class="k">finally</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="p">(</span><span class="nx">requestNo</span> <span class="o">===</span> <span class="nx">latestRequest</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">loading</span><span class="p">.</span><span class="nx">value</span> <span class="o">=</span> <span class="kc">false</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>调试这种问题时，在请求发出、响应返回和状态写入处记录 <code>requestNo</code> 与 <code>keyword</code>，很快就能看出是否发生了乱序覆盖。</p>
+<h3 id="3-区分-vue-警告和真正的根因">3. 区分 Vue 警告和真正的根因</h3>
+<p>Vue 警告通常会指出可疑位置，例如重复的 <code>key</code>、未处理的事件或访问了未定义属性。不要无视它们，但也不要把每条警告都当作当前故障的唯一原因。</p>
+<p>先确认警告是否能稳定复现，是否与页面异常在同一操作路径上，再沿组件栈和数据流继续验证。控制台很诚实，但它只陈述它观察到的事实，不替你完成因果推理。</p>
+<h2 id="八从堆栈信息找到第一处业务代码">八、从堆栈信息找到第一处业务代码</h2>
+<p>运行时错误常见形式：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">TypeError: Cannot read properties of undefined (reading &#39;name&#39;)
+</span></span><span class="line"><span class="cl">    at formatUser (user.ts:12:15)
+</span></span><span class="line"><span class="cl">    at UserCard.vue:28:7
+</span></span></code></pre></div><p>处理顺序如下：</p>
+<ol>
+<li>点击堆栈中最靠前、属于自己项目的文件和行号。</li>
+<li>查看该行读取的变量，确认究竟是对象不存在，还是字段不存在。</li>
+<li>沿调用栈向上检查这个值从哪里来：接口、props、路由参数还是缓存。</li>
+<li>决定应修复数据契约、调用时机，还是在边界处做合理的空值处理。</li>
+</ol>
+<p>不要用可选链把所有错误压下去：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="c1">// 这可能只是隐藏了数据不完整的问题
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kr">const</span> <span class="nx">name</span> <span class="o">=</span> <span class="nx">user</span><span class="o">?</span><span class="p">.</span><span class="nx">profile</span><span class="o">?</span><span class="p">.</span><span class="nx">name</span> <span class="o">??</span> <span class="s1">&#39;-&#39;</span>
+</span></span></code></pre></div><p>可选链适合“字段缺失是允许的”场景；若用户资料按契约必须存在，就应该调查缺失原因，并在用户可见处显示合适错误或降级状态。吞掉异常得到的往往不是稳定，只是更安静的错误。</p>
+<h2 id="九生产环境日志source-map-与错误监控">九、生产环境：日志、Source Map 与错误监控</h2>
+<p>本地能打开源码，但生产构建通常会压缩、拆包和混淆。没有正确的 Source Map，错误堆栈可能只指向难以阅读的压缩文件位置。</p>
+<h3 id="1-source-map-的发布策略">1. Source Map 的发布策略</h3>
+<p>生产环境可以生成 Source Map 并上传到错误监控平台，用于将压缩堆栈还原为源代码文件和行号。通常不建议把完整 Source Map 公开部署在静态站点上，因为它可能暴露源码和模块结构。</p>
+<p>发布时应保证三者版本一致：</p>
+<ul>
+<li>前端构建产物。</li>
+<li>Source Map 文件。</li>
+<li>监控事件中的 <code>release</code> 版本号。</li>
+</ul>
+<p>任何一个不一致，平台都可能把错误还原到错误版本。这个问题很隐蔽，因此版本号应由构建流水线统一生成，而不是人工随手填写。</p>
+<h3 id="2-捕获全局错误但保留原始上下文">2. 捕获全局错误，但保留原始上下文</h3>
+<p>可以在应用启动处登记全局兜底；这里的代码应只做采集和上报，不能让错误处理器再次抛错：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">ErrorContext</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">type</span><span class="o">:</span> <span class="s1">&#39;runtime&#39;</span> <span class="o">|</span> <span class="s1">&#39;promise&#39;</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">message</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">stack?</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">url</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">release</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">function</span> <span class="nx">reportError</span><span class="p">(</span><span class="nx">context</span>: <span class="kt">ErrorContext</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">navigator</span><span class="p">.</span><span class="nx">sendBeacon</span><span class="p">(</span><span class="s1">&#39;/api/frontend-errors&#39;</span><span class="p">,</span> <span class="nx">JSON</span><span class="p">.</span><span class="nx">stringify</span><span class="p">(</span><span class="nx">context</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nb">window</span><span class="p">.</span><span class="nx">addEventListener</span><span class="p">(</span><span class="s1">&#39;error&#39;</span><span class="p">,</span> <span class="p">(</span><span class="nx">event</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">reportError</span><span class="p">({</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">type</span><span class="o">:</span> <span class="s1">&#39;runtime&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">message</span>: <span class="kt">event.message</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">stack</span>: <span class="kt">event.error</span> <span class="k">instanceof</span> <span class="nb">Error</span> <span class="o">?</span> <span class="nx">event.error.stack</span> : <span class="kt">undefined</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">url</span>: <span class="kt">location.href</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">release</span>: <span class="kt">import.meta.env.VITE_APP_RELEASE</span>
+</span></span><span class="line"><span class="cl">  <span class="p">})</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nb">window</span><span class="p">.</span><span class="nx">addEventListener</span><span class="p">(</span><span class="s1">&#39;unhandledrejection&#39;</span><span class="p">,</span> <span class="p">(</span><span class="nx">event</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">const</span> <span class="nx">reason</span> <span class="o">=</span> <span class="nx">event</span><span class="p">.</span><span class="nx">reason</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">reportError</span><span class="p">({</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">type</span><span class="o">:</span> <span class="s1">&#39;promise&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">message</span>: <span class="kt">reason</span> <span class="k">instanceof</span> <span class="nb">Error</span> <span class="o">?</span> <span class="nx">reason.message</span> : <span class="kt">String</span><span class="p">(</span><span class="nx">reason</span><span class="p">),</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">stack</span>: <span class="kt">reason</span> <span class="k">instanceof</span> <span class="nb">Error</span> <span class="o">?</span> <span class="nx">reason.stack</span> : <span class="kt">undefined</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">url</span>: <span class="kt">location.href</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">release</span>: <span class="kt">import.meta.env.VITE_APP_RELEASE</span>
+</span></span><span class="line"><span class="cl">  <span class="p">})</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span></code></pre></div><p>真实项目还应增加用户匿名标识、路由、浏览器版本、网络类型和采样率，并对字段做脱敏和长度限制。上报接口自身也要避免无限重试，否则故障期间会制造第二场故障，实在很没有必要。</p>
+<h3 id="3-请求日志要能关联前后端">3. 请求日志要能关联前后端</h3>
+<p>为每次关键操作生成 <code>requestId</code>，放入请求头并在前端日志、后端日志和错误监控事件中记录它：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">async</span> <span class="kd">function</span> <span class="nx">request</span><span class="p">&lt;</span><span class="nt">T</span><span class="p">&gt;(</span><span class="nx">url</span>: <span class="kt">string</span><span class="p">,</span> <span class="nx">init</span>: <span class="kt">RequestInit</span> <span class="o">=</span> <span class="p">{})</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">const</span> <span class="nx">requestId</span> <span class="o">=</span> <span class="nx">crypto</span><span class="p">.</span><span class="nx">randomUUID</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">const</span> <span class="nx">response</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">fetch</span><span class="p">(</span><span class="nx">url</span><span class="p">,</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="p">...</span><span class="nx">init</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">headers</span><span class="o">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="p">...</span><span class="nx">init</span><span class="p">.</span><span class="nx">headers</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="s1">&#39;X-Request-Id&#39;</span><span class="o">:</span> <span class="nx">requestId</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">})</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nx">response</span><span class="p">.</span><span class="nx">ok</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">throw</span> <span class="k">new</span> <span class="nb">Error</span><span class="p">(</span><span class="sb">`请求失败：</span><span class="si">${</span><span class="nx">response</span><span class="p">.</span><span class="nx">status</span><span class="si">}</span><span class="sb">，requestId=</span><span class="si">${</span><span class="nx">requestId</span><span class="si">}</span><span class="sb">`</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">return</span> <span class="nx">response</span><span class="p">.</span><span class="nx">json</span><span class="p">()</span> <span class="kr">as</span> <span class="nx">Promise</span><span class="p">&lt;</span><span class="nt">T</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>这样当前端报告“保存失败”时，后端能用同一个 ID 查到网关、应用和数据库相关日志。没有关联 ID 的分布式排错，像是在一堆同样的纸片里寻找某一张；理论上能找到，实际常常令人失去耐心。</p>
+<h2 id="十一个完整案例点击保存后页面一直转圈">十、一个完整案例：点击保存后页面一直转圈</h2>
+<p>假设用户反馈：编辑文章后点击保存，按钮一直显示“保存中”。按下面顺序排查：</p>
+<ol>
+<li><strong>复现并保留现场</strong>：打开 Console、Network 的 Preserve log，按用户步骤操作。</li>
+<li><strong>确认事件</strong>：在 <code>handleSubmit</code> 首行打断点；若未停住，检查按钮禁用、遮罩、事件绑定和表单默认行为。</li>
+<li><strong>确认状态</strong>：断点中检查 <code>loading.value</code>、表单值和校验结果；确认没有在请求前 <code>return</code> 后却遗漏复位 <code>loading</code>。</li>
+<li><strong>确认请求</strong>：在 Network 看是否有 <code>POST /api/posts/:id</code>，核对 Payload、token、状态码和响应正文。</li>
+<li><strong>确认异步分支</strong>：若请求成功但一直转圈，在 <code>try</code>、<code>catch</code>、<code>finally</code> 分别下断点，看 <code>finally</code> 是否执行、是否有更晚的请求覆盖状态。</li>
+<li><strong>确认渲染</strong>：若 <code>loading.value</code> 已经是 <code>false</code> 但按钮仍显示“保存中”，检查组件收到的 props、模板条件和 CSS。</li>
+</ol>
+<p>可靠的提交代码通常会将状态复位放在 <code>finally</code>，而不是只放在成功分支：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">async</span> <span class="kd">function</span> <span class="nx">handleSubmit() {</span>
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="p">(</span><span class="nx">loading</span><span class="p">.</span><span class="nx">value</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="nx">loading</span><span class="p">.</span><span class="nx">value</span> <span class="o">=</span> <span class="kc">true</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">errorMessage</span><span class="p">.</span><span class="nx">value</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">try</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">await</span> <span class="nx">savePost</span><span class="p">(</span><span class="nx">form</span><span class="p">.</span><span class="nx">value</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">successMessage</span><span class="p">.</span><span class="nx">value</span> <span class="o">=</span> <span class="s1">&#39;保存成功&#39;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span> <span class="k">catch</span> <span class="p">(</span><span class="nx">error</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">console</span><span class="p">.</span><span class="nx">error</span><span class="p">(</span><span class="s1">&#39;[post-edit] save failed&#39;</span><span class="p">,</span> <span class="p">{</span> <span class="nx">id</span>: <span class="kt">form.value.id</span><span class="p">,</span> <span class="nx">error</span> <span class="p">})</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">errorMessage</span><span class="p">.</span><span class="nx">value</span> <span class="o">=</span> <span class="s1">&#39;保存失败，请检查网络后重试&#39;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span> <span class="k">finally</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">loading</span><span class="p">.</span><span class="nx">value</span> <span class="o">=</span> <span class="kc">false</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>这里的目标不是“让异常看不见”，而是无论成功还是失败，页面都回到一个用户可以继续操作的确定状态。</p>
+<h2 id="十一可直接使用的排错清单">十一、可直接使用的排错清单</h2>
+<h3 id="页面行为异常">页面行为异常</h3>
+<ul>
+<li>是否有稳定复现步骤、页面地址和发生时间？</li>
+<li>Console 是否存在同一操作链路上的错误或警告？</li>
+<li>事件处理函数是否执行？</li>
+<li>关键状态在操作前后是否按预期变化？</li>
+<li>DOM 未出现，还是出现后被样式隐藏？</li>
+</ul>
+<h3 id="接口或数据异常">接口或数据异常</h3>
+<ul>
+<li>Network 中是否有对应请求？</li>
+<li>URL、方法、参数、请求头和请求体是否符合接口契约？</li>
+<li>HTTP 状态码与业务错误码分别是什么？</li>
+<li>是否有重复请求、取消请求或响应乱序？</li>
+<li>能否用脱敏后的 cURL 或请求 ID 与后端共同复现？</li>
+</ul>
+<h3 id="线上偶发异常">线上偶发异常</h3>
+<ul>
+<li>错误监控是否记录了堆栈、路由、浏览器、release 和发生次数？</li>
+<li>Source Map 是否与当前 release 对应？</li>
+<li>是否能按错误类型、版本、浏览器或接口关联 ID 聚合？</li>
+<li>日志是否已经脱敏，且不会因上报失败影响正常业务？</li>
+</ul>
+<h2 id="十二总结">十二、总结</h2>
+<p>前端调试的核心不是记住多少 DevTools 功能，而是建立从现象到证据、从证据到根因的过程：</p>
+<ul>
+<li>用清晰的复现步骤固定问题。</li>
+<li>用 Console 观察关键流程和上下文。</li>
+<li>用 Sources 的断点、调用栈和异常暂停还原执行路径。</li>
+<li>用 Network 检查完整请求、响应与时序，而不只看状态码。</li>
+<li>用 Elements 和 Vue Devtools 确认 DOM、样式、组件与响应式状态。</li>
+<li>用 Source Map、release 和 request ID 让生产错误可以追踪。</li>
+</ul>
+<p>排错并不神秘。把每个猜测替换为一次验证，把每次验证留成可关联的证据，问题最终会收敛到具体的代码、数据或契约上。毕竟，错误不会因为你避开它就消失；只是会挑一个更不合时宜的时机回来。</p>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

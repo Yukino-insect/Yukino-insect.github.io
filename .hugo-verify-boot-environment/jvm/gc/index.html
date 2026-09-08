@@ -1,0 +1,1468 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GC | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="GC（Garbage Collection，垃圾回收）负责自动回收 Java 程序中不再使用的对象。它解决的是内存管理问题，但也会带来停顿、CPU 消耗和吞吐量变化。
+学习 GC 时不要一开始就背收集器参数。更合理的顺序是：
+JVM 如何判断对象还活着。 JVM 用什么算法回收垃圾。 不同垃圾回收器如何实现这些算法。 对象分配和晋升规则如何影响 GC。 如何根据日志判断 GC 是否异常。 一、如何判断对象是否可回收 判断对象是否可回收，本质上是判断它是否还可能被程序使用。
+常见思路有两种：引用计数和可达性分析。
+1. 引用计数 引用计数算法给每个对象维护一个计数器：
+有一个地方引用它，计数加 1。 一个引用失效，计数减 1。 计数为 0 时，对象可回收。 它的优点是实现直观，判断效率高；缺点是很难处理循环引用。
+示例：
+class Node { Node next; } Node a = new Node(); Node b = new Node(); a.next = b; b.next = a; a = null; b = null; a 和 b 已经无法从外部访问，但它们彼此引用。如果只靠引用计数，它们的计数都不是 0，就会出现无法回收的问题。
+2. 可达性分析 Java 主流虚拟机使用可达性分析判断对象是否存活。
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/jvm/gc/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/jvm/gc/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="GC">
+  <meta property="og:description" content="GC（Garbage Collection，垃圾回收）负责自动回收 Java 程序中不再使用的对象。它解决的是内存管理问题，但也会带来停顿、CPU 消耗和吞吐量变化。
+学习 GC 时不要一开始就背收集器参数。更合理的顺序是：
+JVM 如何判断对象还活着。 JVM 用什么算法回收垃圾。 不同垃圾回收器如何实现这些算法。 对象分配和晋升规则如何影响 GC。 如何根据日志判断 GC 是否异常。 一、如何判断对象是否可回收 判断对象是否可回收，本质上是判断它是否还可能被程序使用。
+常见思路有两种：引用计数和可达性分析。
+1. 引用计数 引用计数算法给每个对象维护一个计数器：
+有一个地方引用它，计数加 1。 一个引用失效，计数减 1。 计数为 0 时，对象可回收。 它的优点是实现直观，判断效率高；缺点是很难处理循环引用。
+示例：
+class Node { Node next; } Node a = new Node(); Node b = new Node(); a.next = b; b.next = a; a = null; b = null; a 和 b 已经无法从外部访问，但它们彼此引用。如果只靠引用计数，它们的计数都不是 0，就会出现无法回收的问题。
+2. 可达性分析 Java 主流虚拟机使用可达性分析判断对象是否存活。">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="jvm">
+    <meta property="article:published_time" content="2025-09-10T18:31:04+08:00">
+    <meta property="article:modified_time" content="2025-09-10T18:31:04+08:00">
+
+  
+  <meta itemprop="name" content="GC">
+  <meta itemprop="description" content="GC（Garbage Collection，垃圾回收）负责自动回收 Java 程序中不再使用的对象。它解决的是内存管理问题，但也会带来停顿、CPU 消耗和吞吐量变化。
+学习 GC 时不要一开始就背收集器参数。更合理的顺序是：
+JVM 如何判断对象还活着。 JVM 用什么算法回收垃圾。 不同垃圾回收器如何实现这些算法。 对象分配和晋升规则如何影响 GC。 如何根据日志判断 GC 是否异常。 一、如何判断对象是否可回收 判断对象是否可回收，本质上是判断它是否还可能被程序使用。
+常见思路有两种：引用计数和可达性分析。
+1. 引用计数 引用计数算法给每个对象维护一个计数器：
+有一个地方引用它，计数加 1。 一个引用失效，计数减 1。 计数为 0 时，对象可回收。 它的优点是实现直观，判断效率高；缺点是很难处理循环引用。
+示例：
+class Node { Node next; } Node a = new Node(); Node b = new Node(); a.next = b; b.next = a; a = null; b = null; a 和 b 已经无法从外部访问，但它们彼此引用。如果只靠引用计数，它们的计数都不是 0，就会出现无法回收的问题。
+2. 可达性分析 Java 主流虚拟机使用可达性分析判断对象是否存活。">
+  <meta itemprop="datePublished" content="2025-09-10T18:31:04+08:00">
+  <meta itemprop="dateModified" content="2025-09-10T18:31:04+08:00">
+  <meta itemprop="wordCount" content="621">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="GC">
+  <meta name="twitter:description" content="GC（Garbage Collection，垃圾回收）负责自动回收 Java 程序中不再使用的对象。它解决的是内存管理问题，但也会带来停顿、CPU 消耗和吞吐量变化。
+学习 GC 时不要一开始就背收集器参数。更合理的顺序是：
+JVM 如何判断对象还活着。 JVM 用什么算法回收垃圾。 不同垃圾回收器如何实现这些算法。 对象分配和晋升规则如何影响 GC。 如何根据日志判断 GC 是否异常。 一、如何判断对象是否可回收 判断对象是否可回收，本质上是判断它是否还可能被程序使用。
+常见思路有两种：引用计数和可达性分析。
+1. 引用计数 引用计数算法给每个对象维护一个计数器：
+有一个地方引用它，计数加 1。 一个引用失效，计数减 1。 计数为 0 时，对象可回收。 它的优点是实现直观，判断效率高；缺点是很难处理循环引用。
+示例：
+class Node { Node next; } Node a = new Node(); Node b = new Node(); a.next = b; b.next = a; a = null; b = null; a 和 b 已经无法从外部访问，但它们彼此引用。如果只靠引用计数，它们的计数都不是 0，就会出现无法回收的问题。
+2. 可达性分析 Java 主流虚拟机使用可达性分析判断对象是否存活。">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">GC</h1>
+
+    
+      <div class="post-date">September 10, 2025</div>
+    
+
+    <div class="post-content">
+      <p>GC（Garbage Collection，垃圾回收）负责自动回收 Java 程序中不再使用的对象。它解决的是内存管理问题，但也会带来停顿、CPU 消耗和吞吐量变化。</p>
+<p>学习 GC 时不要一开始就背收集器参数。更合理的顺序是：</p>
+<ol>
+<li>JVM 如何判断对象还活着。</li>
+<li>JVM 用什么算法回收垃圾。</li>
+<li>不同垃圾回收器如何实现这些算法。</li>
+<li>对象分配和晋升规则如何影响 GC。</li>
+<li>如何根据日志判断 GC 是否异常。</li>
+</ol>
+<h2 id="一如何判断对象是否可回收">一、如何判断对象是否可回收</h2>
+<p>判断对象是否可回收，本质上是判断它是否还可能被程序使用。</p>
+<p>常见思路有两种：引用计数和可达性分析。</p>
+<h3 id="1-引用计数">1. 引用计数</h3>
+<p>引用计数算法给每个对象维护一个计数器：</p>
+<ul>
+<li>有一个地方引用它，计数加 <code>1</code>。</li>
+<li>一个引用失效，计数减 <code>1</code>。</li>
+<li>计数为 <code>0</code> 时，对象可回收。</li>
+</ul>
+<p>它的优点是实现直观，判断效率高；缺点是很难处理循环引用。</p>
+<p>示例：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="kd">class</span> <span class="nc">Node</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">Node</span><span class="w"> </span><span class="n">next</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">Node</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">Node</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">Node</span><span class="w"> </span><span class="n">b</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">Node</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">a</span><span class="p">.</span><span class="na">next</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">b</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">b</span><span class="p">.</span><span class="na">next</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">a</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">a</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">null</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">b</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">null</span><span class="p">;</span><span class="w">
+</span></span></span></code></pre></div><p><code>a</code> 和 <code>b</code> 已经无法从外部访问，但它们彼此引用。如果只靠引用计数，它们的计数都不是 <code>0</code>，就会出现无法回收的问题。</p>
+<h3 id="2-可达性分析">2. 可达性分析</h3>
+<p>Java 主流虚拟机使用<strong>可达性分析</strong>判断对象是否存活。</p>
+<p>可达性分析从一组称为 <strong>GC Roots</strong> 的对象出发，沿引用关系向外搜索：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">GC Roots
+</span></span><span class="line"><span class="cl">  |
+</span></span><span class="line"><span class="cl">  +--&gt; object A
+</span></span><span class="line"><span class="cl">         |
+</span></span><span class="line"><span class="cl">         +--&gt; object B
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">object C   object D
+</span></span></code></pre></div><p>能从 GC Roots 走到的对象是存活对象；走不到的对象就是不可达对象，可能被回收。</p>
+<p>常见 GC Roots 包括：</p>
+<ul>
+<li>虚拟机栈中局部变量表引用的对象，例如当前方法的参数、局部变量。</li>
+<li>方法区中静态字段引用的对象。</li>
+<li>方法区中常量引用的对象。</li>
+<li>本地方法栈中 JNI 引用的对象。</li>
+<li>JVM 内部引用的对象，例如系统类加载器、基础异常对象等。</li>
+<li>被同步锁持有的对象。</li>
+</ul>
+<p>可达性分析可以处理循环引用。即使两个对象互相引用，只要它们从 GC Roots 不可达，就仍然可以被回收。</p>
+<h2 id="二java-的引用类型">二、Java 的引用类型</h2>
+<p>Java 引用并不只有一种强度。引用强度会影响对象在 GC 时的存活策略。</p>
+<table>
+  <thead>
+      <tr>
+          <th>引用类型</th>
+          <th>回收规则</th>
+          <th>常见用途</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>强引用</td>
+          <td>只要强引用存在，对象就不会被回收</td>
+          <td>普通对象引用</td>
+      </tr>
+      <tr>
+          <td>软引用</td>
+          <td>内存不足时更容易被回收</td>
+          <td>内存敏感缓存</td>
+      </tr>
+      <tr>
+          <td>弱引用</td>
+          <td>下一次 GC 时会被回收</td>
+          <td><code>WeakHashMap</code>、辅助映射</td>
+      </tr>
+      <tr>
+          <td>虚引用</td>
+          <td>不影响对象存活，配合引用队列感知回收</td>
+          <td>资源清理、堆外内存跟踪</td>
+      </tr>
+  </tbody>
+</table>
+<h3 id="1-强引用">1. 强引用</h3>
+<p>普通对象引用就是强引用：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">Object</span><span class="w"> </span><span class="n">obj</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">Object</span><span class="p">();</span><span class="w">
+</span></span></span></code></pre></div><p>只要 <code>obj</code> 仍然可达，对象就不会被 GC 回收。</p>
+<h3 id="2-软引用">2. 软引用</h3>
+<p>软引用适合描述“有内存就保留，内存紧张就回收”的对象：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">Object</span><span class="w"> </span><span class="n">obj</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">Object</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">SoftReference</span><span class="o">&lt;</span><span class="n">Object</span><span class="o">&gt;</span><span class="w"> </span><span class="n">ref</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">SoftReference</span><span class="o">&lt;&gt;</span><span class="p">(</span><span class="n">obj</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">obj</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">null</span><span class="p">;</span><span class="w">
+</span></span></span></code></pre></div><p>软引用曾经常被用于缓存，但现代服务端系统更推荐使用明确容量、明确过期策略的缓存组件。把缓存是否可用完全交给 GC，行为并不容易预测。</p>
+<h3 id="3-弱引用">3. 弱引用</h3>
+<p>弱引用对象只能存活到下一次 GC 之前：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">Object</span><span class="w"> </span><span class="n">obj</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">Object</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">WeakReference</span><span class="o">&lt;</span><span class="n">Object</span><span class="o">&gt;</span><span class="w"> </span><span class="n">ref</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">WeakReference</span><span class="o">&lt;&gt;</span><span class="p">(</span><span class="n">obj</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">obj</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">null</span><span class="p">;</span><span class="w">
+</span></span></span></code></pre></div><p><code>WeakHashMap</code> 使用弱引用保存 key，当 key 不再被外部强引用持有时，对应映射就可以被清理。</p>
+<h3 id="4-虚引用">4. 虚引用</h3>
+<p>虚引用不能通过 <code>get()</code> 获取对象，也不会延长对象生命周期。它通常要配合 <code>ReferenceQueue</code> 使用，用来感知对象被回收的时机。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">ReferenceQueue</span><span class="o">&lt;</span><span class="n">Object</span><span class="o">&gt;</span><span class="w"> </span><span class="n">queue</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">ReferenceQueue</span><span class="o">&lt;&gt;</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">PhantomReference</span><span class="o">&lt;</span><span class="n">Object</span><span class="o">&gt;</span><span class="w"> </span><span class="n">ref</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">PhantomReference</span><span class="o">&lt;&gt;</span><span class="p">(</span><span class="k">new</span><span class="w"> </span><span class="n">Object</span><span class="p">(),</span><span class="w"> </span><span class="n">queue</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><p>虚引用常用于更精细的资源管理，例如堆外内存释放通知。</p>
+<h2 id="三垃圾回收算法">三、垃圾回收算法</h2>
+<p>GC 分两步：</p>
+<ol>
+<li>判断哪些对象存活。</li>
+<li>回收不可达对象占用的内存。</li>
+</ol>
+<p>第二步才涉及具体垃圾回收算法。</p>
+<h3 id="1-标记-清除">1. 标记-清除</h3>
+<p>标记-清除算法分为两个阶段：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">标记存活对象 -&gt; 清除未标记对象
+</span></span></code></pre></div><p>优点是思路简单，不需要移动对象。缺点也明显：</p>
+<ul>
+<li>标记和清除都有开销。</li>
+<li>回收后会产生内存碎片。</li>
+<li>碎片过多时，大对象可能找不到连续空间。</li>
+</ul>
+<h3 id="2-标记-整理">2. 标记-整理</h3>
+<p>标记-整理算法先标记存活对象，再把存活对象向一端移动，最后清理边界外内存：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">标记存活对象 -&gt; 移动存活对象 -&gt; 清理边界外空间
+</span></span></code></pre></div><p>它解决了内存碎片问题，但移动对象需要更新引用，成本更高。</p>
+<h3 id="3-复制">3. 复制</h3>
+<p>复制算法把内存分成两块，每次只使用其中一块。GC 时，把存活对象复制到另一块，再一次性清空原区域。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">From: live live garbage garbage
+</span></span><span class="line"><span class="cl">          |
+</span></span><span class="line"><span class="cl">          v
+</span></span><span class="line"><span class="cl">To:   live live
+</span></span></code></pre></div><p>复制算法适合新生代，因为新生代通常“对象多，但活下来的少”。如果存活对象比例很低，复制成本就比较可控。</p>
+<h3 id="4-分代收集">4. 分代收集</h3>
+<p>分代收集基于一个经验：大多数对象朝生夕死，少数对象长期存活。</p>
+<p>因此 JVM 通常会把堆按对象年龄划分：</p>
+<ul>
+<li>新生代：适合复制算法。</li>
+<li>老年代：适合标记-清除或标记-整理。</li>
+</ul>
+<p>现代收集器不一定都使用传统连续分代布局，但“根据对象存活特征选择回收策略”的思想仍然重要。</p>
+<h2 id="四gc-相关术语">四、GC 相关术语</h2>
+<p>GC 术语容易混乱，尤其是并行和并发。这里单独拆开，不然面试和排障时都会显得很辛苦。</p>
+<table>
+  <thead>
+      <tr>
+          <th>术语</th>
+          <th>含义</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Stop-The-World</td>
+          <td>GC 期间暂停所有用户线程</td>
+      </tr>
+      <tr>
+          <td>串行</td>
+          <td>GC 使用单个线程工作</td>
+      </tr>
+      <tr>
+          <td>并行</td>
+          <td>GC 使用多个线程工作，但用户线程通常暂停</td>
+      </tr>
+      <tr>
+          <td>并发</td>
+          <td>GC 线程和用户线程同时运行</td>
+      </tr>
+      <tr>
+          <td>Minor GC / Young GC</td>
+          <td>回收新生代</td>
+      </tr>
+      <tr>
+          <td>Major GC / Old GC</td>
+          <td>回收老年代，具体含义依收集器和日志而定</td>
+      </tr>
+      <tr>
+          <td>Mixed GC</td>
+          <td>G1 中同时回收年轻代和部分老年代 Region</td>
+      </tr>
+      <tr>
+          <td>Full GC</td>
+          <td>回收整个堆，通常还会涉及方法区或元空间</td>
+      </tr>
+  </tbody>
+</table>
+<p>关键区别是：</p>
+<ul>
+<li><strong>并行</strong>关注 GC 线程之间是否一起工作。</li>
+<li><strong>并发</strong>关注 GC 线程是否能和用户线程同时工作。</li>
+</ul>
+<p>所以“多线程 GC”不等于“低停顿 GC”。多个 GC 线程一起工作，仍然可能让用户线程全部停下来。</p>
+<h2 id="五常见垃圾回收器">五、常见垃圾回收器</h2>
+<p>垃圾回收算法是思想，垃圾回收器是具体实现。不同收集器的目标不同：有的追求吞吐量，有的追求低延迟，有的更适合小堆，有的更适合大堆。</p>
+<h3 id="1-serial-gc">1. Serial GC</h3>
+<p>Serial GC 是单线程收集器。它在 GC 时只使用一个线程，并暂停所有用户线程。</p>
+<p>特点：</p>
+<ul>
+<li>实现简单。</li>
+<li>单核或小内存环境下开销低。</li>
+<li>不适合对停顿敏感的服务端应用。</li>
+</ul>
+<p>启动参数：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">-XX:+UseSerialGC
+</span></span></code></pre></div><h3 id="2-parallel-gc">2. Parallel GC</h3>
+<p>Parallel GC 以吞吐量优先。它使用多个 GC 线程并行回收，适合后台计算、批处理等更关注整体吞吐的场景。</p>
+<p>特点：</p>
+<ul>
+<li>多线程回收。</li>
+<li>吞吐量表现好。</li>
+<li>停顿时间不如低延迟收集器可控。</li>
+</ul>
+<p>启动参数：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">-XX:+UseParallelGC
+</span></span></code></pre></div><h3 id="3-cms-gc">3. CMS GC</h3>
+<p>CMS（Concurrent Mark Sweep）以降低老年代停顿为目标，主要使用标记-清除算法。</p>
+<p>它的特点是部分阶段可以和用户线程并发执行，但也有几个明显问题：</p>
+<ul>
+<li>标记-清除会产生内存碎片。</li>
+<li>并发阶段会和业务线程竞争 CPU。</li>
+<li>无法处理并发标记期间产生的全部浮动垃圾。</li>
+<li>JDK 9 开始被标记为废弃，后续版本已移除。</li>
+</ul>
+<p>CMS 在老项目里仍可能见到，但新项目一般不再优先选择它。</p>
+<h3 id="4-g1-gc">4. G1 GC</h3>
+<p>G1（Garbage-First）是面向服务端应用的收集器。JDK 9 之后，HotSpot 默认使用 G1。</p>
+<p>G1 不再把堆简单地看成连续的新生代和老年代，而是划分为多个 Region：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Heap
+</span></span><span class="line"><span class="cl">  +--------+--------+--------+--------+
+</span></span><span class="line"><span class="cl">  | Eden   | Old    | Humong | Survivor|
+</span></span><span class="line"><span class="cl">  +--------+--------+--------+--------+
+</span></span><span class="line"><span class="cl">  | Old    | Eden   | Free   | Old     |
+</span></span><span class="line"><span class="cl">  +--------+--------+--------+--------+
+</span></span></code></pre></div><p>G1 会评估各 Region 的回收价值，在目标停顿时间内优先回收收益高的 Region。</p>
+<p>常见回收类型：</p>
+<ul>
+<li><strong>Young GC</strong>：回收年轻代 Region。</li>
+<li><strong>Concurrent Marking</strong>：并发标记老年代存活对象。</li>
+<li><strong>Mixed GC</strong>：回收年轻代和部分老年代 Region。</li>
+<li><strong>Full GC</strong>：退化路径，应尽量避免频繁发生。</li>
+</ul>
+<p>启动参数：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">-XX:+UseG1GC
+</span></span><span class="line"><span class="cl">-XX:MaxGCPauseMillis<span class="o">=</span><span class="m">200</span>
+</span></span></code></pre></div><p><code>MaxGCPauseMillis</code> 是目标，不是保证。JVM 会尽力接近这个目标，但如果对象存活率、分配速率或堆大小不合理，停顿仍然可能超过目标值。</p>
+<h3 id="5-zgc">5. ZGC</h3>
+<p>ZGC 是低延迟垃圾回收器，目标是在大堆场景下把停顿控制在很低水平。它通过并发标记、并发转移、读屏障、着色指针等机制，减少必须 STW 的工作量。</p>
+<p>适合场景：</p>
+<ul>
+<li>大内存服务。</li>
+<li>延迟敏感系统。</li>
+<li>希望减少长尾停顿的在线服务。</li>
+</ul>
+<p>启动参数：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">-XX:+UseZGC
+</span></span></code></pre></div><p>ZGC 的优势是停顿低，代价是实现复杂，并且可能消耗更多 CPU 或内存余量。选它之前仍然要看业务目标，而不是被“低延迟”三个字带着走。</p>
+<h3 id="6-shenandoah-gc">6. Shenandoah GC</h3>
+<p>Shenandoah 也是低停顿收集器，目标是把包括对象整理在内的更多 GC 工作并发化。</p>
+<p>启动参数：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">-XX:+UseShenandoahGC
+</span></span></code></pre></div><p>它和 ZGC 的设计路线不同，但关注点相似：尽量降低 STW 时间。具体可用性与表现取决于 JDK 版本和发行版支持情况。</p>
+<h2 id="六g1-和-zgc-的停顿差异">六、G1 和 ZGC 的停顿差异</h2>
+<p>G1 和 ZGC 都可以用于服务端应用，但它们的停顿来源不同。</p>
+<p>G1 的回收过程里，很多标记工作可以并发完成，但对象复制转移阶段通常仍需要 STW。存活对象越多、对象图越复杂，复制和引用修正成本就越高。</p>
+<p>G1 混合回收大致包含：</p>
+<ul>
+<li>初始标记：STW，标记 GC Roots 直接可达对象。</li>
+<li>并发标记：和用户线程并发，遍历对象图。</li>
+<li>再标记：STW，修正并发期间变化的引用关系。</li>
+<li>清理：统计 Region 回收价值。</li>
+<li>转移复制：STW，把存活对象复制到新 Region。</li>
+</ul>
+<p>ZGC 的设计目标是让标记、转移、重定位尽可能并发完成。它仍然有少量 STW 阶段，但通常只处理 GC Roots 等较小工作集，而不是在停顿阶段搬运大量存活对象。</p>
+<p>因此一般可以这样理解：</p>
+<ul>
+<li>G1 适合作为通用服务端收集器，吞吐量和停顿之间比较均衡。</li>
+<li>ZGC 更偏向低延迟和大堆场景，适合对长停顿敏感的在线服务。</li>
+</ul>
+<p>这不是说 ZGC 永远比 G1 好。GC 选择要看应用分配速率、对象存活率、堆大小、CPU 余量和延迟目标。脱离场景谈收集器优劣，和拿尺子量空气差不多，认真但无效。</p>
+<h2 id="七内存分配与回收策略">七、内存分配与回收策略</h2>
+<p>对象如何分配，会直接影响 GC 频率和停顿。</p>
+<h3 id="1-对象优先在-eden-分配">1. 对象优先在 Eden 分配</h3>
+<p>大多数对象会先在 Eden 区分配。当 Eden 空间不足时，会触发 Young GC。</p>
+<p>Young GC 后仍然存活的对象，会进入 Survivor 区，年龄加 <code>1</code>。达到一定年龄后，对象可能晋升到老年代。</p>
+<h3 id="2-大对象可能直接进入老年代">2. 大对象可能直接进入老年代</h3>
+<p>大对象需要连续内存空间。如果大对象在新生代来回复制，成本很高，所以 JVM 可能让它直接进入老年代。</p>
+<p>G1 中还有 Humongous Object 的概念：超过一定 Region 比例的大对象会被特殊处理。大量大对象分配可能导致 GC 压力明显上升。</p>
+<h3 id="3-长期存活对象进入老年代">3. 长期存活对象进入老年代</h3>
+<p>对象每熬过一次 Young GC，年龄通常会增加。达到晋升阈值后，会进入老年代。</p>
+<p>但晋升不是只看固定年龄。JVM 还可能根据 Survivor 区占用情况进行动态年龄判断。</p>
+<h3 id="4-空间分配担保">4. 空间分配担保</h3>
+<p>Young GC 前，JVM 需要判断老年代是否有足够空间容纳可能晋升的对象。如果担保失败，可能触发更重的回收。</p>
+<p>这也是为什么新生代和老年代比例不合适时，可能导致 GC 行为异常。</p>
+<h2 id="八方法区和类卸载">八、方法区和类卸载</h2>
+<p>GC 不只回收堆对象，也可能涉及方法区或元空间。</p>
+<p>方法区主要回收两类内容：</p>
+<ul>
+<li>废弃常量。</li>
+<li>无用类。</li>
+</ul>
+<p>一个类要被卸载，通常需要满足：</p>
+<ul>
+<li>该类所有实例都已经被回收。</li>
+<li>加载该类的 <code>ClassLoader</code> 已经不可达。</li>
+<li>该类对应的 <code>Class</code> 对象没有被任何地方引用。</li>
+</ul>
+<p>元空间持续增长时，常见原因包括：</p>
+<ul>
+<li>动态代理或字节码增强大量生成类。</li>
+<li>自定义类加载器无法释放。</li>
+<li>Web 应用热部署后旧类加载器被引用住。</li>
+<li>线程上下文类加载器、静态集合、缓存、<code>ThreadLocal</code> 持有旧对象。</li>
+</ul>
+<h2 id="九如何判断-gc-是否异常">九、如何判断 GC 是否异常</h2>
+<p>看 GC 不能只看“发生了几次”，还要结合业务影响。</p>
+<p>常见异常信号：</p>
+<ul>
+<li>Young GC 非常频繁，说明对象分配速率过高或新生代太小。</li>
+<li>Full GC 频繁，说明老年代、元空间或直接内存可能有压力。</li>
+<li>GC 后堆占用下降很少，说明大量对象仍然存活，可能存在内存泄漏或缓存过大。</li>
+<li>单次停顿时间过长，说明存活对象太多、堆过大、收集器不合适或系统资源紧张。</li>
+<li>GC 占用 CPU 高，业务吞吐下降，说明回收成本已经明显影响应用。</li>
+</ul>
+<p>排查时优先收集这些信息：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">jcmd &lt;pid&gt; GC.heap_info
+</span></span><span class="line"><span class="cl">jcmd &lt;pid&gt; VM.flags
+</span></span><span class="line"><span class="cl">jcmd &lt;pid&gt; Thread.print
+</span></span></code></pre></div><p>JDK 9+ 推荐开启统一 GC 日志：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">-Xlog:gc*,gc+heap<span class="o">=</span>debug:file<span class="o">=</span>gc-%t.log:time,uptime,level,tags:filecount<span class="o">=</span>5,filesize<span class="o">=</span>20M
+</span></span></code></pre></div><p>JDK 8 常见写法：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">-XX:+PrintGCDetails
+</span></span><span class="line"><span class="cl">-XX:+PrintGCDateStamps
+</span></span><span class="line"><span class="cl">-XX:+PrintGCCause
+</span></span><span class="line"><span class="cl">-Xloggc:gc.log
+</span></span></code></pre></div><h2 id="十总结">十、总结</h2>
+<p>GC 可以用几句话串起来：</p>
+<ul>
+<li>Java 主要用可达性分析判断对象是否存活。</li>
+<li>GC Roots 是可达性分析的起点。</li>
+<li>引用类型会影响对象在 GC 中的回收时机。</li>
+<li>标记-清除、标记-整理、复制是基础回收算法。</li>
+<li>分代收集利用了“大多数对象很快死亡”的经验。</li>
+<li>并行是多个 GC 线程一起工作，并发是 GC 线程和用户线程同时工作。</li>
+<li>收集器选择要服从业务目标：吞吐量、停顿时间、堆大小、CPU 余量，一个都不能假装不存在。</li>
+</ul>
+<p>学 GC 的目的不是把收集器名字背成菜单，而是在系统出问题时知道：<strong>对象为什么没被回收，GC 为什么停这么久，下一步应该看哪份证据</strong>。</p>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

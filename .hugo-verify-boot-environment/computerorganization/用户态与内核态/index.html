@@ -1,0 +1,1418 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>用户态与内核态 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="用户态和内核态，本质上是 CPU 为了保护操作系统和硬件资源而提供的两种执行权限级别。
+应用程序平时运行在用户态。它可以执行普通计算、访问自己的内存、调用普通函数，但不能直接操作硬件、修改页表、控制中断或随意调度进程。操作系统内核运行在内核态，拥有更高权限，可以执行特权指令并管理整个系统资源。
+所谓“用户态和内核态切换有性能开销”，并不是因为“切换”这两个字有什么神秘之处，而是因为切换时通常伴随着保存和恢复现场、切换执行环境、参数校验、数据拷贝，以及对 CPU cache、TLB、流水线和分支预测的影响。
+一、什么是用户态和内核态 现代操作系统不会让普通应用程序直接控制所有硬件资源。否则一个普通进程就可能随意读写磁盘、修改其他进程内存，甚至破坏内核自身的数据结构。
+因此 CPU 和操作系统会把执行权限分成不同级别。简化理解如下：
+用户态：权限较低，普通应用程序运行在这里。 内核态：权限较高，操作系统内核运行在这里。 用户态程序不能直接做这些事情：
+访问硬件设备 修改页表 执行特权指令 管理中断 调度进程或线程 直接访问内核内存 如果应用程序想读取文件、发送网络数据、申请大块内存、创建线程，就必须通过操作系统提供的接口进入内核，让内核代为完成。
+常见的进入内核的方式有三类：
+系统调用（system call）：应用主动请求内核服务，例如 read、write、open、epoll_wait。 异常（exception）：CPU 执行过程中发现异常情况，例如缺页异常、除零错误、非法指令。 中断（interrupt）：外部设备或定时器通知 CPU，例如网卡收到数据、磁盘 I/O 完成、时钟中断触发调度。 其中，应用程序最常接触的是系统调用。
+二、为什么需要用户态和内核态 如果没有用户态和内核态的隔离，所有程序都能用最高权限运行，系统会非常脆弱。
+1. 保护内核 内核维护着进程、内存、文件系统、网络协议栈等关键数据结构。如果普通应用可以直接修改这些数据结构，一个 bug 就可能让整个系统崩溃。
+用户态把应用程序限制在较低权限下，应用即使崩溃，通常也只会影响自己所在的进程。
+2. 保护进程之间的隔离 不同进程拥有各自的虚拟地址空间。用户态程序不能随意访问别的进程内存，也不能直接访问内核地址空间。
+这正是操作系统稳定性和安全性的基础。
+3. 统一管理硬件资源 硬件资源是全局共享的，例如磁盘、网卡、内存、CPU。如果每个应用都能直接操作硬件，就很难保证并发访问的正确性。
+由内核统一管理硬件，可以避免资源冲突，并提供统一的抽象，例如文件描述符、socket、进程、线程和虚拟内存。
+三、用户态如何进入内核态 以一次文件读取为例：
+read(fd, buf, len); 这行代码看起来只是普通函数调用，但它背后会进入内核。
+大致过程如下：
+用户态程序调用 read。 C 标准库或运行时封装系统调用参数。 CPU 执行特殊指令进入内核态。 内核根据系统调用号找到对应处理函数。 内核检查参数、文件描述符和用户态缓冲区是否合法。 内核读取数据，并把数据拷贝到用户态缓冲区。 内核返回用户态，应用程序继续执行。 这个过程通常被称为陷入内核（trap into kernel）。
+需要注意：从用户态进入内核态后，CPU 执行的就不再是普通应用代码，而是内核代码。权限、栈、执行路径、内存访问规则都会发生变化。
+四、用户态到内核态切换为什么有开销 单纯把 CPU 权限级别从用户态改成内核态，并不是最贵的部分。真正的成本来自伴随这次切换发生的一系列动作。
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/computerorganization/%E7%94%A8%E6%88%B7%E6%80%81%E4%B8%8E%E5%86%85%E6%A0%B8%E6%80%81/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/computerorganization/%E7%94%A8%E6%88%B7%E6%80%81%E4%B8%8E%E5%86%85%E6%A0%B8%E6%80%81/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="用户态与内核态">
+  <meta property="og:description" content="用户态和内核态，本质上是 CPU 为了保护操作系统和硬件资源而提供的两种执行权限级别。
+应用程序平时运行在用户态。它可以执行普通计算、访问自己的内存、调用普通函数，但不能直接操作硬件、修改页表、控制中断或随意调度进程。操作系统内核运行在内核态，拥有更高权限，可以执行特权指令并管理整个系统资源。
+所谓“用户态和内核态切换有性能开销”，并不是因为“切换”这两个字有什么神秘之处，而是因为切换时通常伴随着保存和恢复现场、切换执行环境、参数校验、数据拷贝，以及对 CPU cache、TLB、流水线和分支预测的影响。
+一、什么是用户态和内核态 现代操作系统不会让普通应用程序直接控制所有硬件资源。否则一个普通进程就可能随意读写磁盘、修改其他进程内存，甚至破坏内核自身的数据结构。
+因此 CPU 和操作系统会把执行权限分成不同级别。简化理解如下：
+用户态：权限较低，普通应用程序运行在这里。 内核态：权限较高，操作系统内核运行在这里。 用户态程序不能直接做这些事情：
+访问硬件设备 修改页表 执行特权指令 管理中断 调度进程或线程 直接访问内核内存 如果应用程序想读取文件、发送网络数据、申请大块内存、创建线程，就必须通过操作系统提供的接口进入内核，让内核代为完成。
+常见的进入内核的方式有三类：
+系统调用（system call）：应用主动请求内核服务，例如 read、write、open、epoll_wait。 异常（exception）：CPU 执行过程中发现异常情况，例如缺页异常、除零错误、非法指令。 中断（interrupt）：外部设备或定时器通知 CPU，例如网卡收到数据、磁盘 I/O 完成、时钟中断触发调度。 其中，应用程序最常接触的是系统调用。
+二、为什么需要用户态和内核态 如果没有用户态和内核态的隔离，所有程序都能用最高权限运行，系统会非常脆弱。
+1. 保护内核 内核维护着进程、内存、文件系统、网络协议栈等关键数据结构。如果普通应用可以直接修改这些数据结构，一个 bug 就可能让整个系统崩溃。
+用户态把应用程序限制在较低权限下，应用即使崩溃，通常也只会影响自己所在的进程。
+2. 保护进程之间的隔离 不同进程拥有各自的虚拟地址空间。用户态程序不能随意访问别的进程内存，也不能直接访问内核地址空间。
+这正是操作系统稳定性和安全性的基础。
+3. 统一管理硬件资源 硬件资源是全局共享的，例如磁盘、网卡、内存、CPU。如果每个应用都能直接操作硬件，就很难保证并发访问的正确性。
+由内核统一管理硬件，可以避免资源冲突，并提供统一的抽象，例如文件描述符、socket、进程、线程和虚拟内存。
+三、用户态如何进入内核态 以一次文件读取为例：
+read(fd, buf, len); 这行代码看起来只是普通函数调用，但它背后会进入内核。
+大致过程如下：
+用户态程序调用 read。 C 标准库或运行时封装系统调用参数。 CPU 执行特殊指令进入内核态。 内核根据系统调用号找到对应处理函数。 内核检查参数、文件描述符和用户态缓冲区是否合法。 内核读取数据，并把数据拷贝到用户态缓冲区。 内核返回用户态，应用程序继续执行。 这个过程通常被称为陷入内核（trap into kernel）。
+需要注意：从用户态进入内核态后，CPU 执行的就不再是普通应用代码，而是内核代码。权限、栈、执行路径、内存访问规则都会发生变化。
+四、用户态到内核态切换为什么有开销 单纯把 CPU 权限级别从用户态改成内核态，并不是最贵的部分。真正的成本来自伴随这次切换发生的一系列动作。">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="computerorganization">
+    <meta property="article:published_time" content="2026-03-05T11:45:09+08:00">
+    <meta property="article:modified_time" content="2026-03-05T11:45:09+08:00">
+
+  
+  <meta itemprop="name" content="用户态与内核态">
+  <meta itemprop="description" content="用户态和内核态，本质上是 CPU 为了保护操作系统和硬件资源而提供的两种执行权限级别。
+应用程序平时运行在用户态。它可以执行普通计算、访问自己的内存、调用普通函数，但不能直接操作硬件、修改页表、控制中断或随意调度进程。操作系统内核运行在内核态，拥有更高权限，可以执行特权指令并管理整个系统资源。
+所谓“用户态和内核态切换有性能开销”，并不是因为“切换”这两个字有什么神秘之处，而是因为切换时通常伴随着保存和恢复现场、切换执行环境、参数校验、数据拷贝，以及对 CPU cache、TLB、流水线和分支预测的影响。
+一、什么是用户态和内核态 现代操作系统不会让普通应用程序直接控制所有硬件资源。否则一个普通进程就可能随意读写磁盘、修改其他进程内存，甚至破坏内核自身的数据结构。
+因此 CPU 和操作系统会把执行权限分成不同级别。简化理解如下：
+用户态：权限较低，普通应用程序运行在这里。 内核态：权限较高，操作系统内核运行在这里。 用户态程序不能直接做这些事情：
+访问硬件设备 修改页表 执行特权指令 管理中断 调度进程或线程 直接访问内核内存 如果应用程序想读取文件、发送网络数据、申请大块内存、创建线程，就必须通过操作系统提供的接口进入内核，让内核代为完成。
+常见的进入内核的方式有三类：
+系统调用（system call）：应用主动请求内核服务，例如 read、write、open、epoll_wait。 异常（exception）：CPU 执行过程中发现异常情况，例如缺页异常、除零错误、非法指令。 中断（interrupt）：外部设备或定时器通知 CPU，例如网卡收到数据、磁盘 I/O 完成、时钟中断触发调度。 其中，应用程序最常接触的是系统调用。
+二、为什么需要用户态和内核态 如果没有用户态和内核态的隔离，所有程序都能用最高权限运行，系统会非常脆弱。
+1. 保护内核 内核维护着进程、内存、文件系统、网络协议栈等关键数据结构。如果普通应用可以直接修改这些数据结构，一个 bug 就可能让整个系统崩溃。
+用户态把应用程序限制在较低权限下，应用即使崩溃，通常也只会影响自己所在的进程。
+2. 保护进程之间的隔离 不同进程拥有各自的虚拟地址空间。用户态程序不能随意访问别的进程内存，也不能直接访问内核地址空间。
+这正是操作系统稳定性和安全性的基础。
+3. 统一管理硬件资源 硬件资源是全局共享的，例如磁盘、网卡、内存、CPU。如果每个应用都能直接操作硬件，就很难保证并发访问的正确性。
+由内核统一管理硬件，可以避免资源冲突，并提供统一的抽象，例如文件描述符、socket、进程、线程和虚拟内存。
+三、用户态如何进入内核态 以一次文件读取为例：
+read(fd, buf, len); 这行代码看起来只是普通函数调用，但它背后会进入内核。
+大致过程如下：
+用户态程序调用 read。 C 标准库或运行时封装系统调用参数。 CPU 执行特殊指令进入内核态。 内核根据系统调用号找到对应处理函数。 内核检查参数、文件描述符和用户态缓冲区是否合法。 内核读取数据，并把数据拷贝到用户态缓冲区。 内核返回用户态，应用程序继续执行。 这个过程通常被称为陷入内核（trap into kernel）。
+需要注意：从用户态进入内核态后，CPU 执行的就不再是普通应用代码，而是内核代码。权限、栈、执行路径、内存访问规则都会发生变化。
+四、用户态到内核态切换为什么有开销 单纯把 CPU 权限级别从用户态改成内核态，并不是最贵的部分。真正的成本来自伴随这次切换发生的一系列动作。">
+  <meta itemprop="datePublished" content="2026-03-05T11:45:09+08:00">
+  <meta itemprop="dateModified" content="2026-03-05T11:45:09+08:00">
+  <meta itemprop="wordCount" content="373">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="用户态与内核态">
+  <meta name="twitter:description" content="用户态和内核态，本质上是 CPU 为了保护操作系统和硬件资源而提供的两种执行权限级别。
+应用程序平时运行在用户态。它可以执行普通计算、访问自己的内存、调用普通函数，但不能直接操作硬件、修改页表、控制中断或随意调度进程。操作系统内核运行在内核态，拥有更高权限，可以执行特权指令并管理整个系统资源。
+所谓“用户态和内核态切换有性能开销”，并不是因为“切换”这两个字有什么神秘之处，而是因为切换时通常伴随着保存和恢复现场、切换执行环境、参数校验、数据拷贝，以及对 CPU cache、TLB、流水线和分支预测的影响。
+一、什么是用户态和内核态 现代操作系统不会让普通应用程序直接控制所有硬件资源。否则一个普通进程就可能随意读写磁盘、修改其他进程内存，甚至破坏内核自身的数据结构。
+因此 CPU 和操作系统会把执行权限分成不同级别。简化理解如下：
+用户态：权限较低，普通应用程序运行在这里。 内核态：权限较高，操作系统内核运行在这里。 用户态程序不能直接做这些事情：
+访问硬件设备 修改页表 执行特权指令 管理中断 调度进程或线程 直接访问内核内存 如果应用程序想读取文件、发送网络数据、申请大块内存、创建线程，就必须通过操作系统提供的接口进入内核，让内核代为完成。
+常见的进入内核的方式有三类：
+系统调用（system call）：应用主动请求内核服务，例如 read、write、open、epoll_wait。 异常（exception）：CPU 执行过程中发现异常情况，例如缺页异常、除零错误、非法指令。 中断（interrupt）：外部设备或定时器通知 CPU，例如网卡收到数据、磁盘 I/O 完成、时钟中断触发调度。 其中，应用程序最常接触的是系统调用。
+二、为什么需要用户态和内核态 如果没有用户态和内核态的隔离，所有程序都能用最高权限运行，系统会非常脆弱。
+1. 保护内核 内核维护着进程、内存、文件系统、网络协议栈等关键数据结构。如果普通应用可以直接修改这些数据结构，一个 bug 就可能让整个系统崩溃。
+用户态把应用程序限制在较低权限下，应用即使崩溃，通常也只会影响自己所在的进程。
+2. 保护进程之间的隔离 不同进程拥有各自的虚拟地址空间。用户态程序不能随意访问别的进程内存，也不能直接访问内核地址空间。
+这正是操作系统稳定性和安全性的基础。
+3. 统一管理硬件资源 硬件资源是全局共享的，例如磁盘、网卡、内存、CPU。如果每个应用都能直接操作硬件，就很难保证并发访问的正确性。
+由内核统一管理硬件，可以避免资源冲突，并提供统一的抽象，例如文件描述符、socket、进程、线程和虚拟内存。
+三、用户态如何进入内核态 以一次文件读取为例：
+read(fd, buf, len); 这行代码看起来只是普通函数调用，但它背后会进入内核。
+大致过程如下：
+用户态程序调用 read。 C 标准库或运行时封装系统调用参数。 CPU 执行特殊指令进入内核态。 内核根据系统调用号找到对应处理函数。 内核检查参数、文件描述符和用户态缓冲区是否合法。 内核读取数据，并把数据拷贝到用户态缓冲区。 内核返回用户态，应用程序继续执行。 这个过程通常被称为陷入内核（trap into kernel）。
+需要注意：从用户态进入内核态后，CPU 执行的就不再是普通应用代码，而是内核代码。权限、栈、执行路径、内存访问规则都会发生变化。
+四、用户态到内核态切换为什么有开销 单纯把 CPU 权限级别从用户态改成内核态，并不是最贵的部分。真正的成本来自伴随这次切换发生的一系列动作。">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">用户态与内核态</h1>
+
+    
+      <div class="post-date">March 5, 2026</div>
+    
+
+    <div class="post-content">
+      <p>用户态和内核态，本质上是 CPU 为了保护操作系统和硬件资源而提供的两种执行权限级别。</p>
+<p>应用程序平时运行在<strong>用户态</strong>。它可以执行普通计算、访问自己的内存、调用普通函数，但不能直接操作硬件、修改页表、控制中断或随意调度进程。操作系统内核运行在<strong>内核态</strong>，拥有更高权限，可以执行特权指令并管理整个系统资源。</p>
+<p>所谓“用户态和内核态切换有性能开销”，并不是因为“切换”这两个字有什么神秘之处，而是因为切换时通常伴随着保存和恢复现场、切换执行环境、参数校验、数据拷贝，以及对 CPU cache、TLB、流水线和分支预测的影响。</p>
+<h2 id="一什么是用户态和内核态">一、什么是用户态和内核态</h2>
+<p>现代操作系统不会让普通应用程序直接控制所有硬件资源。否则一个普通进程就可能随意读写磁盘、修改其他进程内存，甚至破坏内核自身的数据结构。</p>
+<p>因此 CPU 和操作系统会把执行权限分成不同级别。简化理解如下：</p>
+<ul>
+<li><strong>用户态</strong>：权限较低，普通应用程序运行在这里。</li>
+<li><strong>内核态</strong>：权限较高，操作系统内核运行在这里。</li>
+</ul>
+<p>用户态程序不能直接做这些事情：</p>
+<ul>
+<li>访问硬件设备</li>
+<li>修改页表</li>
+<li>执行特权指令</li>
+<li>管理中断</li>
+<li>调度进程或线程</li>
+<li>直接访问内核内存</li>
+</ul>
+<p>如果应用程序想读取文件、发送网络数据、申请大块内存、创建线程，就必须通过操作系统提供的接口进入内核，让内核代为完成。</p>
+<p>常见的进入内核的方式有三类：</p>
+<ul>
+<li><strong>系统调用（system call）</strong>：应用主动请求内核服务，例如 <code>read</code>、<code>write</code>、<code>open</code>、<code>epoll_wait</code>。</li>
+<li><strong>异常（exception）</strong>：CPU 执行过程中发现异常情况，例如缺页异常、除零错误、非法指令。</li>
+<li><strong>中断（interrupt）</strong>：外部设备或定时器通知 CPU，例如网卡收到数据、磁盘 I/O 完成、时钟中断触发调度。</li>
+</ul>
+<p>其中，应用程序最常接触的是<strong>系统调用</strong>。</p>
+<h2 id="二为什么需要用户态和内核态">二、为什么需要用户态和内核态</h2>
+<p>如果没有用户态和内核态的隔离，所有程序都能用最高权限运行，系统会非常脆弱。</p>
+<h3 id="1-保护内核">1. 保护内核</h3>
+<p>内核维护着进程、内存、文件系统、网络协议栈等关键数据结构。如果普通应用可以直接修改这些数据结构，一个 bug 就可能让整个系统崩溃。</p>
+<p>用户态把应用程序限制在较低权限下，应用即使崩溃，通常也只会影响自己所在的进程。</p>
+<h3 id="2-保护进程之间的隔离">2. 保护进程之间的隔离</h3>
+<p>不同进程拥有各自的虚拟地址空间。用户态程序不能随意访问别的进程内存，也不能直接访问内核地址空间。</p>
+<p>这正是操作系统稳定性和安全性的基础。</p>
+<h3 id="3-统一管理硬件资源">3. 统一管理硬件资源</h3>
+<p>硬件资源是全局共享的，例如磁盘、网卡、内存、CPU。如果每个应用都能直接操作硬件，就很难保证并发访问的正确性。</p>
+<p>由内核统一管理硬件，可以避免资源冲突，并提供统一的抽象，例如文件描述符、socket、进程、线程和虚拟内存。</p>
+<h2 id="三用户态如何进入内核态">三、用户态如何进入内核态</h2>
+<p>以一次文件读取为例：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="nf">read</span><span class="p">(</span><span class="n">fd</span><span class="p">,</span> <span class="n">buf</span><span class="p">,</span> <span class="n">len</span><span class="p">);</span>
+</span></span></code></pre></div><p>这行代码看起来只是普通函数调用，但它背后会进入内核。</p>
+<p>大致过程如下：</p>
+<ol>
+<li>用户态程序调用 <code>read</code>。</li>
+<li>C 标准库或运行时封装系统调用参数。</li>
+<li>CPU 执行特殊指令进入内核态。</li>
+<li>内核根据系统调用号找到对应处理函数。</li>
+<li>内核检查参数、文件描述符和用户态缓冲区是否合法。</li>
+<li>内核读取数据，并把数据拷贝到用户态缓冲区。</li>
+<li>内核返回用户态，应用程序继续执行。</li>
+</ol>
+<p>这个过程通常被称为<strong>陷入内核（trap into kernel）</strong>。</p>
+<p>需要注意：从用户态进入内核态后，CPU 执行的就不再是普通应用代码，而是内核代码。权限、栈、执行路径、内存访问规则都会发生变化。</p>
+<h2 id="四用户态到内核态切换为什么有开销">四、用户态到内核态切换为什么有开销</h2>
+<p>单纯把 CPU 权限级别从用户态改成内核态，并不是最贵的部分。真正的成本来自伴随这次切换发生的一系列动作。</p>
+<h3 id="1-保存用户态现场">1. 保存用户态现场</h3>
+<p>进入内核前，CPU 和内核需要保存当前用户态执行现场，例如：</p>
+<ul>
+<li>程序计数器（PC / RIP）</li>
+<li>栈指针（SP / RSP）</li>
+<li>标志寄存器</li>
+<li>部分通用寄存器</li>
+</ul>
+<p>因为系统调用处理完之后，程序还要能回到原来的位置继续执行。如果现场没有保存好，用户程序就无法正确恢复。</p>
+<h3 id="2-切换到内核栈">2. 切换到内核栈</h3>
+<p>一个线程通常既有用户栈，也有内核栈。</p>
+<p>用户态运行普通应用代码时使用用户栈；进入内核后，内核会使用该线程对应的内核栈来执行系统调用处理逻辑。</p>
+<p>这不是最重的操作，但它确实意味着执行环境发生了变化。</p>
+<h3 id="3-执行系统调用分发">3. 执行系统调用分发</h3>
+<p>系统调用进入内核后，并不是直接执行目标逻辑。内核还需要根据系统调用号找到对应处理函数。</p>
+<p>例如 <code>read</code>、<code>write</code>、<code>open</code>、<code>futex</code>、<code>epoll_wait</code> 都会走到不同的内核处理路径。</p>
+<p>这个分发过程本身需要执行内核代码，也会带来额外开销。</p>
+<h3 id="4-参数校验和权限检查">4. 参数校验和权限检查</h3>
+<p>用户态传给内核的参数不能被盲目信任。</p>
+<p>比如 <code>read(fd, buf, len)</code> 中：</p>
+<ul>
+<li><code>fd</code> 是否是合法文件描述符？</li>
+<li>当前进程是否有读取权限？</li>
+<li><code>buf</code> 是否指向用户态合法地址？</li>
+<li><code>len</code> 是否合理？</li>
+<li>目标页是否存在？</li>
+</ul>
+<p>内核必须认真检查这些条件。否则应用传一个非法地址，就可能让内核访问错误内存。</p>
+<h3 id="5-用户态和内核态之间可能发生数据拷贝">5. 用户态和内核态之间可能发生数据拷贝</h3>
+<p>很多系统调用需要在用户态和内核态之间传递数据。</p>
+<p>例如：</p>
+<ul>
+<li><code>read</code>：从内核缓冲区拷贝到用户态缓冲区。</li>
+<li><code>write</code>：从用户态缓冲区拷贝到内核缓冲区。</li>
+<li><code>recv</code>：从 socket 接收缓冲区拷贝到用户态。</li>
+<li><code>send</code>：从用户态拷贝到 socket 发送缓冲区。</li>
+</ul>
+<p>所以系统调用的成本往往不只是“进去再出来”，还包括参数检查和数据搬运。</p>
+<h3 id="6-cpu-局部性会被破坏">6. CPU 局部性会被破坏</h3>
+<p>现代 CPU 为了提高性能，会依赖很多缓存和预测机制：</p>
+<ul>
+<li>指令流水线</li>
+<li>分支预测</li>
+<li>L1/L2/L3 cache</li>
+<li>TLB</li>
+<li>指令 cache</li>
+</ul>
+<p>用户态代码正在运行时，CPU cache 中可能已经缓存了应用程序的热点代码和热点数据。</p>
+<p>一旦进入内核，执行流跳到内核代码路径，CPU 可能需要加载新的指令和数据。原本属于用户程序的 cache 热点也可能被内核代码污染。</p>
+<p>因此，切换成本不只体现在切换那一瞬间，还会体现在切换之后一段时间内的 cache 命中率下降。</p>
+<h3 id="7-安全机制可能增加额外成本">7. 安全机制可能增加额外成本</h3>
+<p>现代 CPU 和操作系统为了防御一些漏洞，会在用户态和内核态之间增加额外隔离和屏障。</p>
+<p>例如某些系统会启用更严格的页表隔离，减少用户态通过旁路攻击窥探内核数据的可能性。</p>
+<p>这些安全机制是必要的，但也会让用户态和内核态切换的成本更高。</p>
+<h2 id="五系统调用一定会导致线程切换吗">五、系统调用一定会导致线程切换吗</h2>
+<p>不一定。</p>
+<p>系统调用只表示当前线程进入内核，请求内核执行某个操作。它是否会引发线程切换，取决于这次系统调用会不会阻塞，以及内核调度器是否决定切换执行对象。</p>
+<h3 id="1-不阻塞的系统调用">1. 不阻塞的系统调用</h3>
+<p>如果系统调用很快完成，例如读取已经在内核缓冲区里的数据，或者获取当前时间，那么它可能只是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">用户态 -&gt; 内核态 -&gt; 用户态
+</span></span></code></pre></div><p>这种情况下，不一定发生线程切换。</p>
+<h3 id="2-会阻塞的系统调用">2. 会阻塞的系统调用</h3>
+<p>如果系统调用需要等待资源，例如：</p>
+<ul>
+<li>等磁盘 I/O</li>
+<li>等网络数据</li>
+<li>等锁</li>
+<li>等事件</li>
+<li>等子进程结束</li>
+</ul>
+<p>内核可能会把当前线程挂起，然后调度另一个可运行线程。</p>
+<p>这时发生的就不只是用户态和内核态切换，而是进一步引出了<strong>线程上下文切换</strong>。</p>
+<h2 id="六线程切换为什么更贵">六、线程切换为什么更贵</h2>
+<p>线程切换的核心成本来自三件事：</p>
+<ul>
+<li>保存当前线程上下文</li>
+<li>恢复下一个线程上下文</li>
+<li>调度器参与决策</li>
+</ul>
+<p>假设线程 A 被换下，线程 B 被换上，内核大致要做：</p>
+<ol>
+<li>保存线程 A 的寄存器、栈指针、程序计数器等状态。</li>
+<li>更新线程 A 的状态，例如运行、阻塞、就绪。</li>
+<li>调度器选择下一个要运行的线程 B。</li>
+<li>恢复线程 B 上次保存的执行现场。</li>
+<li>返回到线程 B 的执行位置继续运行。</li>
+</ol>
+<p>线程切换还有一个很重要的间接成本：<strong>CPU cache 局部性被破坏</strong>。</p>
+<p>线程 A 刚运行时，它的数据和代码可能已经被加载到 cache 中。切换到线程 B 后，B 使用另一批代码和数据，会把 A 的热点缓存挤掉一部分。等下次再切回 A，A 可能又要重新加载自己的工作集。</p>
+<p>所以线程切换的成本，往往不只是保存几个寄存器，而是切换后的一段时间内，程序执行效率下降。</p>
+<h2 id="七进程切换为什么通常比线程切换更贵">七、进程切换为什么通常比线程切换更贵</h2>
+<p>同一个进程内的多个线程共享同一套虚拟地址空间。线程之间切换时，通常不需要切换整套页表。</p>
+<p>不同进程则不同。进程之间通常有不同的：</p>
+<ul>
+<li>虚拟地址空间</li>
+<li>页表</li>
+<li>文件描述符表</li>
+<li>内存映射关系</li>
+<li>资源权限和统计信息</li>
+</ul>
+<p>因此，从进程 A 切换到进程 B 时，除了线程执行现场要切换，还可能涉及<strong>地址空间切换</strong>。</p>
+<p>地址空间切换会影响 TLB。</p>
+<p>TLB 缓存的是虚拟地址到物理地址的翻译结果。当切换到另一个进程后，原进程的许多地址翻译结果不再适用，TLB 命中率可能下降。之后一段时间内，内存访问会变慢。</p>
+<p>这也是为什么通常认为：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">同进程线程切换 &lt; 不同进程切换
+</span></span></code></pre></div><p>当然，这只是一般情况。实际成本还会受到 CPU 架构、操作系统实现、是否启用 PCID/ASID、线程是否跨核迁移、工作集大小等因素影响。</p>
+<h2 id="八用户态线程和协程为什么更轻">八、用户态线程和协程为什么更轻</h2>
+<p>前面说的线程切换，指的是操作系统线程切换。例如 Java 中普通的 <code>Thread</code>，通常会映射到 OS 线程。</p>
+<p>只要 OS 线程发生调度切换，就一定需要进入内核，由内核调度器参与。</p>
+<p>但用户态线程、green thread、协程这类机制，可能由语言运行时或框架在用户态自行调度。</p>
+<p>它们的切换通常只需要做：</p>
+<ul>
+<li>保存少量寄存器</li>
+<li>切换栈或恢复协程帧</li>
+<li>更新运行时调度状态</li>
+<li>跳转到另一个用户态任务继续执行</li>
+</ul>
+<p>它们通常不需要：</p>
+<ul>
+<li>进入内核</li>
+<li>调用内核调度器</li>
+<li>切换页表</li>
+<li>触发 OS 线程上下文切换</li>
+</ul>
+<p>所以用户态协程切换通常比 OS 线程切换更轻。</p>
+<p>但“更轻”不等于“没有成本”。协程切换仍然会有调度逻辑、状态保存和一定的 cache 局部性影响。只是与进入内核并触发 OS 线程调度相比，它的成本小得多。</p>
+<h2 id="九io-密集型场景为什么怕频繁切换">九、I/O 密集型场景为什么怕频繁切换</h2>
+<p>I/O 密集型程序经常会经历这样的过程：</p>
+<ol>
+<li>用户态发起系统调用。</li>
+<li>CPU 进入内核态。</li>
+<li>内核发现数据还没准备好。</li>
+<li>当前线程被阻塞。</li>
+<li>调度器切换到其他线程。</li>
+<li>数据到达后，中断或事件唤醒线程。</li>
+<li>线程再次被调度回来继续执行。</li>
+</ol>
+<p>这里面会反复发生：</p>
+<ul>
+<li>用户态和内核态切换</li>
+<li>线程阻塞和唤醒</li>
+<li>调度器决策</li>
+<li>上下文保存和恢复</li>
+<li>cache/TLB 局部性破坏</li>
+</ul>
+<p>所以高并发 I/O 优化，经常是在减少这些成本：</p>
+<ul>
+<li>使用 <code>epoll</code> 这类 I/O 多路复用机制，减少线程数量。</li>
+<li>使用异步 I/O 或事件驱动模型，减少阻塞等待。</li>
+<li>使用协程，让大量任务在少量 OS 线程上调度。</li>
+<li>合并小 I/O，减少高频系统调用。</li>
+<li>减少锁竞争，避免大量线程阻塞和唤醒。</li>
+<li>控制线程池大小，避免线程数失控。</li>
+</ul>
+<h2 id="十几种切换成本的粗略排序">十、几种切换成本的粗略排序</h2>
+<p>一般可以按下面的顺序理解：</p>
+<ol>
+<li><strong>普通函数调用</strong>
+主要是栈帧变化和跳转，成本最低。</li>
+<li><strong>用户态协程切换</strong>
+主要是保存少量状态、切换栈或协程帧，不需要进入内核。</li>
+<li><strong>用户态和内核态切换</strong>
+需要 trap、切内核栈、做系统调用分发和参数检查。</li>
+<li><strong>同一进程内 OS 线程切换</strong>
+需要内核调度器介入，还要保存和恢复线程上下文。</li>
+<li><strong>不同进程切换</strong>
+除了线程上下文切换，还可能涉及地址空间切换和更明显的 TLB 影响。</li>
+</ol>
+<p>这不是绝对的性能公式，只是理解成本来源的常用顺序。真实开销会受系统调用类型、CPU 架构、内核版本、负载情况和数据局部性影响。</p>
+<h2 id="十一放到-java-里怎么理解">十一、放到 Java 里怎么理解</h2>
+<p>Java 程序里很多性能问题，本质上都和这些切换成本有关。</p>
+<p>常见场景包括：</p>
+<ul>
+<li><code>synchronized</code> 或 <code>Lock</code> 竞争激烈，导致线程阻塞、唤醒和上下文切换。</li>
+<li>线程池线程数过多，导致调度频繁，CPU 时间花在切换而不是业务逻辑上。</li>
+<li>频繁小 I/O，例如大量短连接、频繁小包读写，导致系统调用次数过多。</li>
+<li>频繁创建线程，带来栈内存、调度和系统资源管理成本。</li>
+<li>阻塞式 I/O 下连接数过多，导致大量线程等待和调度。</li>
+</ul>
+<p>对应的优化方向通常是：</p>
+<ul>
+<li>控制线程池大小，让线程数匹配 CPU 和业务类型。</li>
+<li>减少锁竞争，缩小临界区。</li>
+<li>合并小请求或小 I/O，降低系统调用频率。</li>
+<li>使用 NIO、事件驱动、异步 I/O 或协程模型减少阻塞线程数量。</li>
+<li>保持数据局部性，避免无意义的跨线程、跨核迁移。</li>
+</ul>
+<h2 id="十二一句话总结">十二、一句话总结</h2>
+<p><strong>用户态和内核态是 CPU 与操作系统提供的权限隔离机制。进入内核态本身不是最贵的，真正的开销来自现场保存与恢复、内核栈切换、系统调用分发、参数校验、数据拷贝，以及 CPU cache、TLB、流水线和分支预测等局部性被破坏。</strong></p>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

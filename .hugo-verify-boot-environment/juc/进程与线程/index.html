@@ -1,0 +1,1192 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>进程与线程 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="进程和线程是理解 Java 并发前必须先分清的两个概念。简单说：进程负责资源隔离，线程负责执行调度。
+一、核心概念 进程是操作系统进行资源分配的基本单位。每个进程都有相对独立的地址空间、文件句柄、环境变量等资源。
+线程是 CPU 调度的基本单位。同一个进程中的多个线程共享进程资源，例如堆内存、方法区、打开的文件句柄，但每个线程又有自己的程序计数器、虚拟机栈和本地方法栈。
+可以这样理解：
+进程 ├─ 堆内存、方法区、文件句柄等共享资源 ├─ 线程 A：程序计数器、栈、本地方法栈 ├─ 线程 B：程序计数器、栈、本地方法栈 └─ 线程 C：程序计数器、栈、本地方法栈 二、进程和线程的区别 对比项 进程 线程 资源拥有 拥有独立资源空间 共享所属进程资源 调度成本 创建和切换成本较高 创建和切换成本较低 隔离性 隔离性强，一个进程崩溃通常不影响其他进程 隔离性弱，一个线程异常可能影响整个进程 通信方式 需要 IPC、Socket、管道等机制 可直接共享内存，但需要同步控制 Java 对应 Process Thread 多进程更稳定，因为隔离性更强；多线程更轻量，因为线程之间共享资源，通信成本更低。代价也很明显：共享资源如果没有正确同步，就会出现竞态条件、可见性问题、死锁等并发问题。
+三、Java 中创建进程 Java 中可以通过 ProcessBuilder 创建外部进程：
+ProcessBuilder builder = new ProcessBuilder(&#34;java&#34;, &#34;-version&#34;); builder.redirectErrorStream(true); Process process = builder.start(); try (BufferedReader reader = new BufferedReader( new InputStreamReader(process.getInputStream()))) { String line; while ((line = reader.readLine()) != null) { System.out.println(line); } } int exitCode = process.waitFor(); System.out.println(&#34;exitCode=&#34; &#43; exitCode); 也可以使用 Runtime.getRuntime().exec()，但实际项目中更推荐 ProcessBuilder。它对命令参数、工作目录、环境变量和输出重定向的控制更清楚，不容易因为空格、引号和平台差异出问题。
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/juc/%E8%BF%9B%E7%A8%8B%E4%B8%8E%E7%BA%BF%E7%A8%8B/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/juc/%E8%BF%9B%E7%A8%8B%E4%B8%8E%E7%BA%BF%E7%A8%8B/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="进程与线程">
+  <meta property="og:description" content="进程和线程是理解 Java 并发前必须先分清的两个概念。简单说：进程负责资源隔离，线程负责执行调度。
+一、核心概念 进程是操作系统进行资源分配的基本单位。每个进程都有相对独立的地址空间、文件句柄、环境变量等资源。
+线程是 CPU 调度的基本单位。同一个进程中的多个线程共享进程资源，例如堆内存、方法区、打开的文件句柄，但每个线程又有自己的程序计数器、虚拟机栈和本地方法栈。
+可以这样理解：
+进程 ├─ 堆内存、方法区、文件句柄等共享资源 ├─ 线程 A：程序计数器、栈、本地方法栈 ├─ 线程 B：程序计数器、栈、本地方法栈 └─ 线程 C：程序计数器、栈、本地方法栈 二、进程和线程的区别 对比项 进程 线程 资源拥有 拥有独立资源空间 共享所属进程资源 调度成本 创建和切换成本较高 创建和切换成本较低 隔离性 隔离性强，一个进程崩溃通常不影响其他进程 隔离性弱，一个线程异常可能影响整个进程 通信方式 需要 IPC、Socket、管道等机制 可直接共享内存，但需要同步控制 Java 对应 Process Thread 多进程更稳定，因为隔离性更强；多线程更轻量，因为线程之间共享资源，通信成本更低。代价也很明显：共享资源如果没有正确同步，就会出现竞态条件、可见性问题、死锁等并发问题。
+三、Java 中创建进程 Java 中可以通过 ProcessBuilder 创建外部进程：
+ProcessBuilder builder = new ProcessBuilder(&#34;java&#34;, &#34;-version&#34;); builder.redirectErrorStream(true); Process process = builder.start(); try (BufferedReader reader = new BufferedReader( new InputStreamReader(process.getInputStream()))) { String line; while ((line = reader.readLine()) != null) { System.out.println(line); } } int exitCode = process.waitFor(); System.out.println(&#34;exitCode=&#34; &#43; exitCode); 也可以使用 Runtime.getRuntime().exec()，但实际项目中更推荐 ProcessBuilder。它对命令参数、工作目录、环境变量和输出重定向的控制更清楚，不容易因为空格、引号和平台差异出问题。">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="juc">
+    <meta property="article:published_time" content="2025-09-02T20:57:07+08:00">
+    <meta property="article:modified_time" content="2025-09-02T20:57:07+08:00">
+
+  
+  <meta itemprop="name" content="进程与线程">
+  <meta itemprop="description" content="进程和线程是理解 Java 并发前必须先分清的两个概念。简单说：进程负责资源隔离，线程负责执行调度。
+一、核心概念 进程是操作系统进行资源分配的基本单位。每个进程都有相对独立的地址空间、文件句柄、环境变量等资源。
+线程是 CPU 调度的基本单位。同一个进程中的多个线程共享进程资源，例如堆内存、方法区、打开的文件句柄，但每个线程又有自己的程序计数器、虚拟机栈和本地方法栈。
+可以这样理解：
+进程 ├─ 堆内存、方法区、文件句柄等共享资源 ├─ 线程 A：程序计数器、栈、本地方法栈 ├─ 线程 B：程序计数器、栈、本地方法栈 └─ 线程 C：程序计数器、栈、本地方法栈 二、进程和线程的区别 对比项 进程 线程 资源拥有 拥有独立资源空间 共享所属进程资源 调度成本 创建和切换成本较高 创建和切换成本较低 隔离性 隔离性强，一个进程崩溃通常不影响其他进程 隔离性弱，一个线程异常可能影响整个进程 通信方式 需要 IPC、Socket、管道等机制 可直接共享内存，但需要同步控制 Java 对应 Process Thread 多进程更稳定，因为隔离性更强；多线程更轻量，因为线程之间共享资源，通信成本更低。代价也很明显：共享资源如果没有正确同步，就会出现竞态条件、可见性问题、死锁等并发问题。
+三、Java 中创建进程 Java 中可以通过 ProcessBuilder 创建外部进程：
+ProcessBuilder builder = new ProcessBuilder(&#34;java&#34;, &#34;-version&#34;); builder.redirectErrorStream(true); Process process = builder.start(); try (BufferedReader reader = new BufferedReader( new InputStreamReader(process.getInputStream()))) { String line; while ((line = reader.readLine()) != null) { System.out.println(line); } } int exitCode = process.waitFor(); System.out.println(&#34;exitCode=&#34; &#43; exitCode); 也可以使用 Runtime.getRuntime().exec()，但实际项目中更推荐 ProcessBuilder。它对命令参数、工作目录、环境变量和输出重定向的控制更清楚，不容易因为空格、引号和平台差异出问题。">
+  <meta itemprop="datePublished" content="2025-09-02T20:57:07+08:00">
+  <meta itemprop="dateModified" content="2025-09-02T20:57:07+08:00">
+  <meta itemprop="wordCount" content="120">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="进程与线程">
+  <meta name="twitter:description" content="进程和线程是理解 Java 并发前必须先分清的两个概念。简单说：进程负责资源隔离，线程负责执行调度。
+一、核心概念 进程是操作系统进行资源分配的基本单位。每个进程都有相对独立的地址空间、文件句柄、环境变量等资源。
+线程是 CPU 调度的基本单位。同一个进程中的多个线程共享进程资源，例如堆内存、方法区、打开的文件句柄，但每个线程又有自己的程序计数器、虚拟机栈和本地方法栈。
+可以这样理解：
+进程 ├─ 堆内存、方法区、文件句柄等共享资源 ├─ 线程 A：程序计数器、栈、本地方法栈 ├─ 线程 B：程序计数器、栈、本地方法栈 └─ 线程 C：程序计数器、栈、本地方法栈 二、进程和线程的区别 对比项 进程 线程 资源拥有 拥有独立资源空间 共享所属进程资源 调度成本 创建和切换成本较高 创建和切换成本较低 隔离性 隔离性强，一个进程崩溃通常不影响其他进程 隔离性弱，一个线程异常可能影响整个进程 通信方式 需要 IPC、Socket、管道等机制 可直接共享内存，但需要同步控制 Java 对应 Process Thread 多进程更稳定，因为隔离性更强；多线程更轻量，因为线程之间共享资源，通信成本更低。代价也很明显：共享资源如果没有正确同步，就会出现竞态条件、可见性问题、死锁等并发问题。
+三、Java 中创建进程 Java 中可以通过 ProcessBuilder 创建外部进程：
+ProcessBuilder builder = new ProcessBuilder(&#34;java&#34;, &#34;-version&#34;); builder.redirectErrorStream(true); Process process = builder.start(); try (BufferedReader reader = new BufferedReader( new InputStreamReader(process.getInputStream()))) { String line; while ((line = reader.readLine()) != null) { System.out.println(line); } } int exitCode = process.waitFor(); System.out.println(&#34;exitCode=&#34; &#43; exitCode); 也可以使用 Runtime.getRuntime().exec()，但实际项目中更推荐 ProcessBuilder。它对命令参数、工作目录、环境变量和输出重定向的控制更清楚，不容易因为空格、引号和平台差异出问题。">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">进程与线程</h1>
+
+    
+      <div class="post-date">September 2, 2025</div>
+    
+
+    <div class="post-content">
+      <p>进程和线程是理解 Java 并发前必须先分清的两个概念。简单说：<strong>进程负责资源隔离，线程负责执行调度</strong>。</p>
+<h2 id="一核心概念">一、核心概念</h2>
+<p>进程是操作系统进行资源分配的基本单位。每个进程都有相对独立的地址空间、文件句柄、环境变量等资源。</p>
+<p>线程是 CPU 调度的基本单位。同一个进程中的多个线程共享进程资源，例如堆内存、方法区、打开的文件句柄，但每个线程又有自己的程序计数器、虚拟机栈和本地方法栈。</p>
+<p>可以这样理解：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">进程
+</span></span><span class="line"><span class="cl"> ├─ 堆内存、方法区、文件句柄等共享资源
+</span></span><span class="line"><span class="cl"> ├─ 线程 A：程序计数器、栈、本地方法栈
+</span></span><span class="line"><span class="cl"> ├─ 线程 B：程序计数器、栈、本地方法栈
+</span></span><span class="line"><span class="cl"> └─ 线程 C：程序计数器、栈、本地方法栈
+</span></span></code></pre></div><h2 id="二进程和线程的区别">二、进程和线程的区别</h2>
+<table>
+  <thead>
+      <tr>
+          <th>对比项</th>
+          <th>进程</th>
+          <th>线程</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>资源拥有</td>
+          <td>拥有独立资源空间</td>
+          <td>共享所属进程资源</td>
+      </tr>
+      <tr>
+          <td>调度成本</td>
+          <td>创建和切换成本较高</td>
+          <td>创建和切换成本较低</td>
+      </tr>
+      <tr>
+          <td>隔离性</td>
+          <td>隔离性强，一个进程崩溃通常不影响其他进程</td>
+          <td>隔离性弱，一个线程异常可能影响整个进程</td>
+      </tr>
+      <tr>
+          <td>通信方式</td>
+          <td>需要 IPC、Socket、管道等机制</td>
+          <td>可直接共享内存，但需要同步控制</td>
+      </tr>
+      <tr>
+          <td>Java 对应</td>
+          <td><code>Process</code></td>
+          <td><code>Thread</code></td>
+      </tr>
+  </tbody>
+</table>
+<p>多进程更稳定，因为隔离性更强；多线程更轻量，因为线程之间共享资源，通信成本更低。代价也很明显：共享资源如果没有正确同步，就会出现竞态条件、可见性问题、死锁等并发问题。</p>
+<h2 id="三java-中创建进程">三、Java 中创建进程</h2>
+<p>Java 中可以通过 <code>ProcessBuilder</code> 创建外部进程：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">ProcessBuilder</span><span class="w"> </span><span class="n">builder</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">ProcessBuilder</span><span class="p">(</span><span class="s">&#34;java&#34;</span><span class="p">,</span><span class="w"> </span><span class="s">&#34;-version&#34;</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">builder</span><span class="p">.</span><span class="na">redirectErrorStream</span><span class="p">(</span><span class="kc">true</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">Process</span><span class="w"> </span><span class="n">process</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">builder</span><span class="p">.</span><span class="na">start</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">try</span><span class="w"> </span><span class="p">(</span><span class="n">BufferedReader</span><span class="w"> </span><span class="n">reader</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">BufferedReader</span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">new</span><span class="w"> </span><span class="n">InputStreamReader</span><span class="p">(</span><span class="n">process</span><span class="p">.</span><span class="na">getInputStream</span><span class="p">())))</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">String</span><span class="w"> </span><span class="n">line</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">while</span><span class="w"> </span><span class="p">((</span><span class="n">line</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">reader</span><span class="p">.</span><span class="na">readLine</span><span class="p">())</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">null</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">System</span><span class="p">.</span><span class="na">out</span><span class="p">.</span><span class="na">println</span><span class="p">(</span><span class="n">line</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kt">int</span><span class="w"> </span><span class="n">exitCode</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">process</span><span class="p">.</span><span class="na">waitFor</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">System</span><span class="p">.</span><span class="na">out</span><span class="p">.</span><span class="na">println</span><span class="p">(</span><span class="s">&#34;exitCode=&#34;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">exitCode</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><p>也可以使用 <code>Runtime.getRuntime().exec()</code>，但实际项目中更推荐 <code>ProcessBuilder</code>。它对命令参数、工作目录、环境变量和输出重定向的控制更清楚，不容易因为空格、引号和平台差异出问题。</p>
+<h2 id="四java-中创建线程">四、Java 中创建线程</h2>
+<p>线程通常通过 <code>Thread</code> 或线程池创建：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">Thread</span><span class="w"> </span><span class="n">thread</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">Thread</span><span class="p">(()</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">System</span><span class="p">.</span><span class="na">out</span><span class="p">.</span><span class="na">println</span><span class="p">(</span><span class="n">Thread</span><span class="p">.</span><span class="na">currentThread</span><span class="p">().</span><span class="na">getName</span><span class="p">());</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">});</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">thread</span><span class="p">.</span><span class="na">start</span><span class="p">();</span><span class="w">
+</span></span></span></code></pre></div><p>生产环境一般不建议无限制地手动创建线程，而是使用线程池统一管理线程数量、任务队列、拒绝策略和关闭流程。</p>
+<h2 id="五总结">五、总结</h2>
+<ul>
+<li>进程是资源分配单位，线程是 CPU 调度单位。</li>
+<li>同一进程内的线程共享堆内存等资源，因此通信方便，但也需要同步。</li>
+<li>Java 可以通过 <code>ProcessBuilder</code> 启动外部进程，通过 <code>Thread</code> 或线程池执行并发任务。</li>
+<li>JUC 主要解决的是多线程共享资源时的同步、协作和任务编排问题。</li>
+</ul>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

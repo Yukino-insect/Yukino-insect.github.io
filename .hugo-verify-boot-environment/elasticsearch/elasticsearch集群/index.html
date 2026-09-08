@@ -1,0 +1,1517 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Elasticsearch 集群 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="ES 集群不是简单地“多启动几个节点”。真正需要理解的是：索引如何被拆成分片，分片如何分配到节点，写入和查询如何在主分片、副本分片、协调节点之间流转，以及一些看起来普通的 settings 为什么会影响集群稳定性。
+本文先从索引 settings 讲起，再看本地三节点集群如何部署。
+索引 settings { &#34;settings&#34;: { /* 1. 分片与副本 */ &#34;number_of_shards&#34;: 3, &#34;number_of_replicas&#34;: 1, /* 2. 写入 &amp; 可见性控制 */ &#34;refresh_interval&#34;: &#34;1s&#34;, /* 3. 查询保护参数 */ &#34;max_result_window&#34;: 10000, /* 4. translog */ &#34;translog&#34;: { &#34;durability&#34;: &#34;request&#34;, &#34;sync_interval&#34;: &#34;5s&#34; }, /* 5. merge / segment 行为 */ &#34;merge&#34;: { &#34;policy&#34;: { &#34;segments_per_tier&#34;: 10, &#34;max_merged_segment&#34;: &#34;5gb&#34; } }, /* 6. 分词器分析配置 */ &#34;analysis&#34;: { &#34;analyzer&#34;: { /* 默认分析器 */ &#34;default&#34;: { &#34;type&#34;: &#34;custom&#34;, &#34;tokenizer&#34;: &#34;standard&#34;, &#34;filter&#34;: [ &#34;lowercase&#34; ] }, /* 查询期同义词分析器（推荐） */ &#34;search_synonym&#34;: { &#34;type&#34;: &#34;custom&#34;, &#34;tokenizer&#34;: &#34;whitespace&#34;, &#34;filter&#34;: [ &#34;lowercase&#34;, &#34;synonym_filter&#34; ] } }, &#34;filter&#34;: { /* 同义词过滤器 */ &#34;synonym_filter&#34;: { &#34;type&#34;: &#34;synonym&#34;, &#34;lenient&#34;: true, &#34;synonyms&#34;: [ &#34;oa, dingding&#34;, &#34;crm, customer&#34; ] } } } } } 分片与副本 &#34;number_of_shards&#34;: 3, &#34;number_of_replicas&#34;: 1 该配置用于设置 ES 索引的主分片数量和副本数量。注意，number_of_replicas 配置的是每个主分片有几份副本，不是配置“从节点数量”。ES 的副本是 Shard 的拷贝，会被分配到 data 节点上。
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/elasticsearch/elasticsearch%E9%9B%86%E7%BE%A4/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/elasticsearch/elasticsearch%E9%9B%86%E7%BE%A4/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="Elasticsearch 集群">
+  <meta property="og:description" content="ES 集群不是简单地“多启动几个节点”。真正需要理解的是：索引如何被拆成分片，分片如何分配到节点，写入和查询如何在主分片、副本分片、协调节点之间流转，以及一些看起来普通的 settings 为什么会影响集群稳定性。
+本文先从索引 settings 讲起，再看本地三节点集群如何部署。
+索引 settings { &#34;settings&#34;: { /* 1. 分片与副本 */ &#34;number_of_shards&#34;: 3, &#34;number_of_replicas&#34;: 1, /* 2. 写入 &amp; 可见性控制 */ &#34;refresh_interval&#34;: &#34;1s&#34;, /* 3. 查询保护参数 */ &#34;max_result_window&#34;: 10000, /* 4. translog */ &#34;translog&#34;: { &#34;durability&#34;: &#34;request&#34;, &#34;sync_interval&#34;: &#34;5s&#34; }, /* 5. merge / segment 行为 */ &#34;merge&#34;: { &#34;policy&#34;: { &#34;segments_per_tier&#34;: 10, &#34;max_merged_segment&#34;: &#34;5gb&#34; } }, /* 6. 分词器分析配置 */ &#34;analysis&#34;: { &#34;analyzer&#34;: { /* 默认分析器 */ &#34;default&#34;: { &#34;type&#34;: &#34;custom&#34;, &#34;tokenizer&#34;: &#34;standard&#34;, &#34;filter&#34;: [ &#34;lowercase&#34; ] }, /* 查询期同义词分析器（推荐） */ &#34;search_synonym&#34;: { &#34;type&#34;: &#34;custom&#34;, &#34;tokenizer&#34;: &#34;whitespace&#34;, &#34;filter&#34;: [ &#34;lowercase&#34;, &#34;synonym_filter&#34; ] } }, &#34;filter&#34;: { /* 同义词过滤器 */ &#34;synonym_filter&#34;: { &#34;type&#34;: &#34;synonym&#34;, &#34;lenient&#34;: true, &#34;synonyms&#34;: [ &#34;oa, dingding&#34;, &#34;crm, customer&#34; ] } } } } } 分片与副本 &#34;number_of_shards&#34;: 3, &#34;number_of_replicas&#34;: 1 该配置用于设置 ES 索引的主分片数量和副本数量。注意，number_of_replicas 配置的是每个主分片有几份副本，不是配置“从节点数量”。ES 的副本是 Shard 的拷贝，会被分配到 data 节点上。">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="elasticsearch">
+    <meta property="article:published_time" content="2026-03-17T21:34:21+08:00">
+    <meta property="article:modified_time" content="2026-03-17T21:34:21+08:00">
+
+  
+  <meta itemprop="name" content="Elasticsearch 集群">
+  <meta itemprop="description" content="ES 集群不是简单地“多启动几个节点”。真正需要理解的是：索引如何被拆成分片，分片如何分配到节点，写入和查询如何在主分片、副本分片、协调节点之间流转，以及一些看起来普通的 settings 为什么会影响集群稳定性。
+本文先从索引 settings 讲起，再看本地三节点集群如何部署。
+索引 settings { &#34;settings&#34;: { /* 1. 分片与副本 */ &#34;number_of_shards&#34;: 3, &#34;number_of_replicas&#34;: 1, /* 2. 写入 &amp; 可见性控制 */ &#34;refresh_interval&#34;: &#34;1s&#34;, /* 3. 查询保护参数 */ &#34;max_result_window&#34;: 10000, /* 4. translog */ &#34;translog&#34;: { &#34;durability&#34;: &#34;request&#34;, &#34;sync_interval&#34;: &#34;5s&#34; }, /* 5. merge / segment 行为 */ &#34;merge&#34;: { &#34;policy&#34;: { &#34;segments_per_tier&#34;: 10, &#34;max_merged_segment&#34;: &#34;5gb&#34; } }, /* 6. 分词器分析配置 */ &#34;analysis&#34;: { &#34;analyzer&#34;: { /* 默认分析器 */ &#34;default&#34;: { &#34;type&#34;: &#34;custom&#34;, &#34;tokenizer&#34;: &#34;standard&#34;, &#34;filter&#34;: [ &#34;lowercase&#34; ] }, /* 查询期同义词分析器（推荐） */ &#34;search_synonym&#34;: { &#34;type&#34;: &#34;custom&#34;, &#34;tokenizer&#34;: &#34;whitespace&#34;, &#34;filter&#34;: [ &#34;lowercase&#34;, &#34;synonym_filter&#34; ] } }, &#34;filter&#34;: { /* 同义词过滤器 */ &#34;synonym_filter&#34;: { &#34;type&#34;: &#34;synonym&#34;, &#34;lenient&#34;: true, &#34;synonyms&#34;: [ &#34;oa, dingding&#34;, &#34;crm, customer&#34; ] } } } } } 分片与副本 &#34;number_of_shards&#34;: 3, &#34;number_of_replicas&#34;: 1 该配置用于设置 ES 索引的主分片数量和副本数量。注意，number_of_replicas 配置的是每个主分片有几份副本，不是配置“从节点数量”。ES 的副本是 Shard 的拷贝，会被分配到 data 节点上。">
+  <meta itemprop="datePublished" content="2026-03-17T21:34:21+08:00">
+  <meta itemprop="dateModified" content="2026-03-17T21:34:21+08:00">
+  <meta itemprop="wordCount" content="1277">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Elasticsearch 集群">
+  <meta name="twitter:description" content="ES 集群不是简单地“多启动几个节点”。真正需要理解的是：索引如何被拆成分片，分片如何分配到节点，写入和查询如何在主分片、副本分片、协调节点之间流转，以及一些看起来普通的 settings 为什么会影响集群稳定性。
+本文先从索引 settings 讲起，再看本地三节点集群如何部署。
+索引 settings { &#34;settings&#34;: { /* 1. 分片与副本 */ &#34;number_of_shards&#34;: 3, &#34;number_of_replicas&#34;: 1, /* 2. 写入 &amp; 可见性控制 */ &#34;refresh_interval&#34;: &#34;1s&#34;, /* 3. 查询保护参数 */ &#34;max_result_window&#34;: 10000, /* 4. translog */ &#34;translog&#34;: { &#34;durability&#34;: &#34;request&#34;, &#34;sync_interval&#34;: &#34;5s&#34; }, /* 5. merge / segment 行为 */ &#34;merge&#34;: { &#34;policy&#34;: { &#34;segments_per_tier&#34;: 10, &#34;max_merged_segment&#34;: &#34;5gb&#34; } }, /* 6. 分词器分析配置 */ &#34;analysis&#34;: { &#34;analyzer&#34;: { /* 默认分析器 */ &#34;default&#34;: { &#34;type&#34;: &#34;custom&#34;, &#34;tokenizer&#34;: &#34;standard&#34;, &#34;filter&#34;: [ &#34;lowercase&#34; ] }, /* 查询期同义词分析器（推荐） */ &#34;search_synonym&#34;: { &#34;type&#34;: &#34;custom&#34;, &#34;tokenizer&#34;: &#34;whitespace&#34;, &#34;filter&#34;: [ &#34;lowercase&#34;, &#34;synonym_filter&#34; ] } }, &#34;filter&#34;: { /* 同义词过滤器 */ &#34;synonym_filter&#34;: { &#34;type&#34;: &#34;synonym&#34;, &#34;lenient&#34;: true, &#34;synonyms&#34;: [ &#34;oa, dingding&#34;, &#34;crm, customer&#34; ] } } } } } 分片与副本 &#34;number_of_shards&#34;: 3, &#34;number_of_replicas&#34;: 1 该配置用于设置 ES 索引的主分片数量和副本数量。注意，number_of_replicas 配置的是每个主分片有几份副本，不是配置“从节点数量”。ES 的副本是 Shard 的拷贝，会被分配到 data 节点上。">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">Elasticsearch 集群</h1>
+
+    
+      <div class="post-date">March 17, 2026</div>
+    
+
+    <div class="post-content">
+      <p>ES 集群不是简单地“多启动几个节点”。真正需要理解的是：索引如何被拆成分片，分片如何分配到节点，写入和查询如何在主分片、副本分片、协调节点之间流转，以及一些看起来普通的 settings 为什么会影响集群稳定性。</p>
+<p>本文先从索引 settings 讲起，再看本地三节点集群如何部署。</p>
+<h2 id="索引-settings">索引 settings</h2>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;settings&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="err">/*</span> <span class="err">1.</span> <span class="err">分片与副本</span> <span class="err">*/</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;number_of_shards&#34;</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;number_of_replicas&#34;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="err">/*</span> <span class="err">2.</span> <span class="err">写入</span> <span class="err">&amp;</span> <span class="err">可见性控制</span> <span class="err">*/</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;refresh_interval&#34;</span><span class="p">:</span> <span class="s2">&#34;1s&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="err">/*</span> <span class="err">3.</span> <span class="err">查询保护参数</span> <span class="err">*/</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;max_result_window&#34;</span><span class="p">:</span> <span class="mi">10000</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="err">/*</span> <span class="err">4.</span> <span class="err">translog</span> <span class="err">*/</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;translog&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;durability&#34;</span><span class="p">:</span> <span class="s2">&#34;request&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;sync_interval&#34;</span><span class="p">:</span> <span class="s2">&#34;5s&#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">},</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="err">/*</span> <span class="err">5.</span> <span class="err">merge</span> <span class="err">/</span> <span class="err">segment</span> <span class="err">行为</span> <span class="err">*/</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;merge&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;policy&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&#34;segments_per_tier&#34;</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&#34;max_merged_segment&#34;</span><span class="p">:</span> <span class="s2">&#34;5gb&#34;</span>
+</span></span><span class="line"><span class="cl">      <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">},</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="err">/*</span> <span class="err">6.</span> <span class="err">分词器分析配置</span> <span class="err">*/</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;analysis&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;analyzer&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="err">/*</span> <span class="err">默认分析器</span> <span class="err">*/</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&#34;default&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">          <span class="nt">&#34;type&#34;</span><span class="p">:</span> <span class="s2">&#34;custom&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">          <span class="nt">&#34;tokenizer&#34;</span><span class="p">:</span> <span class="s2">&#34;standard&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">          <span class="nt">&#34;filter&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">            <span class="s2">&#34;lowercase&#34;</span>
+</span></span><span class="line"><span class="cl">          <span class="p">]</span>
+</span></span><span class="line"><span class="cl">        <span class="p">},</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">        <span class="err">/*</span> <span class="err">查询期同义词分析器（推荐）</span> <span class="err">*/</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&#34;search_synonym&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">          <span class="nt">&#34;type&#34;</span><span class="p">:</span> <span class="s2">&#34;custom&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">          <span class="nt">&#34;tokenizer&#34;</span><span class="p">:</span> <span class="s2">&#34;whitespace&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">          <span class="nt">&#34;filter&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">            <span class="s2">&#34;lowercase&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">            <span class="s2">&#34;synonym_filter&#34;</span>
+</span></span><span class="line"><span class="cl">          <span class="p">]</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">      <span class="p">},</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;filter&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="err">/*</span> <span class="err">同义词过滤器</span> <span class="err">*/</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&#34;synonym_filter&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">          <span class="nt">&#34;type&#34;</span><span class="p">:</span> <span class="s2">&#34;synonym&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">          <span class="nt">&#34;lenient&#34;</span><span class="p">:</span> <span class="kc">true</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">          <span class="nt">&#34;synonyms&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">            <span class="s2">&#34;oa, dingding&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">            <span class="s2">&#34;crm, customer&#34;</span>
+</span></span><span class="line"><span class="cl">          <span class="p">]</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">      <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><h3 id="分片与副本">分片与副本</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="s2">&#34;number_of_shards&#34;</span><span class="err">:</span> <span class="mi">3</span><span class="err">,</span>
+</span></span><span class="line"><span class="cl"><span class="s2">&#34;number_of_replicas&#34;</span><span class="err">:</span> <span class="mi">1</span>
+</span></span></code></pre></div><p>该配置用于设置 ES 索引的<strong>主分片数量</strong>和<strong>副本数量</strong>。注意，<code>number_of_replicas</code> 配置的是每个主分片有几份副本，不是配置“从节点数量”。ES 的副本是 Shard 的拷贝，会被分配到 data 节点上。</p>
+<h4 id="number_of_shards-分片"><code>number_of_shards</code> 分片</h4>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">一个 index
+</span></span><span class="line"><span class="cl"> ├── shard 0（Lucene Index）
+</span></span><span class="line"><span class="cl"> ├── shard 1（Lucene Index）
+</span></span><span class="line"><span class="cl"> └── shard 2（Lucene Index）
+</span></span></code></pre></div><p>当客户端向一个 index 写入数据时，ES 会通过路由策略选择一个分片</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">routing（默认是 _id）
+</span></span><span class="line"><span class="cl">   ↓
+</span></span><span class="line"><span class="cl">hash(routing) % number_of_shards
+</span></span><span class="line"><span class="cl">   ↓
+</span></span><span class="line"><span class="cl">确定主 Shard
+</span></span></code></pre></div><p>当查询分片时协调者节点会执行以下流程</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Client
+</span></span><span class="line"><span class="cl"> ↓
+</span></span><span class="line"><span class="cl">Coordinator Node
+</span></span><span class="line"><span class="cl"> ↓
+</span></span><span class="line"><span class="cl">并发向所有相关 Shard 发送请求
+</span></span><span class="line"><span class="cl"> ↓
+</span></span><span class="line"><span class="cl">各 Shard 本地执行查询
+</span></span><span class="line"><span class="cl"> ↓
+</span></span><span class="line"><span class="cl">Coordinator 汇总、排序、返回
+</span></span></code></pre></div><p>ES 是通过 hash 选择分片的，如果该参数在线上被修改，那之前的 hash 规则将被废除。这是将是灾难性的事故。因此，该参数只能在构建索引是决定，不能在运行时修改。</p>
+<p>在决定分片时，如果 Shard 太少，那么单 Shard 数据量过大，查询或 merge 压力集中，容易达到单点性能的瓶颈；如果 Shard 太多，每个 Shard 都有 Segment、file handle、内存结构，查询要 fan-out 到大量 Shard。集群管理成本将急剧上升。</p>
+<h4 id="number_of_replicas-副本"><code>number_of_replicas</code> 副本</h4>
+<p>副本是每一个主分片的数据冗余，用于保证主分片所在服务挂掉之后，从分片可以继续提供服务。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">shard 0 -&gt; 1 个 replica
+</span></span><span class="line"><span class="cl">shard 1 -&gt; 1 个 replica
+</span></span><span class="line"><span class="cl">shard 2 -&gt; 1 个 replica
+</span></span></code></pre></div><p>当写请求到达主分片时，主分片会把同一写操作复制到副本分片，并在满足写入确认条件后返回。主分片挂掉后，符合条件的副本分片会被提升为新的主分片。读请求可以被负载均衡到主分片或副本分片，从而提升查询吞吐。副本参数可以在运行时修改。</p>
+<p><code>number_of_shards</code> 决定了 ES 索引的数据切分方式和并行处理能力，是容量与写入扩展性的基础；<code>number_of_replicas</code> 决定了数据的冗余副本数量，用于提供高可用和提升查询吞吐。这两个参数共同影响索引的性能、稳定性和资源消耗，是 ES 索引设计中的核心参数。</p>
+<h3 id="写入--可见性控制">写入 &amp; 可见性控制</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="s2">&#34;refresh_interval&#34;</span><span class="err">:</span> <span class="s2">&#34;1s&#34;</span>
+</span></span></code></pre></div><p>该参数<strong>用于控制写入数据后多久可以被搜索引擎看到。</strong></p>
+<p>该参数控制的是写数据多久对搜索可见。从这可以知道，当数据写入 ES 中时是不能被立刻查到的。因此，ES 被称为近实时的数据库。</p>
+<p>ES 的底层是 Lucene，它的核心特性是写入快，但是搜索只能看到已 refresh 的 Segment。整个的写入流程大致如下：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">写请求
+</span></span><span class="line"><span class="cl"> ↓
+</span></span><span class="line"><span class="cl">内存 buffer（Indexing Buffer）
+</span></span><span class="line"><span class="cl"> ↓
+</span></span><span class="line"><span class="cl">refresh
+</span></span><span class="line"><span class="cl"> ↓
+</span></span><span class="line"><span class="cl">生成新的 Segment（可被搜索）
+</span></span></code></pre></div><p>从上图可以清晰的看到，即使数据写入成功，如果没有 refresh 的话，是不会生成 Segment 将数据落盘的，这将直接导致不可搜索。</p>
+<p>refresh 的主要作用就是把内存中的数据刷新成一个 Lucene segment，并打开一个新的 Searcher。Searcher 是 ES 在 Shard 层基于 Lucene 提供的只读查询视图，其封装了一组不可变 Segment，用于在高并发场景下提供一致、无锁、近实时的搜索能力。每当产生新的 Segment、合并出新的 Segment 都会生成一个 Searcher 供用户查询。</p>
+<p><code>refresh_interval: 1s</code> 表示 ES 每 1 秒才会将内存中的数据落盘，数据 1 秒后才可以被搜索到，这就是 ES 所谓的近实时搜索。</p>
+<p>需要注意的是，refresh 操作是有成本的，每一次 refresh 都会，创建新 Segment、打开新 Searcher、增加 Segment 数量、触发后续 merge。refresh 越频繁影响越大，包括：Segment 数量变多、merge 压力增大、写入吞吐下降、IO 抖动增加。因为 refresh 涉及到了磁盘 IO。<strong>但是 refresh 并不保证数据安全，数据写入安全是由 <code>translog</code> 保证的。</strong></p>
+<h3 id="查询保护参数">查询保护参数</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="s2">&#34;max_result_window&#34;</span><span class="err">:</span> <span class="mi">10000</span>
+</span></span></code></pre></div><p>该参数<strong>用于控制一次可以读多少数据</strong>，是为了限制一次分页查询中 <code>from + size</code> 的最大值。它主要为了缓解分页深度问题。</p>
+<p>MySQL 深度分页问题产生的原因：MySQL 要先读取前 10000 条数据，再丢弃前 9999 条数据，再拿到指定页数和数量的数据。而 ES 比这个开销更大，它的一次分页查询要涉及</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">每个 Shard：取 from + size 条数据
+</span></span><span class="line"><span class="cl">  ↓
+</span></span><span class="line"><span class="cl">Coordinator 汇总所有 Shard 的结果
+</span></span><span class="line"><span class="cl">  ↓
+</span></span><span class="line"><span class="cl">全局排序
+</span></span><span class="line"><span class="cl">  ↓
+</span></span><span class="line"><span class="cl">丢弃前 from 条
+</span></span><span class="line"><span class="cl">  ↓
+</span></span><span class="line"><span class="cl">返回 size 条
+</span></span></code></pre></div><p>它要查询每一个分片的数据，每一个分片数据分页以后汇总，再总体分页。这将对 CPU 造成极大的压力。10000 是 ES 团队给出的一个安全阈值，防止将 JVM 撑爆。</p>
+<p>除此之外，ES 团队提供了 <code>search_after</code>，用于解决深度分页问题。它是基于上一次查询的位置继续查询</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;size&#34;</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;sort&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span> <span class="nt">&#34;create_time&#34;</span><span class="p">:</span> <span class="s2">&#34;desc&#34;</span> <span class="p">},</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span> <span class="nt">&#34;_id&#34;</span><span class="p">:</span> <span class="s2">&#34;desc&#34;</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">],</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;search_after&#34;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&#34;2024-01-01T10:00:00&#34;</span><span class="p">,</span> <span class="s2">&#34;abc123&#34;</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>或者使用 <code>Scroll</code> 批量导出</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">POST index/_search?scroll=1m
+</span></span></span></code></pre></div><p><code>scroll</code> 查询用于在某一时间点对查询结果创建一个快照，并以游标方式批量遍历该结果集，常用于全量数据导出、离线处理和数据同步。<code>scroll</code> 并不适合实时分页查询，其设计目标是稳定遍历而非用户交互。</p>
+<p><code>scroll=1m</code> 含义是如果在 1 分钟内没有继续拉取下一页，这个 scroll context 就会被自动清理</p>
+<p>使用 <code>scroll</code> 的步骤：</p>
+<p>第一次查询</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">POST index/_search?scroll=1m
+</span></span></span><span class="line"><span class="cl"><span class="err">{
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;size&#34;: 1000,
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;_source&#34;: [&#34;id&#34;, &#34;name&#34;, &#34;age&#34;],   // 建议只取需要的字段
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;query&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;match_all&#34;: {}
+</span></span></span><span class="line"><span class="cl"><span class="err">  },
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;sort&#34;: [&#34;_doc&#34;]                    // 非常重要：提高效率
+</span></span></span><span class="line"><span class="cl"><span class="err">}
+</span></span></span></code></pre></div><p>返回值</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;_scroll_id&#34;</span><span class="p">:</span> <span class="s2">&#34;DXF1ZXJ5QW5kRmV0Y2gBAAAAA...&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;hits&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;hits&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">      <span class="p">{</span> <span class="nt">&#34;_id&#34;</span><span class="p">:</span> <span class="s2">&#34;1&#34;</span><span class="p">,</span> <span class="nt">&#34;_source&#34;</span><span class="p">:</span> <span class="p">{</span><span class="err">...</span><span class="p">}</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">]</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>这一步会建立查询快照，返回第一批数据和一个 <code>_scroll_id</code>，这个 id 类似该快照的索引。<code>size</code> 参数代表本次查询需要返回的数量。</p>
+<p><code>scroll</code> 查询可以分批遍历一次查询命中的全部结果集，其总返回数量等于初始查询的命中总数。<code>scroll</code> 的性能开销主要来自搜索上下文的长期占用，持有 Segment 和 Searcher 的引用导致阻塞 Segment merge 等问题。</p>
+<blockquote>
+<p><code>scroll</code> 会通过固定旧的 Searcher 视图，长期持有历史 Segment 的引用，从而阻止 merge 后旧 Segment 的回收，导致 Segment 数膨胀、IO 压力增大和查询性能下降，因此在现代 ES 中已不再推荐用于深度分页。</p></blockquote>
+<p>合理控制批大小、并发数量和及时清理 <code>scroll</code> 上下文，可以避免对集群造成显著性能压力。</p>
+<p>接着带着该 <code>_scroll_id</code> 循环拉取下一批数据</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">POST /_search/scroll
+</span></span></span><span class="line"><span class="cl"><span class="err">{
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;scroll&#34;: &#34;1m&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;scroll_id&#34;: &#34;DXF1ZXJ5QW5kRmV0Y2gBAAAAA...&#34;
+</span></span></span><span class="line"><span class="cl"><span class="err">}
+</span></span></span></code></pre></div><p>用完后立即清除 scroll</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">DELETE /_search/scroll
+</span></span></span><span class="line"><span class="cl"><span class="err">{
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;scroll_id&#34;: &#34;DXF1ZXJ5QW5kRmV0Y2gBAAAAA...&#34;
+</span></span></span><span class="line"><span class="cl"><span class="err">}
+</span></span></span></code></pre></div><p><code>max_result_window</code> 用于限制基于 <code>from/size</code> 的分页查询中 <code>from</code> 与 <code>size</code> 之和的最大值，防止深度分页在分布式查询和全局排序过程中消耗过多内存和 CPU。它并不限制一次查询返回的总数据量，而是限制分页深度，深度分页应使用 <code>search_after</code> 或 <code>scroll</code> 等方式替代。</p>
+<h3 id="translog">translog</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="s2">&#34;translog&#34;</span><span class="err">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;durability&#34;</span><span class="p">:</span> <span class="s2">&#34;request&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;sync_interval&#34;</span><span class="p">:</span> <span class="s2">&#34;5s&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p><strong>这个参数是 ES 写入可靠性与性能权衡的关键参数。</strong></p>
+<p><code>translog</code> 是 ES 的写入日志，<code>durability</code> 决定写入确定前是否强制落盘，<code>sync_interval</code> 决定多久把日志刷新到磁盘一次。</p>
+<p><code>translog</code> 可以保证数据的安全性，即使进程异常数据也可以恢复，<code>refresh</code> 则会在内存中生成 <code>segment</code> 保证数据可搜索。而 <code>flush</code> 是一个持久化检查点操作，它通过 Lucene commit 将当前磁盘上的 Segment 标记为一个安全状态，并清空旧的 translog，从而减少崩溃恢复时需要回放的日志量。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">客户端写请求
+</span></span><span class="line"><span class="cl">   ↓
+</span></span><span class="line"><span class="cl">写入 indexing buffer（内存）
+</span></span><span class="line"><span class="cl">   ↓
+</span></span><span class="line"><span class="cl">追加写入 translog
+</span></span><span class="line"><span class="cl">   ↓
+</span></span><span class="line"><span class="cl">返回成功（客户端看到成功）
+</span></span><span class="line"><span class="cl">   ↓
+</span></span><span class="line"><span class="cl">refresh -&gt; 可搜索
+</span></span><span class="line"><span class="cl">   ↓
+</span></span><span class="line"><span class="cl">flush -&gt; 持久化检查点操作
+</span></span></code></pre></div><p>ES 在一次 Index 请求中，会在同一线程内串行完成 Lucene Index buffer 写入和 translog 追加；写入是否被确认成功并不取决于 Index buffer，而是取决于 translog 是否满足 durability 要求（如 request 模式下完成 fsync）。</p>
+<p>如果数据写入了 Index buffer，没有执行 translog 追加，进程崩溃了。客户端将会返回失败响应，ES 是不会认为该条数据写入成功。</p>
+<p>在 ES 中，<code>durability</code> 用于控制 translog 的持久化策略。当 <code>durability = request</code> 时，每一个写请求在返回成功之前，必须将对应的 translog 通过 <code>fsync</code> 同步到磁盘，这是最安全但性能开销较高的模式；当 <code>durability = async</code> 时，写请求在 translog 写入操作系统缓存后即可返回成功，不等待实际刷盘；后台线程会按照 <code>sync_interval</code>（如 5 秒）周期性地执行 translog 的 <code>fsync</code>，因此在异常宕机时，最多可能丢失一个 <code>sync_interval</code> 时间窗口内的数据。</p>
+<p>在 ES 中，是否执行 <code>fsync</code> 决定了数据是否真正持久化；在 <code>durability = request</code> 模式下，没有完成 <code>fsync</code> 就不会认为写入成功，而在 <code>durability = async</code> 模式下，即使尚未执行 <code>fsync</code>，ES 也可能已经返回成功。</p>
+<p>因此，<code>durability = async</code> 模式下，如果 translog 数据写入了缓存，但是没有落盘，ES 也会返回写入成功。这时如果进程崩溃，下次恢复时这部分数据就丢失了。</p>
+<blockquote>
+<p><code>fsync</code> 是一个系统调用，用于强制将文件的脏数据和元数据从操作系统缓存同步到物理存储设备</p></blockquote>
+<h3 id="merge--segment-行为">merge / Segment 行为</h3>
+<p><strong>用于控制 segment 的合并策略</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="s2">&#34;merge&#34;</span><span class="err">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;policy&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;segments_per_tier&#34;</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;max_merged_segment&#34;</span><span class="p">:</span> <span class="s2">&#34;5gb&#34;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>Segment 是什么呢？</p>
+<p>它本质上是一组不可变的索引文件。Segment 是不可变的，一旦生成便不能修改，不能更新。更新删除只是打标记，旧数据仍然存在。每次 refresh 都会产生新 Segment。refresh 越频繁 Segment 越多。如果不主动合并的话。一次查询就需要对每一个 Segment 执行一次操作。最后再将结果合并。这样 CPU 开销将变大，Cache 命中率越低。</p>
+<p>前面讲到，删除只是标记，旧数据仍在 Segment 中，只有执行了 merge 才会真正清理理应该删除的数据。merge 是把多个小 Segment 合并成一个更大的 Segment，并在过程中清理已删除的数据。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Segment A + Segment B + Segment C
+</span></span><span class="line"><span class="cl"> ↓
+</span></span><span class="line"><span class="cl">生成一个新的 Segment D
+</span></span><span class="line"><span class="cl"> ↓
+</span></span><span class="line"><span class="cl">删除旧 Segment
+</span></span></code></pre></div><p><code>segments_per_tier</code> 参数的含义是每一层（tier）允许存在的 Segment 数量上限。Segment 在 ES 中是会按大小分层存储的：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">小 segment   ← tier 0
+</span></span><span class="line"><span class="cl">中 segment   ← tier 1
+</span></span><span class="line"><span class="cl">大 segment   ← tier 2
+</span></span></code></pre></div><p>相同数量级的在一层，当某一层达到数量上限就会触发 merge。这样 Segment 数量级小的合并更积极，查询起来更快，IO 压力等大；数量级大的合并更保守，写入更稳，查询略慢。</p>
+<p>当某一层的 Segment 数超过这个值，就会触发 merge，所以这个参数值的大小就决定了合并的频繁程度以及程序中 Segment 的多少。</p>
+<p><code>max_merged_segment</code> 代表合并后的 Segment，最大不能超过的数量级。Lucene 在 merge 时，不会生成超过这个限制的 Segment。这个值不能过大。超大的 Segment 会导致 <code>merge</code> 代价巨大。</p>
+<p>在 ES 中，Segment 是 Lucene 索引的不可变最小单元，每次 refresh 都会生成新的 Segment。随着写入和删除的发生，Segment 数量会不断增加，导致查询成本上升和磁盘空间浪费。merge 操作通过将多个小 Segment 合并为更大的 Segment，清理已删除的数据，从而提升查询性能并回收空间。<code>segments_per_tier</code> 控制每个层级允许的 Segment 数量，<code>max_merged_segment</code> 用于限制单个合并后 Segment 的最大大小，两者共同在查询性能、IO 成本和稳定性之间取得平衡。</p>
+<h3 id="分词器分析配置">分词器分析配置</h3>
+<p><strong>用于配置分词器</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="s2">&#34;analysis&#34;</span><span class="err">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;tokenizer&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;comma_tokenizer&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;type&#34;</span><span class="p">:</span> <span class="s2">&#34;pattern&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;pattern&#34;</span><span class="p">:</span> <span class="s2">&#34;,&#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">},</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;filter&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;my_lowercase&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;type&#34;</span><span class="p">:</span> <span class="s2">&#34;lowercase&#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">},</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;analyzer&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;my_analyzer&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;type&#34;</span><span class="p">:</span> <span class="s2">&#34;custom&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;tokenizer&#34;</span><span class="p">:</span> <span class="s2">&#34;comma_tokenizer&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;filter&#34;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&#34;my_lowercase&#34;</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">analysis
+</span></span><span class="line"><span class="cl"> ├── analyzer        ← 定义“完整分析流程”
+</span></span><span class="line"><span class="cl"> │     └──（引用）
+</span></span><span class="line"><span class="cl"> │          ├── char_filter
+</span></span><span class="line"><span class="cl"> │          ├── tokenizer
+</span></span><span class="line"><span class="cl"> │          └── token_filter（filter）
+</span></span><span class="line"><span class="cl"> │
+</span></span><span class="line"><span class="cl"> ├── tokenizer       ← 定义“如何切词”
+</span></span><span class="line"><span class="cl"> │
+</span></span><span class="line"><span class="cl"> ├── filter          ← 定义“如何加工 token”
+</span></span><span class="line"><span class="cl"> │
+</span></span><span class="line"><span class="cl"> └── char_filter     ← 定义“分词前如何改文本”
+</span></span></code></pre></div><p>ES 的分词器配置位于 Index settings 的 analysis 模块中，由 analyzer、tokenizer、token filter 和 char filter 组成。analyzer 通过组合这三类组件定义文本从原始字符串到最终 token 的完整处理流程。合理设计分词器是搜索效果与性能的基础，生产中需谨慎修改并优先在查询阶段使用复杂分析逻辑。</p>
+<p><code>analysis</code> 是 ES 分词体系的顶级容器，用于定义分词相关的组件，包括 analyzer、tokenizer、token filter 和 char filter。analyzer、tokenizer、token filter 和 char filter 之间是组合关系而非同级关系。</p>
+<p>analyzer 本身不实现分词逻辑，而是通过引用在 analysis 下定义的 tokenizer、filter 和 char_filter，将它们按顺序组装成一条完整的文本分析流水线。</p>
+<p>分词器的处理流程是 char_filter 文本预处理、tokenizer 切词、token filter 词加工</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">char_filter -&gt; tokenizer -&gt; filter
+</span></span></code></pre></div><p><code>char_filter</code> 会对原始字符串做字符级别的替换或清洗，比如去除 HTML 标签，全角改为半角，符号统一，特殊字符替换。</p>
+<p><code>tokenizer</code> 是真正的分词器，它会将一整段文本切成一个一个的 token 词项。</p>
+<p>ES 内置的分词器有：</p>
+<ul>
+<li><code>standard</code></li>
+<li><code>whitespace</code></li>
+<li><code>simple</code></li>
+<li><code>letter</code></li>
+<li><code>pattern</code></li>
+</ul>
+<p>等</p>
+<p>filter 会对词再加工，如小写化，去停用词、同义词拓展等操作都在这一阶段</p>
+<p>ES 的分词流程由 char_filter、tokenizer 和 token filter 三个阶段组成。char_filter 用于在分词前对原始文本进行字符级预处理，tokenizer 负责将文本切分为 token，而 token filter 则对这些 token 进行进一步加工。三者按固定顺序执行，共同构成 analyzer 的完整分析流程。</p>
+<h2 id="集群部署">集群部署</h2>
+<p>首先要清楚，Index 是一个逻辑概念，代表一个 Shard 集合。Shard 是物理执行单元，每一个 Shard 本质上是一个独立的 Lucene Index。一个 Index 会被切成 n 个 Shard。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">PUT my_index
+</span></span></span><span class="line"><span class="cl"><span class="err">{
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;settings&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;number_of_shards&#34;: 3
+</span></span></span><span class="line"><span class="cl"><span class="err">  }
+</span></span></span><span class="line"><span class="cl"><span class="err">}
+</span></span></span></code></pre></div><p>这个配置就代表着当前索引会有 3 个分片，这 3 个 Shard 会被 master 节点分配到 data 节点上。</p>
+<p>Document 是最小的业务数据单位，它的写入流程如下：</p>
+<ol>
+<li>计算路由值 routing，routing 默认是 <code>_id</code>，也可以自定义 routing，例如按 userId 路由</li>
+<li>通过哈希 <code>shard_id = hash(routing) % number_of_primary_shards</code> 确定文档应该落到哪一个 Primary Shard。因此主分片数一旦确定，后续调整一般需要执行 <code>reindex</code></li>
+<li>写入Primary Shard 的 Lucene Segment</li>
+</ol>
+<p>Segment 是一个不可变的倒排索引文件块</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Shard
+</span></span><span class="line"><span class="cl"> ├── Segment_1
+</span></span><span class="line"><span class="cl"> ├── Segment_2
+</span></span><span class="line"><span class="cl"> ├── Segment_3
+</span></span><span class="line"><span class="cl"> └── Segment_n
+</span></span></code></pre></div><p>当新文档写入成功并且 <code>refresh</code> 后，就会创建新 Segment。当我们执行查询操作时：</p>
+<ol>
+<li>客户端请求打到任意节点，该节点会临时充当 coordinating node</li>
+<li>coordinating node 根据路由表，将请求分发到 相关 Shard</li>
+<li>每个 Shard 本地执行查询，返回 topN 的候选结果</li>
+<li>协调节点从对应 Shard 拉取真实 <code>_source</code> 等字段</li>
+<li>归并、排序、返回结果</li>
+</ol>
+<p>由此可见，Shard 的数量会影响查询的速度。如果 Shard 太多，调度开销、线程切换、Segment 数量暴涨、merge 压力增大；如果 Shard 太少，并行度不足、单 Shard 数据过大导致查询慢、恢复慢。</p>
+<p>在上文我们也看到了一些 ES 的集群中的部分角色，现在汇总以下，主要有这么几个角色：</p>
+<ul>
+<li>
+<p>master 节点，它负责集群层面的控制工作。包括选主、维护 cluster state、分片分配与迁移决策、索引生命周期管理、映射与设置变更的协调等。在生产环境中，推荐 master 节点不承载数据分片（即不作为 data 节点），以保证集群稳定性。</p>
+</li>
+<li>
+<p>data 节点，它用于承载索引分片，负责文档写入、查询、聚合、排序、Segment merge、缓存维护等所有与数据直接相关的操作。</p>
+</li>
+<li>
+<p>coordinating，它并不是一种独立的节点类型，而是一种行为角色，任何节点都可能接到客户端请求并充当协调节点，区别是它是否承载数据 shard、是否参与选主与决策。</p>
+</li>
+</ul>
+<p>一个 ES 进程就是一个节点。而角色决定这个进程负责干什么。分片最终只会落在有 data 角色的数据节点上。一般单例运行时，一个 ES 实例就充当了所有角色。</p>
+<p>现在我们在本地部署一个最小集群，它的结构如下：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Node 1：master + data
+</span></span><span class="line"><span class="cl">Node 2：master + data
+</span></span><span class="line"><span class="cl">Node 3：master + data
+</span></span></code></pre></div><p>复制 3 份 ES 实例。他们的配置如下：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-yaml" data-lang="yaml"><span class="line"><span class="cl"><span class="c"># es-node1</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nt">cluster.name</span><span class="p">:</span><span class="w"> </span><span class="l">local-node-cluster</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nt">node.name</span><span class="p">:</span><span class="w"> </span><span class="l">node-1</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nt">node.roles</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="w"> </span><span class="l">master, data ]</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nt">cluster.initial_master_nodes</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&#34;node-1&#34;</span><span class="p">,</span><span class="s2">&#34;node-2&#34;</span><span class="p">,</span><span class="s2">&#34;node-3&#34;</span><span class="p">]</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nt">path.data</span><span class="p">:</span><span class="w"> </span><span class="l">D:\JavaLearning\deployment-testing\es\elasticsearch-node1\data</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nt">path.logs</span><span class="p">:</span><span class="w"> </span><span class="l">D:\JavaLearning\deployment-testing\es\elasticsearch-node1\logs</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nt">network.host</span><span class="p">:</span><span class="w"> </span><span class="m">127.0.0.1</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nt">http.port</span><span class="p">:</span><span class="w"> </span><span class="m">9200</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nt">transport.port</span><span class="p">:</span><span class="w"> </span><span class="m">9300</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nt">discovery.seed_hosts</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span>- <span class="m">127.0.0.1</span><span class="p">:</span><span class="m">9300</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span>- <span class="m">127.0.0.1</span><span class="p">:</span><span class="m">9301</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span>- <span class="m">127.0.0.1</span><span class="p">:</span><span class="m">9302</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nt">xpack.security.enabled</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="w">
+</span></span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-yaml" data-lang="yaml"><span class="line"><span class="cl"><span class="c"># es-node2</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nt">cluster.name</span><span class="p">:</span><span class="w"> </span><span class="l">local-node-cluster</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nt">node.name</span><span class="p">:</span><span class="w"> </span><span class="l">node-2</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nt">node.roles</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="w"> </span><span class="l">master, data ]</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nt">cluster.initial_master_nodes</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&#34;node-1&#34;</span><span class="p">,</span><span class="s2">&#34;node-2&#34;</span><span class="p">,</span><span class="s2">&#34;node-3&#34;</span><span class="p">]</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nt">path.data</span><span class="p">:</span><span class="w"> </span><span class="l">D:\JavaLearning\deployment-testing\es\elasticsearch-node2\data</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nt">path.logs</span><span class="p">:</span><span class="w"> </span><span class="l">D:\JavaLearning\deployment-testing\es\elasticsearch-node2\logs</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nt">network.host</span><span class="p">:</span><span class="w"> </span><span class="m">127.0.0.1</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nt">http.port</span><span class="p">:</span><span class="w"> </span><span class="m">9201</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nt">transport.port</span><span class="p">:</span><span class="w"> </span><span class="m">9301</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nt">discovery.seed_hosts</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span>- <span class="m">127.0.0.1</span><span class="p">:</span><span class="m">9300</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span>- <span class="m">127.0.0.1</span><span class="p">:</span><span class="m">9301</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span>- <span class="m">127.0.0.1</span><span class="p">:</span><span class="m">9302</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nt">xpack.security.enabled</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="w">
+</span></span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-yaml" data-lang="yaml"><span class="line"><span class="cl"><span class="c"># es-node3</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nt">cluster.name</span><span class="p">:</span><span class="w"> </span><span class="l">local-node-cluster</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nt">node.name</span><span class="p">:</span><span class="w"> </span><span class="l">node-3</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nt">node.roles</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="w"> </span><span class="l">master, data ]</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nt">cluster.initial_master_nodes</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&#34;node-1&#34;</span><span class="p">,</span><span class="s2">&#34;node-2&#34;</span><span class="p">,</span><span class="s2">&#34;node-3&#34;</span><span class="p">]</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nt">path.data</span><span class="p">:</span><span class="w"> </span><span class="l">D:\JavaLearning\deployment-testing\es\elasticsearch-node3\data</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nt">path.logs</span><span class="p">:</span><span class="w"> </span><span class="l">D:\JavaLearning\deployment-testing\es\elasticsearch-node3\logs</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nt">network.host</span><span class="p">:</span><span class="w"> </span><span class="m">127.0.0.1</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nt">http.port</span><span class="p">:</span><span class="w"> </span><span class="m">9202</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nt">transport.port</span><span class="p">:</span><span class="w"> </span><span class="m">9302</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nt">discovery.seed_hosts</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span>- <span class="m">127.0.0.1</span><span class="p">:</span><span class="m">9300</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span>- <span class="m">127.0.0.1</span><span class="p">:</span><span class="m">9301</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span>- <span class="m">127.0.0.1</span><span class="p">:</span><span class="m">9302</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nt">xpack.security.enabled</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="w">
+</span></span></span></code></pre></div><p><code>xpack.security.enabled: false</code> 我们关掉了 ES 8.x 默认开启的安全模块。如果当前 ES 实例之前启动过，请删除 <code>data</code> 文件夹和 <code>elasticsearch.keystore</code> 配置文件。<code>data</code> 文件夹下会有之前的 ES 数据，集群部署时，这些已存在的数据 ES 不知道如何分配，会报错。<code>elasticsearch.keystore</code> 是之前启动 ES 时生成的安全模块文件，仍然会影响当前集群启动。</p>
+<p><code>cluster.initial_master_nodes: [&quot;node-1&quot;,&quot;node-2&quot;,&quot;node-3&quot;]</code> 配置是首次启动时的候选 master 节点，最后 master 节点会在这几个节点中选出。该配置只用于首次引导，成功后必须删除。<code>node.roles: [ master, data ]</code> 配置代表该节点的角色，<code>transport.port: 9302</code> 配置是节点间内部的通信端口，在执行选举或者其他程序时会用到。<code>discovery.seed_hosts</code> 是声明通信端口的配置。<code>network.host: 127.0.0.1</code> 它决定改节点绑定的网络地址，<code>127.0.0.1</code> 只允许本机访问，如果要让局域网其他机器访问，需要绑定机器内网 IP 或 <code>0.0.0.0</code>。</p>
+<p>当程序成功运行后，在终端执行下面命令，验证集群是否成功：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">curl http://127.0.0.1:9200/_cat/nodes?v
+</span></span></span></code></pre></div><p>如果出现以下内容，说明集群启动成功。<code>master:*</code> 代表 <code>node-2</code> 是 master 节点。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">ip        heap.percent ram.percent cpu load_1m load_5m load_15m node.role master name
+</span></span><span class="line"><span class="cl">127.0.0.1           <span class="m">62</span>          <span class="m">90</span>  <span class="m">10</span>                          dm        -      node-1
+</span></span><span class="line"><span class="cl">127.0.0.1           <span class="m">37</span>          <span class="m">90</span>   <span class="m">9</span>                          dm        *      node-2
+</span></span><span class="line"><span class="cl">127.0.0.1           <span class="m">40</span>          <span class="m">90</span>   <span class="m">9</span>                          dm        -      node-3
+</span></span></code></pre></div><p>创建一个测试索引</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">PUT /test_index
+</span></span></span><span class="line"><span class="cl"><span class="err">{
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;settings&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;number_of_shards&#34;: 1,
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;number_of_replicas&#34;: 1
+</span></span></span><span class="line"><span class="cl"><span class="err">  }
+</span></span></span><span class="line"><span class="cl"><span class="err">}
+</span></span></span></code></pre></div><p>查看分片</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">GET /_cat/shards?v
+</span></span></span></code></pre></div><blockquote>
+<p><code>GET /_cat/shards?v</code> 用来以表格形式查看当前集群中所有分片的分布、状态和所在节点。<code>?v</code> 参数用来显示表头。</p></blockquote>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">GET /_cat/shards/test_index?v
+</span></span></span></code></pre></div><p>只查询你想看的索引下的分片信息。</p>
+<p>可以发现，我们并没有单独配置从节点，因为 ES 一个 data node 上可能承载某些 Shard 的 primary，也可能承载其他 Shard 的 replica。ES 的副本不是另起一个进程，也不是设置专门的副本节点。ES 的副本只是一个 Shard 的另一份拷贝，会被分配到某个 data 节点上，并满足一个核心规则：<strong>同一个 Shard 的 primary 和 replica 不会被分配到同一个节点。</strong></p>
+<p>为什么 ES 没有把不同职责的节点拆成独立进程呢？这样一个节点承担多个职能会不会显得冗余？</p>
+<p>ES 通过在节点中声明角色来实现逻辑上的职责分离。这种设计看似存在能力冗余，但实际上避免了服务间复杂的 RPC 调用，提升了系统弹性和扩展性，使集群能够在节点动态变化的情况下自动重平衡，是一种典型的分布式系统设计取舍。</p>
+<p>ES 的主节点是通过内置选举机制自动产生的，负责集群状态和分片调度，不参与数据读写。在数据写入时，请求首先由协调节点路由到目标主分片，所有写操作只在主分片上执行，主分片写入成功后会将相同的写操作同步到副本分片，待副本确认后才返回成功。如果主分片所在节点故障，Master 会自动将副本分片提升为新的主分片，从而保证数据不丢失。</p>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

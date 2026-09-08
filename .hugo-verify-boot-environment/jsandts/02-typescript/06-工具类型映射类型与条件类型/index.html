@@ -1,0 +1,1394 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>工具类型、映射类型与条件类型：从复用到类型推导 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="工具类型的目标不是让类型看起来更复杂，而是减少重复、保留关系、让类型随业务模型自动变化。
+如果两个类型之间有明显关系，就不应该完全复制一份。复制出来的类型一开始很安静，后来字段改了，它就开始装作自己一直是对的。工程里最麻烦的错误，往往就来自这种安静。
+一、为什么需要工具类型 假设有用户类型：
+type User = { id: number username: string password: string nickname?: string avatarUrl?: string } 页面展示时不能暴露密码：
+type UserPublicInfo = { id: number username: string nickname?: string avatarUrl?: string } 这可以运行，但以后 User 增加字段，UserPublicInfo 不会自动同步。
+用 Omit：
+type UserPublicInfo = Omit&lt;User, &#39;password&#39;&gt; 类型之间的关系被保留了。
+二、Partial 与 Required Partial&lt;T&gt; 把所有字段变成可选。
+type User = { id: number username: string avatarUrl?: string } type UserPatch = Partial&lt;User&gt; 等价于：
+type UserPatch = { id?: number username?: string avatarUrl?: string } 适合局部更新：
+function updateUser(id: number, patch: Partial&lt;Omit&lt;User, &#39;id&#39;&gt;&gt;) { return fetch(`/api/users/${id}`, { method: &#39;PATCH&#39;, body: JSON.stringify(patch) }) } Required&lt;T&gt; 把所有字段变成必填：
+type CompleteUser = Required&lt;User&gt; 注意它只处理一层字段，不会递归处理嵌套对象。
+三、Pick 与 Omit Pick&lt;T, K&gt; 从类型中挑选字段。
+type LoginForm = Pick&lt;User, &#39;username&#39; | &#39;password&#39;&gt; Omit&lt;T, K&gt; 从类型中排除字段。
+type UserWithoutPassword = Omit&lt;User, &#39;password&#39;&gt; 常见组合：
+type CreateUserRequest = Pick&lt;User, &#39;username&#39; | &#39;password&#39; | &#39;nickname&#39;&gt; type UpdateUserRequest = Partial&lt;Pick&lt;User, &#39;username&#39; | &#39;nickname&#39; | &#39;avatarUrl&#39;&gt;&gt; 这样能清楚表达提交参数和领域模型之间的关系。
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/jsandts/02-typescript/06-%E5%B7%A5%E5%85%B7%E7%B1%BB%E5%9E%8B%E6%98%A0%E5%B0%84%E7%B1%BB%E5%9E%8B%E4%B8%8E%E6%9D%A1%E4%BB%B6%E7%B1%BB%E5%9E%8B/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/jsandts/02-typescript/06-%E5%B7%A5%E5%85%B7%E7%B1%BB%E5%9E%8B%E6%98%A0%E5%B0%84%E7%B1%BB%E5%9E%8B%E4%B8%8E%E6%9D%A1%E4%BB%B6%E7%B1%BB%E5%9E%8B/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="工具类型、映射类型与条件类型：从复用到类型推导">
+  <meta property="og:description" content="工具类型的目标不是让类型看起来更复杂，而是减少重复、保留关系、让类型随业务模型自动变化。
+如果两个类型之间有明显关系，就不应该完全复制一份。复制出来的类型一开始很安静，后来字段改了，它就开始装作自己一直是对的。工程里最麻烦的错误，往往就来自这种安静。
+一、为什么需要工具类型 假设有用户类型：
+type User = { id: number username: string password: string nickname?: string avatarUrl?: string } 页面展示时不能暴露密码：
+type UserPublicInfo = { id: number username: string nickname?: string avatarUrl?: string } 这可以运行，但以后 User 增加字段，UserPublicInfo 不会自动同步。
+用 Omit：
+type UserPublicInfo = Omit&lt;User, &#39;password&#39;&gt; 类型之间的关系被保留了。
+二、Partial 与 Required Partial&lt;T&gt; 把所有字段变成可选。
+type User = { id: number username: string avatarUrl?: string } type UserPatch = Partial&lt;User&gt; 等价于：
+type UserPatch = { id?: number username?: string avatarUrl?: string } 适合局部更新：
+function updateUser(id: number, patch: Partial&lt;Omit&lt;User, &#39;id&#39;&gt;&gt;) { return fetch(`/api/users/${id}`, { method: &#39;PATCH&#39;, body: JSON.stringify(patch) }) } Required&lt;T&gt; 把所有字段变成必填：
+type CompleteUser = Required&lt;User&gt; 注意它只处理一层字段，不会递归处理嵌套对象。
+三、Pick 与 Omit Pick&lt;T, K&gt; 从类型中挑选字段。
+type LoginForm = Pick&lt;User, &#39;username&#39; | &#39;password&#39;&gt; Omit&lt;T, K&gt; 从类型中排除字段。
+type UserWithoutPassword = Omit&lt;User, &#39;password&#39;&gt; 常见组合：
+type CreateUserRequest = Pick&lt;User, &#39;username&#39; | &#39;password&#39; | &#39;nickname&#39;&gt; type UpdateUserRequest = Partial&lt;Pick&lt;User, &#39;username&#39; | &#39;nickname&#39; | &#39;avatarUrl&#39;&gt;&gt; 这样能清楚表达提交参数和领域模型之间的关系。">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="jsandts">
+    <meta property="article:published_time" content="2026-08-20T18:33:00+08:00">
+    <meta property="article:modified_time" content="2026-08-20T18:33:00+08:00">
+
+  
+  <meta itemprop="name" content="工具类型、映射类型与条件类型：从复用到类型推导">
+  <meta itemprop="description" content="工具类型的目标不是让类型看起来更复杂，而是减少重复、保留关系、让类型随业务模型自动变化。
+如果两个类型之间有明显关系，就不应该完全复制一份。复制出来的类型一开始很安静，后来字段改了，它就开始装作自己一直是对的。工程里最麻烦的错误，往往就来自这种安静。
+一、为什么需要工具类型 假设有用户类型：
+type User = { id: number username: string password: string nickname?: string avatarUrl?: string } 页面展示时不能暴露密码：
+type UserPublicInfo = { id: number username: string nickname?: string avatarUrl?: string } 这可以运行，但以后 User 增加字段，UserPublicInfo 不会自动同步。
+用 Omit：
+type UserPublicInfo = Omit&lt;User, &#39;password&#39;&gt; 类型之间的关系被保留了。
+二、Partial 与 Required Partial&lt;T&gt; 把所有字段变成可选。
+type User = { id: number username: string avatarUrl?: string } type UserPatch = Partial&lt;User&gt; 等价于：
+type UserPatch = { id?: number username?: string avatarUrl?: string } 适合局部更新：
+function updateUser(id: number, patch: Partial&lt;Omit&lt;User, &#39;id&#39;&gt;&gt;) { return fetch(`/api/users/${id}`, { method: &#39;PATCH&#39;, body: JSON.stringify(patch) }) } Required&lt;T&gt; 把所有字段变成必填：
+type CompleteUser = Required&lt;User&gt; 注意它只处理一层字段，不会递归处理嵌套对象。
+三、Pick 与 Omit Pick&lt;T, K&gt; 从类型中挑选字段。
+type LoginForm = Pick&lt;User, &#39;username&#39; | &#39;password&#39;&gt; Omit&lt;T, K&gt; 从类型中排除字段。
+type UserWithoutPassword = Omit&lt;User, &#39;password&#39;&gt; 常见组合：
+type CreateUserRequest = Pick&lt;User, &#39;username&#39; | &#39;password&#39; | &#39;nickname&#39;&gt; type UpdateUserRequest = Partial&lt;Pick&lt;User, &#39;username&#39; | &#39;nickname&#39; | &#39;avatarUrl&#39;&gt;&gt; 这样能清楚表达提交参数和领域模型之间的关系。">
+  <meta itemprop="datePublished" content="2026-08-20T18:33:00+08:00">
+  <meta itemprop="dateModified" content="2026-08-20T18:33:00+08:00">
+  <meta itemprop="wordCount" content="650">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="工具类型、映射类型与条件类型：从复用到类型推导">
+  <meta name="twitter:description" content="工具类型的目标不是让类型看起来更复杂，而是减少重复、保留关系、让类型随业务模型自动变化。
+如果两个类型之间有明显关系，就不应该完全复制一份。复制出来的类型一开始很安静，后来字段改了，它就开始装作自己一直是对的。工程里最麻烦的错误，往往就来自这种安静。
+一、为什么需要工具类型 假设有用户类型：
+type User = { id: number username: string password: string nickname?: string avatarUrl?: string } 页面展示时不能暴露密码：
+type UserPublicInfo = { id: number username: string nickname?: string avatarUrl?: string } 这可以运行，但以后 User 增加字段，UserPublicInfo 不会自动同步。
+用 Omit：
+type UserPublicInfo = Omit&lt;User, &#39;password&#39;&gt; 类型之间的关系被保留了。
+二、Partial 与 Required Partial&lt;T&gt; 把所有字段变成可选。
+type User = { id: number username: string avatarUrl?: string } type UserPatch = Partial&lt;User&gt; 等价于：
+type UserPatch = { id?: number username?: string avatarUrl?: string } 适合局部更新：
+function updateUser(id: number, patch: Partial&lt;Omit&lt;User, &#39;id&#39;&gt;&gt;) { return fetch(`/api/users/${id}`, { method: &#39;PATCH&#39;, body: JSON.stringify(patch) }) } Required&lt;T&gt; 把所有字段变成必填：
+type CompleteUser = Required&lt;User&gt; 注意它只处理一层字段，不会递归处理嵌套对象。
+三、Pick 与 Omit Pick&lt;T, K&gt; 从类型中挑选字段。
+type LoginForm = Pick&lt;User, &#39;username&#39; | &#39;password&#39;&gt; Omit&lt;T, K&gt; 从类型中排除字段。
+type UserWithoutPassword = Omit&lt;User, &#39;password&#39;&gt; 常见组合：
+type CreateUserRequest = Pick&lt;User, &#39;username&#39; | &#39;password&#39; | &#39;nickname&#39;&gt; type UpdateUserRequest = Partial&lt;Pick&lt;User, &#39;username&#39; | &#39;nickname&#39; | &#39;avatarUrl&#39;&gt;&gt; 这样能清楚表达提交参数和领域模型之间的关系。">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">工具类型、映射类型与条件类型：从复用到类型推导</h1>
+
+    
+      <div class="post-date">August 20, 2026</div>
+    
+
+    <div class="post-content">
+      <p>工具类型的目标不是让类型看起来更复杂，而是减少重复、保留关系、让类型随业务模型自动变化。</p>
+<p>如果两个类型之间有明显关系，就不应该完全复制一份。复制出来的类型一开始很安静，后来字段改了，它就开始装作自己一直是对的。工程里最麻烦的错误，往往就来自这种安静。</p>
+<h2 id="一为什么需要工具类型">一、为什么需要工具类型</h2>
+<p>假设有用户类型：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">User</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">id</span>: <span class="kt">number</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">username</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">password</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">nickname?</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">avatarUrl?</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>页面展示时不能暴露密码：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">UserPublicInfo</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">id</span>: <span class="kt">number</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">username</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">nickname?</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">avatarUrl?</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>这可以运行，但以后 <code>User</code> 增加字段，<code>UserPublicInfo</code> 不会自动同步。</p>
+<p>用 <code>Omit</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">UserPublicInfo</span> <span class="o">=</span> <span class="nx">Omit</span><span class="p">&lt;</span><span class="nt">User</span><span class="p">,</span> <span class="s1">&#39;password&#39;</span><span class="p">&gt;</span>
+</span></span></code></pre></div><p>类型之间的关系被保留了。</p>
+<h2 id="二partial-与-required">二、Partial 与 Required</h2>
+<p><code>Partial&lt;T&gt;</code> 把所有字段变成可选。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">User</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">id</span>: <span class="kt">number</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">username</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">avatarUrl?</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">UserPatch</span> <span class="o">=</span> <span class="nx">Partial</span><span class="p">&lt;</span><span class="nt">User</span><span class="p">&gt;</span>
+</span></span></code></pre></div><p>等价于：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">UserPatch</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">id?</span>: <span class="kt">number</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">username?</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">avatarUrl?</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>适合局部更新：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kd">function</span> <span class="nx">updateUser</span><span class="p">(</span><span class="nx">id</span>: <span class="kt">number</span><span class="p">,</span> <span class="nx">patch</span>: <span class="kt">Partial</span><span class="p">&lt;</span><span class="nt">Omit</span><span class="p">&lt;</span><span class="nt">User</span><span class="p">,</span> <span class="s1">&#39;id&#39;</span><span class="p">&gt;&gt;)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="k">return</span> <span class="nx">fetch</span><span class="p">(</span><span class="sb">`/api/users/</span><span class="si">${</span><span class="nx">id</span><span class="si">}</span><span class="sb">`</span><span class="p">,</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">method</span><span class="o">:</span> <span class="s1">&#39;PATCH&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">body</span>: <span class="kt">JSON.stringify</span><span class="p">(</span><span class="nx">patch</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="p">})</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p><code>Required&lt;T&gt;</code> 把所有字段变成必填：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">CompleteUser</span> <span class="o">=</span> <span class="nx">Required</span><span class="p">&lt;</span><span class="nt">User</span><span class="p">&gt;</span>
+</span></span></code></pre></div><p>注意它只处理一层字段，不会递归处理嵌套对象。</p>
+<h2 id="三pick-与-omit">三、Pick 与 Omit</h2>
+<p><code>Pick&lt;T, K&gt;</code> 从类型中挑选字段。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">LoginForm</span> <span class="o">=</span> <span class="nx">Pick</span><span class="p">&lt;</span><span class="nt">User</span><span class="p">,</span> <span class="s1">&#39;username&#39;</span> <span class="err">|</span> <span class="s1">&#39;password&#39;</span><span class="p">&gt;</span>
+</span></span></code></pre></div><p><code>Omit&lt;T, K&gt;</code> 从类型中排除字段。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">UserWithoutPassword</span> <span class="o">=</span> <span class="nx">Omit</span><span class="p">&lt;</span><span class="nt">User</span><span class="p">,</span> <span class="s1">&#39;password&#39;</span><span class="p">&gt;</span>
+</span></span></code></pre></div><p>常见组合：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">CreateUserRequest</span> <span class="o">=</span> <span class="nx">Pick</span><span class="p">&lt;</span><span class="nt">User</span><span class="p">,</span> <span class="s1">&#39;username&#39;</span> <span class="err">|</span> <span class="s1">&#39;password&#39;</span> <span class="err">|</span> <span class="s1">&#39;nickname&#39;</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">UpdateUserRequest</span> <span class="o">=</span> <span class="nx">Partial</span><span class="p">&lt;</span><span class="nt">Pick</span><span class="p">&lt;</span><span class="nt">User</span><span class="p">,</span> <span class="s1">&#39;username&#39;</span> <span class="err">|</span> <span class="s1">&#39;nickname&#39;</span> <span class="err">|</span> <span class="s1">&#39;avatarUrl&#39;</span><span class="p">&gt;&gt;</span>
+</span></span></code></pre></div><p>这样能清楚表达提交参数和领域模型之间的关系。</p>
+<h2 id="四record">四、Record</h2>
+<p><code>Record&lt;K, T&gt;</code> 构造键值映射。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">PostStatus</span> <span class="o">=</span> <span class="s1">&#39;draft&#39;</span> <span class="o">|</span> <span class="s1">&#39;published&#39;</span> <span class="o">|</span> <span class="s1">&#39;archived&#39;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">statusText</span>: <span class="kt">Record</span><span class="p">&lt;</span><span class="nt">PostStatus</span><span class="p">,</span> <span class="na">string</span><span class="p">&gt;</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">draft</span><span class="o">:</span> <span class="s1">&#39;草稿&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">published</span><span class="o">:</span> <span class="s1">&#39;已发布&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">archived</span><span class="o">:</span> <span class="s1">&#39;已归档&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>如果漏掉 <code>archived</code>，会报错。如果多写一个不存在的键，也会报错。</p>
+<p>配置对象更适合：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">StatusConfig</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">text</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">color</span><span class="o">:</span> <span class="s1">&#39;gray&#39;</span> <span class="o">|</span> <span class="s1">&#39;green&#39;</span> <span class="o">|</span> <span class="s1">&#39;red&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">statusConfig</span>: <span class="kt">Record</span><span class="p">&lt;</span><span class="nt">PostStatus</span><span class="p">,</span> <span class="na">StatusConfig</span><span class="p">&gt;</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">draft</span><span class="o">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">text</span><span class="o">:</span> <span class="s1">&#39;草稿&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">color</span><span class="o">:</span> <span class="s1">&#39;gray&#39;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">},</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">published</span><span class="o">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">text</span><span class="o">:</span> <span class="s1">&#39;已发布&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">color</span><span class="o">:</span> <span class="s1">&#39;green&#39;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">},</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">archived</span><span class="o">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">text</span><span class="o">:</span> <span class="s1">&#39;已归档&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">color</span><span class="o">:</span> <span class="s1">&#39;red&#39;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><h2 id="五readonly">五、Readonly</h2>
+<p><code>Readonly&lt;T&gt;</code> 把对象属性变成只读。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">AppConfig</span> <span class="o">=</span> <span class="nx">Readonly</span><span class="o">&lt;</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">apiBaseUrl</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">pageSize</span>: <span class="kt">number</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span><span class="o">&gt;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">config</span>: <span class="kt">AppConfig</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">apiBaseUrl</span><span class="o">:</span> <span class="s1">&#39;/api&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">pageSize</span>: <span class="kt">20</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">config</span><span class="p">.</span><span class="nx">pageSize</span> <span class="o">=</span> <span class="mi">50</span>
+</span></span></code></pre></div><p>最后一行会报错。</p>
+<p>它适合配置、常量、不可变数据约束。不要把所有业务对象都变成只读，否则表单和状态更新会很别扭。</p>
+<h2 id="六returntype-和-parameters">六、ReturnType 和 Parameters</h2>
+<p><code>ReturnType&lt;T&gt;</code> 获取函数返回值类型。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kd">function</span> <span class="nx">createUser() {</span>
+</span></span><span class="line"><span class="cl">  <span class="k">return</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">id</span>: <span class="kt">1</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">name</span><span class="o">:</span> <span class="s1">&#39;Yuki&#39;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">User</span> <span class="o">=</span> <span class="nx">ReturnType</span><span class="p">&lt;</span><span class="nt">typeof</span> <span class="na">createUser</span><span class="p">&gt;</span>
+</span></span></code></pre></div><p><code>Parameters&lt;T&gt;</code> 获取函数参数类型组成的元组。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kd">function</span> <span class="nx">searchPosts</span><span class="p">(</span><span class="nx">keyword</span>: <span class="kt">string</span><span class="p">,</span> <span class="nx">page</span>: <span class="kt">number</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="k">return</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">keyword</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">page</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">SearchParams</span> <span class="o">=</span> <span class="nx">Parameters</span><span class="p">&lt;</span><span class="nt">typeof</span> <span class="na">searchPosts</span><span class="p">&gt;</span>
+</span></span></code></pre></div><p><code>SearchParams</code> 是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">SearchParams</span> <span class="o">=</span> <span class="p">[</span><span class="nx">keyword</span>: <span class="kt">string</span><span class="p">,</span> <span class="nx">page</span>: <span class="kt">number</span><span class="p">]</span>
+</span></span></code></pre></div><p>这些工具常用于从已有函数推导类型，避免重复声明。</p>
+<h2 id="七awaited">七、Awaited</h2>
+<p><code>Awaited&lt;T&gt;</code> 获取 Promise 完成后的值类型。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">async</span> <span class="kd">function</span> <span class="nx">fetchProfile() {</span>
+</span></span><span class="line"><span class="cl">  <span class="k">return</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">id</span>: <span class="kt">1</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">name</span><span class="o">:</span> <span class="s1">&#39;Yuki&#39;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">Profile</span> <span class="o">=</span> <span class="nx">Awaited</span><span class="p">&lt;</span><span class="nt">ReturnType</span><span class="p">&lt;</span><span class="nt">typeof</span> <span class="na">fetchProfile</span><span class="p">&gt;&gt;</span>
+</span></span></code></pre></div><p><code>Profile</code> 是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">Profile</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">id</span>: <span class="kt">number</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">name</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>这在封装 API 时很常见。</p>
+<h2 id="八映射类型">八、映射类型</h2>
+<p>工具类型的底层基础之一是映射类型。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">MyPartial</span><span class="p">&lt;</span><span class="nt">T</span><span class="p">&gt;</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="p">[</span><span class="nx">K</span> <span class="k">in</span> <span class="k">keyof</span> <span class="nx">T</span><span class="p">]</span><span class="o">?:</span> <span class="nx">T</span><span class="p">[</span><span class="nx">K</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>含义是：遍历 <code>T</code> 的所有键 <code>K</code>，把每个字段变成可选。</p>
+<p>再写一个只读版本：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">MyReadonly</span><span class="p">&lt;</span><span class="nt">T</span><span class="p">&gt;</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">readonly</span> <span class="p">[</span><span class="nx">K</span> <span class="k">in</span> <span class="k">keyof</span> <span class="nx">T</span><span class="p">]</span><span class="o">:</span> <span class="nx">T</span><span class="p">[</span><span class="nx">K</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>去掉只读和可选修饰：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">MutableRequired</span><span class="p">&lt;</span><span class="nt">T</span><span class="p">&gt;</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="o">-</span><span class="kr">readonly</span> <span class="p">[</span><span class="nx">K</span> <span class="k">in</span> <span class="k">keyof</span> <span class="nx">T</span><span class="p">]</span><span class="o">-?:</span> <span class="nx">T</span><span class="p">[</span><span class="nx">K</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p><code>+</code> 表示增加修饰，<code>-</code> 表示移除修饰。</p>
+<h2 id="九键名重映射">九、键名重映射</h2>
+<p>映射类型可以通过 <code>as</code> 改键名。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">Getter</span><span class="p">&lt;</span><span class="nt">T</span><span class="p">&gt;</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="p">[</span><span class="nx">K</span> <span class="k">in</span> <span class="k">keyof</span> <span class="nx">T</span> <span class="kr">as</span> <span class="sb">`get</span><span class="si">${</span><span class="nx">Capitalize</span><span class="p">&lt;</span><span class="nt">string</span> <span class="err">&amp;</span> <span class="na">K</span><span class="p">&gt;</span><span class="si">}</span><span class="sb">`</span><span class="p">]</span><span class="o">:</span> <span class="p">()</span> <span class="o">=&gt;</span> <span class="nx">T</span><span class="p">[</span><span class="nx">K</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>使用：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">User</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">name</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">age</span>: <span class="kt">number</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">UserGetter</span> <span class="o">=</span> <span class="nx">Getter</span><span class="p">&lt;</span><span class="nt">User</span><span class="p">&gt;</span>
+</span></span></code></pre></div><p>结果类似：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">UserGetter</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">getName</span><span class="o">:</span> <span class="p">()</span> <span class="o">=&gt;</span> <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">getAge</span><span class="o">:</span> <span class="p">()</span> <span class="o">=&gt;</span> <span class="kt">number</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>这种能力在封装库时很有用。业务代码里要适度，不要让类型变成猜谜。</p>
+<h2 id="十条件类型">十、条件类型</h2>
+<p>条件类型写法：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">IsString</span><span class="p">&lt;</span><span class="nt">T</span><span class="p">&gt;</span> <span class="o">=</span> <span class="nx">T</span> <span class="kr">extends</span> <span class="kt">string</span> <span class="o">?</span> <span class="kc">true</span> <span class="o">:</span> <span class="kc">false</span>
+</span></span></code></pre></div><p>使用：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">A</span> <span class="o">=</span> <span class="nx">IsString</span><span class="p">&lt;</span><span class="nt">string</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">B</span> <span class="o">=</span> <span class="nx">IsString</span><span class="p">&lt;</span><span class="nt">number</span><span class="p">&gt;</span>
+</span></span></code></pre></div><p><code>A</code> 是 <code>true</code>，<code>B</code> 是 <code>false</code>。</p>
+<p>常见用途是根据输入类型选择输出类型。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">ApiData</span><span class="p">&lt;</span><span class="nt">T</span><span class="p">&gt;</span> <span class="o">=</span> <span class="nx">T</span> <span class="kr">extends</span> <span class="nx">Promise</span><span class="p">&lt;</span><span class="nt">infer</span> <span class="na">R</span><span class="p">&gt;</span> <span class="o">?</span> <span class="nx">R</span> : <span class="kt">T</span>
+</span></span></code></pre></div><p>这里出现了 <code>infer</code>。</p>
+<h2 id="十一infer">十一、infer</h2>
+<p><code>infer</code> 用于在条件类型中推断某一部分类型。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">UnwrapPromise</span><span class="p">&lt;</span><span class="nt">T</span><span class="p">&gt;</span> <span class="o">=</span> <span class="nx">T</span> <span class="kr">extends</span> <span class="nx">Promise</span><span class="p">&lt;</span><span class="nt">infer</span> <span class="na">R</span><span class="p">&gt;</span> <span class="o">?</span> <span class="nx">R</span> : <span class="kt">T</span>
+</span></span></code></pre></div><p>使用：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">A</span> <span class="o">=</span> <span class="nx">UnwrapPromise</span><span class="p">&lt;</span><span class="nt">Promise</span><span class="p">&lt;</span><span class="nt">string</span><span class="p">&gt;&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">B</span> <span class="o">=</span> <span class="nx">UnwrapPromise</span><span class="p">&lt;</span><span class="nt">number</span><span class="p">&gt;</span>
+</span></span></code></pre></div><p><code>A</code> 是 <code>string</code>，<code>B</code> 是 <code>number</code>。</p>
+<p>提取数组元素：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">ElementOf</span><span class="p">&lt;</span><span class="nt">T</span><span class="p">&gt;</span> <span class="o">=</span> <span class="nx">T</span> <span class="kr">extends</span> <span class="nb">Array</span><span class="p">&lt;</span><span class="nt">infer</span> <span class="na">Item</span><span class="p">&gt;</span> <span class="o">?</span> <span class="nx">Item</span> : <span class="kt">never</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">User</span> <span class="o">=</span> <span class="nx">ElementOf</span><span class="p">&lt;</span><span class="nt">User</span><span class="err">[]</span><span class="p">&gt;</span>
+</span></span></code></pre></div><p><code>infer</code> 很强，但也容易写出过度抽象。只有当类型关系确实值得复用时再写。</p>
+<h2 id="十二分布式条件类型">十二、分布式条件类型</h2>
+<p>条件类型遇到联合类型时，会分发到每个成员。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">ToArray</span><span class="p">&lt;</span><span class="nt">T</span><span class="p">&gt;</span> <span class="o">=</span> <span class="nx">T</span> <span class="kr">extends</span> <span class="kt">unknown</span> <span class="o">?</span> <span class="nx">T</span><span class="p">[]</span> <span class="o">:</span> <span class="kt">never</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">Result</span> <span class="o">=</span> <span class="nx">ToArray</span><span class="p">&lt;</span><span class="nt">string</span> <span class="err">|</span> <span class="na">number</span><span class="p">&gt;</span>
+</span></span></code></pre></div><p><code>Result</code> 是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">Result</span> <span class="o">=</span> <span class="kt">string</span><span class="p">[]</span> <span class="o">|</span> <span class="kt">number</span><span class="p">[]</span>
+</span></span></code></pre></div><p>而不是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">Result</span> <span class="o">=</span> <span class="p">(</span><span class="kt">string</span> <span class="o">|</span> <span class="kt">number</span><span class="p">)[]</span>
+</span></span></code></pre></div><p>如果不想分发，可以包一层元组：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">ToArrayNoDistribute</span><span class="p">&lt;</span><span class="nt">T</span><span class="p">&gt;</span> <span class="o">=</span> <span class="p">[</span><span class="nx">T</span><span class="p">]</span> <span class="kr">extends</span> <span class="p">[</span><span class="kt">unknown</span><span class="p">]</span> <span class="o">?</span> <span class="nx">T</span><span class="p">[]</span> <span class="o">:</span> <span class="kt">never</span>
+</span></span></code></pre></div><p>这属于进阶知识，读懂即可，不必急着在业务里使用。</p>
+<h2 id="十三常见误区">十三、常见误区</h2>
+<h3 id="1-滥用-partial">1. 滥用 Partial</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">UserForm</span> <span class="o">=</span> <span class="nx">Partial</span><span class="p">&lt;</span><span class="nt">User</span><span class="p">&gt;</span>
+</span></span></code></pre></div><p>这会让所有字段都变成可选，但表单里可能有些字段是必填的。更好的方式是准确挑选：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">UserForm</span> <span class="o">=</span> <span class="nx">Pick</span><span class="p">&lt;</span><span class="nt">User</span><span class="p">,</span> <span class="s1">&#39;username&#39;</span> <span class="err">|</span> <span class="s1">&#39;nickname&#39;</span><span class="p">&gt;</span>
+</span></span></code></pre></div><h3 id="2-工具类型叠太深">2. 工具类型叠太深</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">X</span> <span class="o">=</span> <span class="nx">Partial</span><span class="p">&lt;</span><span class="nt">Omit</span><span class="p">&lt;</span><span class="nt">Pick</span><span class="p">&lt;</span><span class="nt">User</span><span class="p">,</span> <span class="s1">&#39;id&#39;</span> <span class="err">|</span> <span class="s1">&#39;name&#39;</span> <span class="err">|</span> <span class="s1">&#39;avatarUrl&#39;</span><span class="p">&gt;,</span> <span class="s1">&#39;id&#39;</span><span class="p">&gt;&gt;</span>
+</span></span></code></pre></div><p>这类类型读起来很累。可以拆中间类型：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">UserEditableFields</span> <span class="o">=</span> <span class="nx">Pick</span><span class="p">&lt;</span><span class="nt">User</span><span class="p">,</span> <span class="s1">&#39;name&#39;</span> <span class="err">|</span> <span class="s1">&#39;avatarUrl&#39;</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">UserUpdateForm</span> <span class="o">=</span> <span class="nx">Partial</span><span class="p">&lt;</span><span class="nt">UserEditableFields</span><span class="p">&gt;</span>
+</span></span></code></pre></div><h3 id="3-用类型运算替代业务命名">3. 用类型运算替代业务命名</h3>
+<p>工具类型能推导结构，但不能替你表达业务含义。重要类型应该有业务名字。</p>
+<h2 id="十四练习">十四、练习</h2>
+<p>基于下面类型：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">Post</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">id</span>: <span class="kt">number</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">title</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">content</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">authorId</span>: <span class="kt">number</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">createdAt</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">updatedAt</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>定义：</p>
+<ul>
+<li><code>PostCard</code>：包含 <code>id</code>、<code>title</code>、<code>createdAt</code>。</li>
+<li><code>CreatePostRequest</code>：包含 <code>title</code>、<code>content</code>、<code>authorId</code>。</li>
+<li><code>UpdatePostRequest</code>：允许局部更新 <code>title</code> 和 <code>content</code>。</li>
+<li><code>PostReadonly</code>：所有字段只读。</li>
+</ul>
+<p>参考：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">PostCard</span> <span class="o">=</span> <span class="nx">Pick</span><span class="p">&lt;</span><span class="nt">Post</span><span class="p">,</span> <span class="s1">&#39;id&#39;</span> <span class="err">|</span> <span class="s1">&#39;title&#39;</span> <span class="err">|</span> <span class="s1">&#39;createdAt&#39;</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">CreatePostRequest</span> <span class="o">=</span> <span class="nx">Pick</span><span class="p">&lt;</span><span class="nt">Post</span><span class="p">,</span> <span class="s1">&#39;title&#39;</span> <span class="err">|</span> <span class="s1">&#39;content&#39;</span> <span class="err">|</span> <span class="s1">&#39;authorId&#39;</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">UpdatePostRequest</span> <span class="o">=</span> <span class="nx">Partial</span><span class="p">&lt;</span><span class="nt">Pick</span><span class="p">&lt;</span><span class="nt">Post</span><span class="p">,</span> <span class="s1">&#39;title&#39;</span> <span class="err">|</span> <span class="s1">&#39;content&#39;</span><span class="p">&gt;&gt;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">PostReadonly</span> <span class="o">=</span> <span class="nx">Readonly</span><span class="p">&lt;</span><span class="nt">Post</span><span class="p">&gt;</span>
+</span></span></code></pre></div><p>工具类型的价值在于表达关系。类型之间的关系越清楚，项目演进时越不容易出现“字段改了，但只改了一半”的问题。</p>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

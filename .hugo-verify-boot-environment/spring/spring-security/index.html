@@ -1,0 +1,1831 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Spring Security | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="Spring Security 是基于 Spring 生态的用于保护 Java 应用程序的框架。它提供了身份验证、授权和防护机制等功能
+Spring Security 中重要的设计思想是 责任链模式，它将网络请求通过 Filter 链逐步处理。每个 Filter 可以决定请求是否继续传递给下一个 Filter，或者直接返回响应（如认证失败、权限不足）。
+Spring Security 默认链中主要 Filter 按顺序如下：
+Filter 作用 SecurityContextPersistenceFilter 从 Session 或其他存储加载 SecurityContext（包含 Authentication）到线程上下文，保证请求内可访问 SecurityContextHolder UsernamePasswordAuthenticationFilter 处理表单登录认证，解析用户名/密码，调用 AuthenticationManager 进行身份验证 BasicAuthenticationFilter 处理 HTTP Basic 认证 BearerTokenAuthenticationFilter 处理 OAuth2 / JWT Token CsrfFilter 处理 CSRF 校验 LogoutFilter 处理登出请求 SessionManagementFilter 管理 Session（并发控制、Session Fixation 防护） ExceptionTranslationFilter 捕获安全异常（如 AuthenticationException / AccessDeniedException）并生成 HTTP 响应 FilterSecurityInterceptor 最终权限校验，调用 AccessDecisionManager 判断是否允许访问资源 请求处理流程的主要流程
+客户端请求 -&gt; 进入 Servlet Filter DelegatingFilterProxy -&gt; 委托给 FilterChainProxy SecurityContextPersistenceFilter -&gt; 从 Session/Token 加载 SecurityContext UsernamePasswordAuthenticationFilter / BasicAuthenticationFilter -&gt; 认证处理 调用 AuthenticationManager.authenticate() 返回认证成功的 Authentication，存入 SecurityContext SessionManagementFilter / CsrfFilter / LogoutFilter / RememberMeFilter -&gt; 执行安全功能 FilterSecurityInterceptor -&gt; 权限判断，调用 AccessDecisionManager DispatcherServlet -&gt; Controller -&gt; 业务处理 响应返回 -&gt; Filter 链逆序执行后处理（如清理 SecurityContext） 其中重要的 Filter 有
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/spring/spring-security/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/spring/spring-security/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="Spring Security">
+  <meta property="og:description" content="Spring Security 是基于 Spring 生态的用于保护 Java 应用程序的框架。它提供了身份验证、授权和防护机制等功能
+Spring Security 中重要的设计思想是 责任链模式，它将网络请求通过 Filter 链逐步处理。每个 Filter 可以决定请求是否继续传递给下一个 Filter，或者直接返回响应（如认证失败、权限不足）。
+Spring Security 默认链中主要 Filter 按顺序如下：
+Filter 作用 SecurityContextPersistenceFilter 从 Session 或其他存储加载 SecurityContext（包含 Authentication）到线程上下文，保证请求内可访问 SecurityContextHolder UsernamePasswordAuthenticationFilter 处理表单登录认证，解析用户名/密码，调用 AuthenticationManager 进行身份验证 BasicAuthenticationFilter 处理 HTTP Basic 认证 BearerTokenAuthenticationFilter 处理 OAuth2 / JWT Token CsrfFilter 处理 CSRF 校验 LogoutFilter 处理登出请求 SessionManagementFilter 管理 Session（并发控制、Session Fixation 防护） ExceptionTranslationFilter 捕获安全异常（如 AuthenticationException / AccessDeniedException）并生成 HTTP 响应 FilterSecurityInterceptor 最终权限校验，调用 AccessDecisionManager 判断是否允许访问资源 请求处理流程的主要流程
+客户端请求 -&gt; 进入 Servlet Filter DelegatingFilterProxy -&gt; 委托给 FilterChainProxy SecurityContextPersistenceFilter -&gt; 从 Session/Token 加载 SecurityContext UsernamePasswordAuthenticationFilter / BasicAuthenticationFilter -&gt; 认证处理 调用 AuthenticationManager.authenticate() 返回认证成功的 Authentication，存入 SecurityContext SessionManagementFilter / CsrfFilter / LogoutFilter / RememberMeFilter -&gt; 执行安全功能 FilterSecurityInterceptor -&gt; 权限判断，调用 AccessDecisionManager DispatcherServlet -&gt; Controller -&gt; 业务处理 响应返回 -&gt; Filter 链逆序执行后处理（如清理 SecurityContext） 其中重要的 Filter 有">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="spring">
+    <meta property="article:published_time" content="2026-02-17T13:04:35+08:00">
+    <meta property="article:modified_time" content="2026-02-17T13:04:35+08:00">
+
+  
+  <meta itemprop="name" content="Spring Security">
+  <meta itemprop="description" content="Spring Security 是基于 Spring 生态的用于保护 Java 应用程序的框架。它提供了身份验证、授权和防护机制等功能
+Spring Security 中重要的设计思想是 责任链模式，它将网络请求通过 Filter 链逐步处理。每个 Filter 可以决定请求是否继续传递给下一个 Filter，或者直接返回响应（如认证失败、权限不足）。
+Spring Security 默认链中主要 Filter 按顺序如下：
+Filter 作用 SecurityContextPersistenceFilter 从 Session 或其他存储加载 SecurityContext（包含 Authentication）到线程上下文，保证请求内可访问 SecurityContextHolder UsernamePasswordAuthenticationFilter 处理表单登录认证，解析用户名/密码，调用 AuthenticationManager 进行身份验证 BasicAuthenticationFilter 处理 HTTP Basic 认证 BearerTokenAuthenticationFilter 处理 OAuth2 / JWT Token CsrfFilter 处理 CSRF 校验 LogoutFilter 处理登出请求 SessionManagementFilter 管理 Session（并发控制、Session Fixation 防护） ExceptionTranslationFilter 捕获安全异常（如 AuthenticationException / AccessDeniedException）并生成 HTTP 响应 FilterSecurityInterceptor 最终权限校验，调用 AccessDecisionManager 判断是否允许访问资源 请求处理流程的主要流程
+客户端请求 -&gt; 进入 Servlet Filter DelegatingFilterProxy -&gt; 委托给 FilterChainProxy SecurityContextPersistenceFilter -&gt; 从 Session/Token 加载 SecurityContext UsernamePasswordAuthenticationFilter / BasicAuthenticationFilter -&gt; 认证处理 调用 AuthenticationManager.authenticate() 返回认证成功的 Authentication，存入 SecurityContext SessionManagementFilter / CsrfFilter / LogoutFilter / RememberMeFilter -&gt; 执行安全功能 FilterSecurityInterceptor -&gt; 权限判断，调用 AccessDecisionManager DispatcherServlet -&gt; Controller -&gt; 业务处理 响应返回 -&gt; Filter 链逆序执行后处理（如清理 SecurityContext） 其中重要的 Filter 有">
+  <meta itemprop="datePublished" content="2026-02-17T13:04:35+08:00">
+  <meta itemprop="dateModified" content="2026-02-17T13:04:35+08:00">
+  <meta itemprop="wordCount" content="1559">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Spring Security">
+  <meta name="twitter:description" content="Spring Security 是基于 Spring 生态的用于保护 Java 应用程序的框架。它提供了身份验证、授权和防护机制等功能
+Spring Security 中重要的设计思想是 责任链模式，它将网络请求通过 Filter 链逐步处理。每个 Filter 可以决定请求是否继续传递给下一个 Filter，或者直接返回响应（如认证失败、权限不足）。
+Spring Security 默认链中主要 Filter 按顺序如下：
+Filter 作用 SecurityContextPersistenceFilter 从 Session 或其他存储加载 SecurityContext（包含 Authentication）到线程上下文，保证请求内可访问 SecurityContextHolder UsernamePasswordAuthenticationFilter 处理表单登录认证，解析用户名/密码，调用 AuthenticationManager 进行身份验证 BasicAuthenticationFilter 处理 HTTP Basic 认证 BearerTokenAuthenticationFilter 处理 OAuth2 / JWT Token CsrfFilter 处理 CSRF 校验 LogoutFilter 处理登出请求 SessionManagementFilter 管理 Session（并发控制、Session Fixation 防护） ExceptionTranslationFilter 捕获安全异常（如 AuthenticationException / AccessDeniedException）并生成 HTTP 响应 FilterSecurityInterceptor 最终权限校验，调用 AccessDecisionManager 判断是否允许访问资源 请求处理流程的主要流程
+客户端请求 -&gt; 进入 Servlet Filter DelegatingFilterProxy -&gt; 委托给 FilterChainProxy SecurityContextPersistenceFilter -&gt; 从 Session/Token 加载 SecurityContext UsernamePasswordAuthenticationFilter / BasicAuthenticationFilter -&gt; 认证处理 调用 AuthenticationManager.authenticate() 返回认证成功的 Authentication，存入 SecurityContext SessionManagementFilter / CsrfFilter / LogoutFilter / RememberMeFilter -&gt; 执行安全功能 FilterSecurityInterceptor -&gt; 权限判断，调用 AccessDecisionManager DispatcherServlet -&gt; Controller -&gt; 业务处理 响应返回 -&gt; Filter 链逆序执行后处理（如清理 SecurityContext） 其中重要的 Filter 有">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">Spring Security</h1>
+
+    
+      <div class="post-date">February 17, 2026</div>
+    
+
+    <div class="post-content">
+      <p>Spring Security 是基于 Spring 生态的用于保护 Java 应用程序的框架。它提供了身份验证、授权和防护机制等功能</p>
+<p>Spring Security 中重要的设计思想是 <strong>责任链模式</strong>，它将网络请求通过 Filter 链逐步处理。每个 Filter 可以决定请求是否继续传递给下一个 Filter，或者直接返回响应（如认证失败、权限不足）。</p>
+<p>Spring Security 默认链中主要 Filter 按顺序如下：</p>
+<table>
+  <thead>
+      <tr>
+          <th>Filter</th>
+          <th>作用</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>SecurityContextPersistenceFilter</code></td>
+          <td>从 Session 或其他存储加载 <code>SecurityContext</code>（包含 <code>Authentication</code>）到线程上下文，保证请求内可访问 <code>SecurityContextHolder</code></td>
+      </tr>
+      <tr>
+          <td><code>UsernamePasswordAuthenticationFilter</code></td>
+          <td>处理表单登录认证，解析用户名/密码，调用 <code>AuthenticationManager</code> 进行身份验证</td>
+      </tr>
+      <tr>
+          <td><code>BasicAuthenticationFilter</code></td>
+          <td>处理 HTTP Basic 认证</td>
+      </tr>
+      <tr>
+          <td><code>BearerTokenAuthenticationFilter</code></td>
+          <td>处理 OAuth2 / JWT Token</td>
+      </tr>
+      <tr>
+          <td><code>CsrfFilter</code></td>
+          <td>处理 CSRF 校验</td>
+      </tr>
+      <tr>
+          <td><code>LogoutFilter</code></td>
+          <td>处理登出请求</td>
+      </tr>
+      <tr>
+          <td><code>SessionManagementFilter</code></td>
+          <td>管理 Session（并发控制、Session Fixation 防护）</td>
+      </tr>
+      <tr>
+          <td><code>ExceptionTranslationFilter</code></td>
+          <td>捕获安全异常（如 AuthenticationException / AccessDeniedException）并生成 HTTP 响应</td>
+      </tr>
+      <tr>
+          <td><code>FilterSecurityInterceptor</code></td>
+          <td>最终权限校验，调用 <code>AccessDecisionManager</code> 判断是否允许访问资源</td>
+      </tr>
+  </tbody>
+</table>
+<p><strong>请求处理流程的主要流程</strong></p>
+<ol>
+<li><strong>客户端请求</strong> -&gt; 进入 Servlet Filter</li>
+<li><strong>DelegatingFilterProxy</strong> -&gt; 委托给 <code>FilterChainProxy</code></li>
+<li><strong>SecurityContextPersistenceFilter</strong> -&gt; 从 Session/Token 加载 <code>SecurityContext</code></li>
+<li><strong>UsernamePasswordAuthenticationFilter / BasicAuthenticationFilter</strong> -&gt; 认证处理
+<ul>
+<li>调用 <code>AuthenticationManager.authenticate()</code></li>
+<li>返回认证成功的 <code>Authentication</code>，存入 <code>SecurityContext</code></li>
+</ul>
+</li>
+<li><strong>SessionManagementFilter / CsrfFilter / LogoutFilter / RememberMeFilter</strong> -&gt; 执行安全功能</li>
+<li><strong>FilterSecurityInterceptor</strong> -&gt; 权限判断，调用 <code>AccessDecisionManager</code></li>
+<li><strong>DispatcherServlet -&gt; Controller</strong> -&gt; 业务处理</li>
+<li><strong>响应返回</strong> -&gt; Filter 链逆序执行后处理（如清理 SecurityContext）</li>
+</ol>
+<p>其中重要的 Filter 有</p>
+<ul>
+<li><code>UsernamePasswordAuthenticationFilter</code>：认证操作全靠这个过滤器</li>
+<li><code>ExceptionTranslationFilter</code>：异常转换过滤器位于整个 SpringSecurityFilterChain 的后方，用来转换整个链路中出现的异常</li>
+<li><code>FilterSecurityInterceptor</code>：获取所配置资源访问的授权信息，根据 SecurityContextHolder 中存储的用户信息来决定其是否有权限</li>
+</ul>
+<p><strong>接下来我们着重看一下身份认证</strong></p>
+<p><code>UsernamePasswordAuthenticationFilter</code> 是身份认证过滤器，<code>AuthenticationManager</code> 类是过滤器中用于认证过程总入口。它可以理解为一个认证调度中心，所有的登录认证请求都会经过它来处理。</p>
+<p>主要的认证流程是</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">接收一个 Authentication 请求对象 -&gt; 找到合适的认证器 -&gt; 调用认证逻辑 -&gt; 返回一个认证成功的 Authentication 对象（带上用户权限信息等
+</span></span></code></pre></div><p>Spring Secturity 在基于内存中的用户认证过程中，是通过 <code>loadUserByUserName</code> 获取的账号和密码并存入内存中的。之后会再调用其他方法来判断客户端输入的账号密码是否和内存中的数据匹配。</p>
+<p>这个 <code>loadUserByUserName</code> 方法是通过 <code>UserDetailsService</code> 获取的，它是一个抽象接口，内部的实现可以自由配置。</p>
+<p><strong>一般，账号密码都是存入数据库的，所以如果我们需要基于数据库来实现用的认证</strong>，我们可以通过继承 <code>UserDetailsService</code> 接口重写 <code>loadUserByUserName</code> 中的获取账号密码的逻辑即可。</p>
+<p>查看该接口</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="kd">public</span><span class="w"> </span><span class="kd">interface</span> <span class="nc">UserDetailsService</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">UserDetails</span><span class="w"> </span><span class="nf">loadUserByUsername</span><span class="p">(</span><span class="n">String</span><span class="w"> </span><span class="n">username</span><span class="p">)</span><span class="w"> </span><span class="kd">throws</span><span class="w"> </span><span class="n">UsernameNotFoundException</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>发现该接口返回的是 <code>UserDetails</code>，查看该类</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="kd">public</span><span class="w"> </span><span class="kd">interface</span> <span class="nc">UserDetails</span><span class="w"> </span><span class="kd">extends</span><span class="w"> </span><span class="n">Serializable</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">Collection</span><span class="o">&lt;?</span><span class="w"> </span><span class="kd">extends</span><span class="w"> </span><span class="n">GrantedAuthority</span><span class="o">&gt;</span><span class="w"> </span><span class="nf">getAuthorities</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">String</span><span class="w"> </span><span class="nf">getPassword</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">String</span><span class="w"> </span><span class="nf">getUsername</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">default</span><span class="w"> </span><span class="kt">boolean</span><span class="w"> </span><span class="nf">isAccountNonExpired</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="kc">true</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">default</span><span class="w"> </span><span class="kt">boolean</span><span class="w"> </span><span class="nf">isAccountNonLocked</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="kc">true</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">default</span><span class="w"> </span><span class="kt">boolean</span><span class="w"> </span><span class="nf">isCredentialsNonExpired</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="kc">true</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">default</span><span class="w"> </span><span class="kt">boolean</span><span class="w"> </span><span class="nf">isEnabled</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="kc">true</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>可以看到这是一个接口，是用来获取我们储存的用户信息。我们需要实现该接口，可以使其能够正确返回正确的信息。从数据库查询到的用户信息肯定是会被存入实体类中的 <code>User</code>，我们可以在 <code>UserDetails</code> 的实现类中保存该类的一个引用从而获取信息</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="nd">@Data</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nd">@AllArgsConstructor</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nd">@NoArgsConstructor</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">UserDetailsImpl</span><span class="w"> </span><span class="kd">implements</span><span class="w"> </span><span class="n">UserDetails</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="n">User</span><span class="w"> </span><span class="n">user</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nd">@Override</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="n">Collection</span><span class="o">&lt;?</span><span class="w"> </span><span class="kd">extends</span><span class="w"> </span><span class="n">GrantedAuthority</span><span class="o">&gt;</span><span class="w"> </span><span class="nf">getAuthorities</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">List</span><span class="p">.</span><span class="na">of</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nd">@Override</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="n">String</span><span class="w"> </span><span class="nf">getPassword</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">user</span><span class="p">.</span><span class="na">getPassword</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nd">@Override</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="n">String</span><span class="w"> </span><span class="nf">getUsername</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">user</span><span class="p">.</span><span class="na">getUsername</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nd">@Override</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kt">boolean</span><span class="w"> </span><span class="nf">isAccountNonExpired</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">UserDetails</span><span class="p">.</span><span class="na">super</span><span class="p">.</span><span class="na">isAccountNonExpired</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nd">@Override</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kt">boolean</span><span class="w"> </span><span class="nf">isAccountNonLocked</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">UserDetails</span><span class="p">.</span><span class="na">super</span><span class="p">.</span><span class="na">isAccountNonLocked</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nd">@Override</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kt">boolean</span><span class="w"> </span><span class="nf">isCredentialsNonExpired</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">UserDetails</span><span class="p">.</span><span class="na">super</span><span class="p">.</span><span class="na">isCredentialsNonExpired</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nd">@Override</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kt">boolean</span><span class="w"> </span><span class="nf">isEnabled</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">UserDetails</span><span class="p">.</span><span class="na">super</span><span class="p">.</span><span class="na">isEnabled</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><blockquote>
+<p><strong><code>UserDetails</code></strong>  是描述用户核心信息的接口</p>
+<p><strong><code>UserDetailsService</code></strong> 是专门用来加载 <code>UserDetails</code> 的核心接口</p></blockquote>
+<p>现在我们总结一下认证的大概流程：</p>
+<p>用户在前端提交登录表单：<code>username=alice, password=123456</code></p>
+<p><code>UsernamePasswordAuthenticationFilter</code> 会拦截请求并构造认证请求对象</p>
+<blockquote>
+</blockquote>
+<p>然后 <code>AuthenticationManager</code> 会调用 <code>UserDetailsService.loadUserByUsername(&quot;alice&quot;)</code> 从数据库查出 <code>UserDetails</code>：</p>
+<ul>
+<li>username = <code>&quot;alice&quot;</code></li>
+<li>password = <code>&quot;$2a$10$...哈希值...&quot;</code></li>
+</ul>
+<p><code>DaoAuthenticationProvider</code> 用 <code>PasswordEncoder.matches()</code> 比较前端密码和数据库哈希密码</p>
+<p>如果正确返回认证成功的 <code>Authentication</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="c1">// 根据用户名和密码创建认证令牌</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">Authentication</span><span class="w"> </span><span class="n">authToken</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">UsernamePasswordAuthenticationToken</span><span class="p">(</span><span class="n">username</span><span class="p">,</span><span class="w"> </span><span class="n">password</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 调用认证处理对象的 authenticate 方法进行认证</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">Authentication</span><span class="w"> </span><span class="n">authenticate</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">authenticationManager</span><span class="p">.</span><span class="na">authenticate</span><span class="p">(</span><span class="n">authToken</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 认证令牌中的 isAuthenticated() 返回 false 代表未认证</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 返回的认证对象 isAuthenticated() 返回 true 代表已认证</span><span class="w">
+</span></span></span></code></pre></div><p>来看一下这个过程中涉及的核心类</p>
+<p><strong><code>AuthenticationManager</code></strong></p>
+<ul>
+<li>核心接口，用于执行身份验证：</li>
+</ul>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">Authentication</span><span class="w"> </span><span class="nf">authenticate</span><span class="p">(</span><span class="n">Authentication</span><span class="w"> </span><span class="n">authentication</span><span class="p">)</span><span class="w"> </span><span class="kd">throws</span><span class="w"> </span><span class="n">AuthenticationException</span><span class="p">;</span><span class="w">
+</span></span></span></code></pre></div><ul>
+<li>常用实现：
+<ul>
+<li><code>ProviderManager</code>：维护一个 <code>AuthenticationProvider</code> 列表，逐个尝试认证。</li>
+</ul>
+</li>
+</ul>
+<p><strong><code>AuthenticationProvider</code></strong></p>
+<ul>
+<li>具体认证逻辑实现：
+<ul>
+<li><code>DaoAuthenticationProvider</code>：基于数据库用户名/密码认证</li>
+<li><code>JwtAuthenticationProvider</code>：基于 JWT Token 认证</li>
+</ul>
+</li>
+<li>判断 <code>Authentication</code> 是否有效，生成认证后的 <code>Authentication</code> 对象。</li>
+</ul>
+<p><strong><code>Authentication</code></strong></p>
+<ul>
+<li>身份认证令牌，封装认证信息：
+<ul>
+<li><code>principal</code>：用户身份（UserDetails）</li>
+<li><code>credentials</code>：凭证（密码、Token）</li>
+<li><code>authorities</code>：角色或权限列表</li>
+<li><code>authenticated</code>：是否认证成功</li>
+</ul>
+</li>
+</ul>
+<p><strong><code>SecurityContext</code> &amp; <code>SecurityContextHolder</code></strong></p>
+<ul>
+<li><strong>SecurityContext</strong>：保存当前请求的 <code>Authentication</code> 对象</li>
+<li><strong>SecurityContextHolder</strong>：提供访问当前线程上下文 <code>SecurityContext</code> 的入口</li>
+</ul>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">SecurityContextHolder</span><span class="p">.</span><span class="na">getContext</span><span class="p">().</span><span class="na">getAuthentication</span><span class="p">();</span><span class="w">
+</span></span></span></code></pre></div><ul>
+<li><strong>UserDetailsService</strong>：用户信息查询服务，定义了 loadUserByUsername 方法查询用户信息</li>
+<li><strong>UserDetails</strong>：封装了用户的详细信息，UserDetailsService 查询的用户信息都会封装到这个对象中</li>
+</ul>
+<p><strong><code>GrantedAuthority</code></strong></p>
+<ul>
+<li>表示用户的权限或角色</li>
+<li>用于最终访问控制（如 <code>ROLE_ADMIN</code>、<code>ROLE_USER</code>）</li>
+</ul>
+<p><strong><code>AccessDecisionManager</code> &amp; <code>AccessDecisionVoter</code></strong></p>
+<ul>
+<li>最终由 <code>FilterSecurityInterceptor</code> 调用</li>
+<li>判断当前用户是否有访问某个 URL 或方法的权限</li>
+</ul>
+<p>在解了如何获取用户信息之后，接下来看一下一个 spring security 的基本配置</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="nd">@Configuration</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nd">@EnableWebSecurity</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">SecurityConfig</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nd">@Autowired</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="n">JwtAuthenticationTokenFilter</span><span class="w"> </span><span class="n">jwtAuthenticationTokenFilter</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nd">@Bean</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="n">PasswordEncoder</span><span class="w"> </span><span class="nf">passwordEncoder</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">BCryptPasswordEncoder</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nd">@Bean</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="n">AuthenticationManager</span><span class="w"> </span><span class="nf">authenticationManager</span><span class="p">(</span><span class="n">AuthenticationConfiguration</span><span class="w"> </span><span class="n">authConfig</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="kd">throws</span><span class="w"> </span><span class="n">Exception</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">authConfig</span><span class="p">.</span><span class="na">getAuthenticationManager</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nd">@Bean</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="n">SecurityFilterChain</span><span class="w"> </span><span class="nf">filterChain</span><span class="p">(</span><span class="n">HttpSecurity</span><span class="w"> </span><span class="n">http</span><span class="p">)</span><span class="w"> </span><span class="kd">throws</span><span class="w"> </span><span class="n">Exception</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">http</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="c1">// 开启授权保护</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="na">authorizeHttpRequests</span><span class="p">(</span><span class="n">authorize</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="n">authorize</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                        </span><span class="c1">// 不需要认证的地址有哪些</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                        </span><span class="p">.</span><span class="na">requestMatchers</span><span class="p">(</span><span class="s">&#34;&#34;</span><span class="p">).</span><span class="na">permitAll</span><span class="p">()</span><span class="w">	</span><span class="c1">// ** 通配符</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                        </span><span class="c1">// 对所有请求开启授权保护</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                        </span><span class="p">.</span><span class="na">anyRequest</span><span class="p">().</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                        </span><span class="c1">// 已认证的请求会被自动授权</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                                </span><span class="n">authenticated</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="c1">// 使用默认的登陆登出页面进行授权登陆</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="na">formLogin</span><span class="p">(</span><span class="n">Customizer</span><span class="p">.</span><span class="na">withDefaults</span><span class="p">())</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="c1">// 启用“记住我”功能的。允许用户在关闭浏览器后，仍然保持登录状态，直到他们主动注销或超出设定的过期时间。</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="na">rememberMe</span><span class="p">(</span><span class="n">Customizer</span><span class="p">.</span><span class="na">withDefaults</span><span class="p">());</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="c1">// 关闭 csrf CSRF（跨站请求伪造）是一种网络攻击，攻击者通过欺骗已登录用户，诱使他们在不知情的情况下向受信任的网站发送请求。</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">http</span><span class="p">.</span><span class="na">csrf</span><span class="p">(</span><span class="n">AbstractHttpConfigurer</span><span class="p">::</span><span class="n">disable</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="c1">// 加入过滤器</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">http</span><span class="p">.</span><span class="na">addFilterBefore</span><span class="p">(</span><span class="n">jwtAuthenticationTokenFilter</span><span class="p">,</span><span class="w"> </span><span class="n">UsernamePasswordAuthenticationFilter</span><span class="p">.</span><span class="na">class</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">http</span><span class="p">.</span><span class="na">build</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>在上述配置类中设置了一个 <code>PasswordEncoder</code> 类，这是 Spring Security 提供的加密类，是用于保护用户信息等内容的安全机制。</p>
+<p>一般说，数据库存储的密码都是加密过的，当前端界面提交一份用户信息，后端程序需要使用 <code>PasswordEncoder</code> 对进行 <code>encode</code> 加密，然后再存入数据库。当用户登录时，可以使用其 <code>matches</code> 方法来判断是否与当前数据库存储的数据一致</p>
+<h4 id="spring-security-的加密机制">Spring Security 的加密机制</h4>
+<p><strong>PasswordEncoder</strong>接口</p>
+<p>Spring Security 提供了 <code>PasswordEncoder</code> 接口，用于定义密码的加密和验证方法。主要有以下几种实现：</p>
+<ul>
+<li><strong>BCryptPasswordEncoder</strong>：基于 BCrypt 算法，具有适应性和强大的加密强度。它可以根据需求自动调整加密的复杂性。</li>
+<li><strong>NoOpPasswordEncoder</strong>：不执行加密，适用于开发和测试环境，不建议在生产环境中使用。</li>
+<li><strong>Pbkdf2PasswordEncoder</strong>、<strong>Argon2PasswordEncoder</strong> 等：这些都是基于不同算法的实现，具有不同的安全特性。</li>
+</ul>
+<p><strong>BCrypt</strong> 算法</p>
+<p>BCrypt 是一种安全的密码哈希算法，具有以下特点：</p>
+<ul>
+<li><strong>盐值（Salt）</strong>：每次加密时都会生成一个随机盐值，确保相同的密码在每次加密时生成不同的哈希值。</li>
+<li><strong>适应性</strong>：通过增加计算复杂性（如工作因子），可以提高密码的加密强度。</li>
+</ul>
+<h4 id="用户状态存储方式">用户状态存储方式</h4>
+<p>当 spring security 生成了验证信息后，它本身<strong>不规定存储方式</strong>。所以需要看一下常用的客户端和服务端一般有两种方式保存认证状态</p>
+<p>基于 <strong>Session</strong>（状态性认证，Stateful）</p>
+<ul>
+<li><strong>存储位置</strong>：服务器端存储用户认证信息在 <strong>HttpSession</strong> 中</li>
+<li><strong>流程</strong>：
+<ol>
+<li>用户登录 -&gt; Spring Security 校验用户名密码</li>
+<li>生成 <code>Authentication</code> -&gt; 保存到 <code>SecurityContext</code> -&gt; 存入 Session</li>
+<li>后续请求带上 Session ID -&gt; 服务端读取 Session -&gt; 获取用户信息</li>
+</ol>
+</li>
+<li><strong>特点</strong>：
+<ul>
+<li>服务端维护状态</li>
+<li>容易实现登出（删除 Session）</li>
+<li>不适合分布式（除非用 Session 集群 / Redis）</li>
+</ul>
+</li>
+</ul>
+<p><strong>spring security 基于 session 的身份认证原理</strong></p>
+<p><strong>核心思想</strong></p>
+<ul>
+<li>认证信息保存在 <strong>服务器端</strong>（通常是 HttpSession）。</li>
+<li>客户端通过 <strong>Cookie（JSESSIONID）</strong> 与服务器通信，每次请求带上 Session ID。</li>
+<li>Spring Security 会自动把认证信息存入 <code>SecurityContext</code>，并存入 Session。</li>
+</ul>
+<p><strong>流程</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">客户端登录请求
+</span></span><span class="line"><span class="cl">      ↓
+</span></span><span class="line"><span class="cl">UsernamePasswordAuthenticationFilter
+</span></span><span class="line"><span class="cl">      ↓
+</span></span><span class="line"><span class="cl">AuthenticationManager -&gt; AuthenticationProvider
+</span></span><span class="line"><span class="cl">      ↓
+</span></span><span class="line"><span class="cl">生成 Authentication 对象
+</span></span><span class="line"><span class="cl">      ↓
+</span></span><span class="line"><span class="cl">SecurityContextPersistenceFilter
+</span></span><span class="line"><span class="cl">      ↓
+</span></span><span class="line"><span class="cl">将 Authentication 存入 SecurityContextHolder
+</span></span><span class="line"><span class="cl">      ↓
+</span></span><span class="line"><span class="cl">将 SecurityContext 存入 HttpSession
+</span></span><span class="line"><span class="cl">      ↓
+</span></span><span class="line"><span class="cl">响应客户端（返回 Cookie: JSESSIONID）
+</span></span></code></pre></div><p><strong>后续请求</strong></p>
+<ol>
+<li>客户端带上 Cookie: JSESSIONID</li>
+<li><code>SecurityContextPersistenceFilter</code> 从 Session 加载 SecurityContext</li>
+<li>将 Authentication 放入 SecurityContextHolder</li>
+<li>FilterSecurityInterceptor 校验权限</li>
+<li>Controller 处理请求</li>
+</ol>
+<p>基于 <strong>Token</strong>（无状态认证，Stateless）</p>
+<ul>
+<li><strong>存储位置</strong>：客户端持有 Token（如 JWT），服务端不保存认证状态</li>
+<li><strong>流程</strong>：
+<ol>
+<li>用户登录 -&gt; Spring Security 验证用户名密码</li>
+<li>生成 Token（JWT）返回给客户端</li>
+<li>客户端每次请求带上 Token（Header/Query）</li>
+<li>服务端通过 Token 验证用户身份（无需 Session）</li>
+</ol>
+</li>
+<li><strong>特点</strong>：
+<ul>
+<li>无状态，不依赖服务器保存 Session</li>
+<li>支持分布式系统</li>
+<li>Token 一旦生成，无法立即失效（除非做 Token 黑名单管理）</li>
+</ul>
+</li>
+</ul>
+<p><strong>基于 JWT 的身份验证（Stateless）</strong></p>
+<p><strong>核心思想</strong></p>
+<ul>
+<li>认证信息 <strong>不保存在服务器端</strong>，全部存储在客户端 Token（JWT）里。</li>
+<li>服务端每次请求通过解析 JWT 来验证身份。</li>
+<li>适合 <strong>分布式和移动端应用</strong>。</li>
+</ul>
+<p><strong>流程</strong></p>
+<p><strong>登录阶段</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">客户端发送用户名/密码登录请求
+</span></span><span class="line"><span class="cl">      ↓
+</span></span><span class="line"><span class="cl">UsernamePasswordAuthenticationFilter
+</span></span><span class="line"><span class="cl">      ↓
+</span></span><span class="line"><span class="cl">AuthenticationManager -&gt; AuthenticationProvider
+</span></span><span class="line"><span class="cl">      ↓
+</span></span><span class="line"><span class="cl">生成 Authentication 对象
+</span></span><span class="line"><span class="cl">      ↓
+</span></span><span class="line"><span class="cl">生成 JWT（包含 userId、roles 等）
+</span></span><span class="line"><span class="cl">      ↓
+</span></span><span class="line"><span class="cl">返回 JWT 给客户端
+</span></span></code></pre></div><p><strong>请求阶段</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">客户端请求 API，并在 Header 中带上 JWT（Authorization: Bearer &lt;token&gt;）
+</span></span><span class="line"><span class="cl">      ↓
+</span></span><span class="line"><span class="cl">JwtAuthenticationFilter（自定义 Filter）
+</span></span><span class="line"><span class="cl">      ↓
+</span></span><span class="line"><span class="cl">解析 JWT，验证签名和有效期
+</span></span><span class="line"><span class="cl">      ↓
+</span></span><span class="line"><span class="cl">生成 Authentication 对象
+</span></span><span class="line"><span class="cl">      ↓
+</span></span><span class="line"><span class="cl">SecurityContextHolder.setContext<span class="o">(</span>authentication<span class="o">)</span>
+</span></span><span class="line"><span class="cl">      ↓
+</span></span><span class="line"><span class="cl">FilterSecurityInterceptor 进行权限校验
+</span></span><span class="line"><span class="cl">      ↓
+</span></span><span class="line"><span class="cl">Controller 处理请求
+</span></span></code></pre></div><blockquote>
+<p>这里我们强调一下 <code>UsernamePasswordAuthenticationFilter</code> 的执行逻辑只在首次提交登录表单时触发，那么程序是如何判断这个时机呢</p>
+<p><code>UsernamePasswordAuthenticationFilter</code> 内部有两个关键属性：</p>
+<pre tabindex="0"><code>private String filterProcessesUrl = &#34;/login&#34;; // 默认登录 URL
+private boolean postOnly = true;             // 默认只处理 POST 请求
+</code></pre><ul>
+<li><strong>filterProcessesUrl</strong>：指定登录请求的 URL</li>
+<li><strong>postOnly</strong>：是否只处理 POST 方法</li>
+</ul>
+<p>一个关键方法 <code>requiresAuthentication()</code> 内部就是根据这两个属性判断“是否需要触发登录认证”的</p>
+<p><strong>只要请求 URL 是登录 URL 且是 POST，就认为是首次提交表单</strong></p></blockquote>
+<p>要知道 <strong>SecurityContextPersistenceFilter 会执行两次逻辑</strong>：</p>
+<ol>
+<li><strong>请求开始时</strong>：读取 Session 恢复 <code>SecurityContext</code> 到 <code>SecurityContextHolder</code></li>
+<li><strong>请求结束时</strong>：把 <code>SecurityContextHolder</code> 的内容保存回 Session</li>
+</ol>
+<p>因此当第一次认证过后，基于 session 储存认证信息的方式可以再次拿到认证信息，但是基于 token 的认证方式一般会将 session 禁用，所以它不能从 session 中拿到，因此就需要自己通过继承 <code>OncePerRequestFilter</code> 来自定义一个 Filter 逻辑来获取认证信息</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="nd">@Component</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">JwtAuthenticationTokenFilter</span><span class="w"> </span><span class="kd">extends</span><span class="w"> </span><span class="n">OncePerRequestFilter</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nd">@Autowired</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="n">UserMapper</span><span class="w"> </span><span class="n">userMapper</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nd">@Override</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">protected</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">doFilterInternal</span><span class="p">(</span><span class="n">HttpServletRequest</span><span class="w"> </span><span class="n">request</span><span class="p">,</span><span class="w"> </span><span class="nd">@NotNull</span><span class="w"> </span><span class="n">HttpServletResponse</span><span class="w"> </span><span class="n">response</span><span class="p">,</span><span class="w"> </span><span class="nd">@NotNull</span><span class="w"> </span><span class="n">FilterChain</span><span class="w"> </span><span class="n">filterChain</span><span class="p">)</span><span class="w"> </span><span class="kd">throws</span><span class="w"> </span><span class="n">ServletException</span><span class="p">,</span><span class="w"> </span><span class="n">IOException</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">String</span><span class="w"> </span><span class="n">token</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">request</span><span class="p">.</span><span class="na">getHeader</span><span class="p">(</span><span class="s">&#34;Authorization&#34;</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">StringUtils</span><span class="p">.</span><span class="na">hasText</span><span class="p">(</span><span class="n">token</span><span class="p">)</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="o">!</span><span class="n">token</span><span class="p">.</span><span class="na">startsWith</span><span class="p">(</span><span class="s">&#34;Bearer &#34;</span><span class="p">))</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">filterChain</span><span class="p">.</span><span class="na">doFilter</span><span class="p">(</span><span class="n">request</span><span class="p">,</span><span class="w"> </span><span class="n">response</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="k">return</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">token</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">token</span><span class="p">.</span><span class="na">substring</span><span class="p">(</span><span class="n">7</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">String</span><span class="w"> </span><span class="n">userid</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">try</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">Claims</span><span class="w"> </span><span class="n">claims</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">JwtUtil</span><span class="p">.</span><span class="na">parseJWT</span><span class="p">(</span><span class="n">token</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">userid</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">claims</span><span class="p">.</span><span class="na">getSubject</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(</span><span class="n">Exception</span><span class="w"> </span><span class="n">e</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="k">throw</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">RuntimeException</span><span class="p">(</span><span class="n">e</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">User</span><span class="w"> </span><span class="n">user</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">userMapper</span><span class="p">.</span><span class="na">selectById</span><span class="p">(</span><span class="n">Integer</span><span class="p">.</span><span class="na">parseInt</span><span class="p">(</span><span class="n">userid</span><span class="p">));</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">user</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="kc">null</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="k">throw</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">RuntimeException</span><span class="p">(</span><span class="s">&#34;用户名未登录&#34;</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">UserDetailsImpl</span><span class="w"> </span><span class="n">loginUser</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">UserDetailsImpl</span><span class="p">(</span><span class="n">user</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">UsernamePasswordAuthenticationToken</span><span class="w"> </span><span class="n">authenticationToken</span><span class="w"> </span><span class="o">=</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="k">new</span><span class="w"> </span><span class="n">UsernamePasswordAuthenticationToken</span><span class="p">(</span><span class="n">loginUser</span><span class="p">,</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w"> </span><span class="kc">null</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="c1">// 如果是有效的jwt，那么设置该用户为认证后的用户</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">SecurityContextHolder</span><span class="p">.</span><span class="na">getContext</span><span class="p">().</span><span class="na">setAuthentication</span><span class="p">(</span><span class="n">authenticationToken</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">filterChain</span><span class="p">.</span><span class="na">doFilter</span><span class="p">(</span><span class="n">request</span><span class="p">,</span><span class="w"> </span><span class="n">response</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><h3 id="权限校验">权限校验</h3>
+<p>Spring Security 会在请求进入 <code>FilterSecurityInterceptor</code> 之前，从 <code>SecurityContextHolder</code> 获取 <code>Authentication</code> 对象。</p>
+<p><code>Authentication</code> 里有用户的权限信息（通常是 <code>GrantedAuthority</code>）。</p>
+<p>然后会根据在配置中写的 <strong>访问规则</strong>（比如 <code>hasRole(&quot;ADMIN&quot;)</code>），来判断当前用户是否有权限访问。</p>
+<p>有两种权限校验的方式</p>
+<h4 id="基于-url-的权限控制">基于 URL 的权限控制</h4>
+<p>配置 <code>SecurityFilterChain</code>，对不同 URL 设置访问规则：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="nd">@Configuration</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nd">@EnableWebSecurity</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">SecurityConfig</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nd">@Bean</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="n">SecurityFilterChain</span><span class="w"> </span><span class="nf">securityFilterChain</span><span class="p">(</span><span class="n">HttpSecurity</span><span class="w"> </span><span class="n">http</span><span class="p">)</span><span class="w"> </span><span class="kd">throws</span><span class="w"> </span><span class="n">Exception</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">http</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="p">.</span><span class="na">authorizeHttpRequests</span><span class="p">(</span><span class="n">auth</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="n">auth</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="na">requestMatchers</span><span class="p">(</span><span class="s">&#34;/public/**&#34;</span><span class="p">).</span><span class="na">permitAll</span><span class="p">()</span><span class="w">   </span><span class="c1">// 公开接口，无需认证</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="na">requestMatchers</span><span class="p">(</span><span class="s">&#34;/admin/**&#34;</span><span class="p">).</span><span class="na">hasRole</span><span class="p">(</span><span class="s">&#34;ADMIN&#34;</span><span class="p">)</span><span class="w"> </span><span class="c1">// 需要 ADMIN 角色</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="na">requestMatchers</span><span class="p">(</span><span class="s">&#34;/user/**&#34;</span><span class="p">).</span><span class="na">hasAnyRole</span><span class="p">(</span><span class="s">&#34;USER&#34;</span><span class="p">,</span><span class="w"> </span><span class="s">&#34;ADMIN&#34;</span><span class="p">)</span><span class="w"> </span><span class="c1">// USER 或 ADMIN 可访问</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="na">anyRequest</span><span class="p">().</span><span class="na">authenticated</span><span class="p">()</span><span class="w"> </span><span class="c1">// 其他请求必须登录</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="p">.</span><span class="na">formLogin</span><span class="p">(</span><span class="n">withDefaults</span><span class="p">());</span><span class="w"> </span><span class="c1">// 开启表单登录</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">http</span><span class="p">.</span><span class="na">build</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><h4 id="基于方法的权限控制">基于方法的权限控制</h4>
+<p>在 Service 或 Controller 层面，通过注解做权限校验。</p>
+<p>需要开启：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="nd">@Configuration</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nd">@EnableMethodSecurity</span><span class="w"> </span><span class="c1">// Spring Boot 3.x / Spring Security 6.x</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">MethodSecurityConfig</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>然后在方法上使用：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="nd">@RestController</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nd">@RequestMapping</span><span class="p">(</span><span class="s">&#34;/api&#34;</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">UserController</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nd">@GetMapping</span><span class="p">(</span><span class="s">&#34;/profile&#34;</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nd">@PreAuthorize</span><span class="p">(</span><span class="s">&#34;hasRole(&#39;USER&#39;)&#34;</span><span class="p">)</span><span class="w"> </span><span class="c1">// 只有 USER 角色能访问</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="n">String</span><span class="w"> </span><span class="nf">profile</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="s">&#34;用户信息&#34;</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nd">@GetMapping</span><span class="p">(</span><span class="s">&#34;/admin&#34;</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nd">@PreAuthorize</span><span class="p">(</span><span class="s">&#34;hasAuthority(&#39;sys:admin&#39;)&#34;</span><span class="p">)</span><span class="w"> </span><span class="c1">// 需要特定权限</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="n">String</span><span class="w"> </span><span class="nf">admin</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="s">&#34;后台管理&#34;</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><h4 id="基于表达式的权限控制">基于表达式的权限控制</h4>
+<p>Spring Security 提供 SpEL 表达式，可以写得更灵活：</p>
+<ul>
+<li><code>@PreAuthorize(&quot;isAuthenticated()&quot;)</code> -&gt; 必须登录</li>
+<li><code>@PreAuthorize(&quot;hasRole('ADMIN') or hasRole('MANAGER')&quot;)</code> -&gt; 多角色支持</li>
+<li><code>@PreAuthorize(&quot;#id == authentication.principal.id&quot;)</code> -&gt; 只能访问自己的数据</li>
+</ul>
+<blockquote>
+<p>用户权限信息来自 <strong>UserDetailsService.loadUserByUsername()</strong> 里返回的 <code>UserDetails</code> 对象的 <code>getAuthorities()</code>。</p>
+<ul>
+<li>一般从数据库里查用户 -&gt; 查询角色/权限 -&gt; 封装成 <code>GrantedAuthority</code>。</li>
+</ul>
+<p><strong>FilterSecurityInterceptor</strong> 是最终的拦截器，会根据配置的规则校验是否允许访问。</p>
+<p>如果权限不足，Spring Security 默认会抛出 <code>AccessDeniedException</code>，触发 <code>AccessDeniedHandler</code>。</p></blockquote>
+<p><strong>自定义的权限校验暂空</strong></p>
+<h3 id="jwt">JWT</h3>
+<p><code>JWT</code>全称 <code>JSON Web Token</code>，实现过程简单的说就是用户登录成功之后，将用户的信息进行加密，然后生成一个 <code>token</code> 返回给客户端</p>
+<p>因为 <code>token</code> 中存放了用户的基本信息，所以肯定不能存放敏感信息，并且要对信息做一些加密处理</p>
+<p>JWT是由三段信息构成的，将这三段信息文本用<code>.</code>链接一起就构成了<code>JWT</code>字符串</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiYWRtaW4iOnRydWV9.TJVA95OrM7E2cBab30RMHrHDcEfxjoYZgeFONFh7HgQ
+</span></span></code></pre></div><ul>
+<li>第一部分：我们称它为头部（header），用于存放token类型和加密协议，一般都是固定的；</li>
+<li>第二部分：我们称其为载荷（payload），用户数据就存放在里面；</li>
+<li>第三部分：是签证（signature），主要用于服务端的验证；</li>
+</ul>
+<h4 id="header">header</h4>
+<p>JWT的头部承载两部分信息：</p>
+<ul>
+<li>声明类型，这里是JWT；</li>
+<li>声明加密的算法，通常直接使用 HMAC SHA256；</li>
+</ul>
+<p>完整的头部就像下面这样的 JSON：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;typ&#34;</span><span class="p">:</span> <span class="s2">&#34;JWT&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;alg&#34;</span><span class="p">:</span> <span class="s2">&#34;HS256&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>使用 <code>base64</code> 加密，构成了第一部分。</p>
+<h4 id="payload">payload</h4>
+<p>载荷就是存放有效信息的地方，这些有效信息包含三个部分：</p>
+<ul>
+<li>标准中注册的声明；</li>
+<li>公共的声明；</li>
+<li>私有的声明；</li>
+</ul>
+<p><strong>其中，标准中注册的声明包括如下几个部分</strong> ：</p>
+<ul>
+<li>iss：jwt 签发者；</li>
+<li>sub：jwt 所面向的用户；</li>
+<li>aud：接收 jwt 的一方；</li>
+<li>exp：jwt 的过期时间，这个过期时间必须要大于签发时间；</li>
+<li>nbf：定义在什么时间之前，该jwt都是不可用的；</li>
+<li>iat：jwt 的签发时间；</li>
+<li>jti：jwt 唯一身份标识，主要用来作为一次性token,从而回避重放攻击；</li>
+</ul>
+<p><strong>公共的声明部分</strong>：
+公共的声明可以添加任何的信息，一般添加用户的相关信息或其他业务需要的必要信息，但不建议添加敏感信息，因为该部分在客户端可解密。</p>
+<p><strong>私有的声明部分</strong>：
+私有声明是提供者和消费者所共同定义的声明，一般不建议存放敏感信息，因为<code>base64</code>是对称解密的，意味着该部分信息可以归类为明文信息。</p>
+<p>定义一个 payload 后，将其进行<code>base64</code>加密，得到<code>Jwt</code>的第二部分：</p>
+<h4 id="signature">signature</h4>
+<p>jwt 的第三部分是一个签证信息，这个签证信息由三部分组成：</p>
+<ul>
+<li>header (base64后的)；</li>
+<li>payload (base64后的)；</li>
+<li>secret (密钥);</li>
+</ul>
+<p>这个部分需要 <code>base64</code> 加密后的 <code>header</code> 和 <code>base64</code> 加密后的 <code>payload</code> 使用 <code>.</code> 连接组成的字符串，然后通过 <code>header</code> 中声明的加密方式进行加盐 <code>secret</code> 组合加密，然后就构成了 <code>jwt</code> 的第三部分。</p>
+<blockquote>
+<p>在 Spring Security 中，使用 JWT 的方式进行身份认证时，会将<strong>身份认证后的身份标识和权限信息加密成 JWT</strong>，后续会从 JWT 中拿到相应信息</p></blockquote>
+<p>一个 JWT 工具类</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="cm">/**
+</span></span></span><span class="line"><span class="cl"><span class="cm"> * JWT 工具类
+</span></span></span><span class="line"><span class="cl"><span class="cm"> * 功能：
+</span></span></span><span class="line"><span class="cl"><span class="cm"> *  - 生成 JWT
+</span></span></span><span class="line"><span class="cl"><span class="cm"> *  - 解析 JWT
+</span></span></span><span class="line"><span class="cl"><span class="cm"> *  - 校验 JWT 是否过期
+</span></span></span><span class="line"><span class="cl"><span class="cm"> *  - 从 JWT 中获取信息
+</span></span></span><span class="line"><span class="cl"><span class="cm"> */</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">JwtUtil</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="cm">/** JWT 默认有效期：14天 */</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kd">static</span><span class="w"> </span><span class="kd">final</span><span class="w"> </span><span class="kt">long</span><span class="w"> </span><span class="n">JWT_TTL</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">1000L</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">60</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">60</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">24</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">14</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="cm">/** JWT 签发者 */</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="kd">static</span><span class="w"> </span><span class="kd">final</span><span class="w"> </span><span class="n">String</span><span class="w"> </span><span class="n">ISSUER</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&#34;sg&#34;</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="cm">/** 秘钥 */</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="kd">static</span><span class="w"> </span><span class="kd">final</span><span class="w"> </span><span class="n">String</span><span class="w"> </span><span class="n">SECRET_KEY</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&#34;SDFGjhdsfalshdfHFdsjkdsfds121232131afasdfac&#34;</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="cm">/**
+</span></span></span><span class="line"><span class="cl"><span class="cm">     * 生成唯一标识（JWT ID）
+</span></span></span><span class="line"><span class="cl"><span class="cm">     */</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kd">static</span><span class="w"> </span><span class="n">String</span><span class="w"> </span><span class="nf">getUUID</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">UUID</span><span class="p">.</span><span class="na">randomUUID</span><span class="p">().</span><span class="na">toString</span><span class="p">().</span><span class="na">replaceAll</span><span class="p">(</span><span class="s">&#34;-&#34;</span><span class="p">,</span><span class="w"> </span><span class="s">&#34;&#34;</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="cm">/**
+</span></span></span><span class="line"><span class="cl"><span class="cm">     * 生成 JWT
+</span></span></span><span class="line"><span class="cl"><span class="cm">     * @param subject 主题（通常存放用户唯一标识，比如用户ID）
+</span></span></span><span class="line"><span class="cl"><span class="cm">     * @return JWT 字符串
+</span></span></span><span class="line"><span class="cl"><span class="cm">     */</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kd">static</span><span class="w"> </span><span class="n">String</span><span class="w"> </span><span class="nf">createJWT</span><span class="p">(</span><span class="n">String</span><span class="w"> </span><span class="n">subject</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">createJWT</span><span class="p">(</span><span class="n">subject</span><span class="p">,</span><span class="w"> </span><span class="kc">null</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="cm">/**
+</span></span></span><span class="line"><span class="cl"><span class="cm">     * 生成 JWT（带自定义有效期）
+</span></span></span><span class="line"><span class="cl"><span class="cm">     * @param subject 主题（通常是用户ID或用户名）
+</span></span></span><span class="line"><span class="cl"><span class="cm">     * @param ttlMillis 自定义有效期（毫秒），如果为 null 则用默认值
+</span></span></span><span class="line"><span class="cl"><span class="cm">     * @return JWT 字符串
+</span></span></span><span class="line"><span class="cl"><span class="cm">     */</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kd">static</span><span class="w"> </span><span class="n">String</span><span class="w"> </span><span class="nf">createJWT</span><span class="p">(</span><span class="n">String</span><span class="w"> </span><span class="n">subject</span><span class="p">,</span><span class="w"> </span><span class="n">Long</span><span class="w"> </span><span class="n">ttlMillis</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">ttlMillis</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="kc">null</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">ttlMillis</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">JWT_TTL</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kt">long</span><span class="w"> </span><span class="n">nowMillis</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">System</span><span class="p">.</span><span class="na">currentTimeMillis</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">Date</span><span class="w"> </span><span class="n">now</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">Date</span><span class="p">(</span><span class="n">nowMillis</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kt">long</span><span class="w"> </span><span class="n">expMillis</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nowMillis</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ttlMillis</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">Date</span><span class="w"> </span><span class="n">expDate</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">Date</span><span class="p">(</span><span class="n">expMillis</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">SecretKey</span><span class="w"> </span><span class="n">key</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">generalKey</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">Jwts</span><span class="p">.</span><span class="na">builder</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="na">id</span><span class="p">(</span><span class="n">getUUID</span><span class="p">())</span><span class="w">              </span><span class="c1">// JWT 唯一ID</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="na">subject</span><span class="p">(</span><span class="n">subject</span><span class="p">)</span><span class="w">           </span><span class="c1">// 主题（可以存放用户ID/用户名）</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="na">issuer</span><span class="p">(</span><span class="n">ISSUER</span><span class="p">)</span><span class="w">             </span><span class="c1">// 签发者</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="na">issuedAt</span><span class="p">(</span><span class="n">now</span><span class="p">)</span><span class="w">              </span><span class="c1">// 签发时间</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="na">expiration</span><span class="p">(</span><span class="n">expDate</span><span class="p">)</span><span class="w">        </span><span class="c1">// 过期时间</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="na">signWith</span><span class="p">(</span><span class="n">key</span><span class="p">,</span><span class="w"> </span><span class="n">SignatureAlgorithm</span><span class="p">.</span><span class="na">HS256</span><span class="p">)</span><span class="w"> </span><span class="c1">// 签名算法</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="na">compact</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="cm">/**
+</span></span></span><span class="line"><span class="cl"><span class="cm">     * 生成密钥
+</span></span></span><span class="line"><span class="cl"><span class="cm">     */</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="kd">static</span><span class="w"> </span><span class="n">SecretKey</span><span class="w"> </span><span class="nf">generalKey</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="c1">// JJWT 新版本推荐使用 Keys.hmacShaKeyFor</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">Keys</span><span class="p">.</span><span class="na">hmacShaKeyFor</span><span class="p">(</span><span class="n">SECRET_KEY</span><span class="p">.</span><span class="na">getBytes</span><span class="p">());</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="cm">/**
+</span></span></span><span class="line"><span class="cl"><span class="cm">     * 解析 JWT 并获取 Claims
+</span></span></span><span class="line"><span class="cl"><span class="cm">     * @param jwt JWT 字符串
+</span></span></span><span class="line"><span class="cl"><span class="cm">     * @return Claims 对象（包含 subject, exp 等）
+</span></span></span><span class="line"><span class="cl"><span class="cm">     * @throws JwtException 如果 token 无效或过期
+</span></span></span><span class="line"><span class="cl"><span class="cm">     */</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kd">static</span><span class="w"> </span><span class="n">Claims</span><span class="w"> </span><span class="nf">parseJWT</span><span class="p">(</span><span class="n">String</span><span class="w"> </span><span class="n">jwt</span><span class="p">)</span><span class="w"> </span><span class="kd">throws</span><span class="w"> </span><span class="n">JwtException</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">SecretKey</span><span class="w"> </span><span class="n">key</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">generalKey</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">Jwts</span><span class="p">.</span><span class="na">parser</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="na">verifyWith</span><span class="p">(</span><span class="n">key</span><span class="p">)</span><span class="w">   </span><span class="c1">// 校验签名</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="na">build</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="na">parseSignedClaims</span><span class="p">(</span><span class="n">jwt</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="p">.</span><span class="na">getPayload</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="cm">/**
+</span></span></span><span class="line"><span class="cl"><span class="cm">     * 判断 Token 是否过期
+</span></span></span><span class="line"><span class="cl"><span class="cm">     */</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kd">static</span><span class="w"> </span><span class="kt">boolean</span><span class="w"> </span><span class="nf">isTokenExpired</span><span class="p">(</span><span class="n">String</span><span class="w"> </span><span class="n">jwt</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">try</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">Claims</span><span class="w"> </span><span class="n">claims</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">parseJWT</span><span class="p">(</span><span class="n">jwt</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="n">claims</span><span class="p">.</span><span class="na">getExpiration</span><span class="p">().</span><span class="na">before</span><span class="p">(</span><span class="k">new</span><span class="w"> </span><span class="n">Date</span><span class="p">());</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(</span><span class="n">ExpiredJwtException</span><span class="w"> </span><span class="n">e</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="kc">true</span><span class="p">;</span><span class="w"> </span><span class="c1">// 已过期</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="cm">/**
+</span></span></span><span class="line"><span class="cl"><span class="cm">     * 获取 Token 中的 subject（例如用户ID）
+</span></span></span><span class="line"><span class="cl"><span class="cm">     */</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kd">static</span><span class="w"> </span><span class="n">String</span><span class="w"> </span><span class="nf">getSubject</span><span class="p">(</span><span class="n">String</span><span class="w"> </span><span class="n">jwt</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">parseJWT</span><span class="p">(</span><span class="n">jwt</span><span class="p">).</span><span class="na">getSubject</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><h3 id="servlet-的-filterspring-security-的-filterchain-和-spring-mvc-的-handlerinterceptor-的执行顺序">Servlet 的 Filter、Spring Security 的 FilterChain 和 Spring MVC 的 HandlerInterceptor 的执行顺序</h3>
+<p>web 服务中，一个请求的执行顺序是</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">客户端请求
+</span></span><span class="line"><span class="cl">   ↓
+</span></span><span class="line"><span class="cl">Servlet Filter（普通 Web Filter）
+</span></span><span class="line"><span class="cl">   ↓
+</span></span><span class="line"><span class="cl">DelegatingFilterProxy -&gt; Spring Security FilterChain
+</span></span><span class="line"><span class="cl">   ↓
+</span></span><span class="line"><span class="cl">DispatcherServlet
+</span></span><span class="line"><span class="cl">   ↓
+</span></span><span class="line"><span class="cl">Spring MVC HandlerInterceptor.preHandle<span class="o">()</span>
+</span></span><span class="line"><span class="cl">   ↓
+</span></span><span class="line"><span class="cl">Controller 方法
+</span></span><span class="line"><span class="cl">   ↓
+</span></span><span class="line"><span class="cl">Spring MVC HandlerInterceptor.postHandle<span class="o">()</span>
+</span></span><span class="line"><span class="cl">   ↓
+</span></span><span class="line"><span class="cl">视图渲染 / 返回响应
+</span></span><span class="line"><span class="cl">   ↓
+</span></span><span class="line"><span class="cl">Spring MVC HandlerInterceptor.afterCompletion<span class="o">()</span>
+</span></span><span class="line"><span class="cl">   ↓
+</span></span><span class="line"><span class="cl">Servlet Filter.doFilter<span class="o">()</span> 的后续逻辑
+</span></span><span class="line"><span class="cl">   ↓
+</span></span><span class="line"><span class="cl">响应返回给客户端
+</span></span></code></pre></div><p>结合上面的流程图分析</p>
+<p><strong>Servlet Filter（Web Filter）</strong></p>
+<ul>
+<li>属于 <strong>Servlet 容器级别</strong>（Tomcat/Jetty 等）的过滤器。</li>
+<li>在 Spring 体系外就已经能生效。</li>
+<li>对所有进入容器的请求先进行处理。</li>
+</ul>
+<p><strong>Spring Security Filter Chain</strong></p>
+<ul>
+<li>是 Spring Boot 在启动时通过 <code>DelegatingFilterProxy</code> 注册到 Servlet 容器中的一个特殊 Filter。</li>
+<li>本质上也是 <strong>Servlet Filter</strong>，但它内部维护了一个 <strong>FilterChainProxy</strong>，包含十几个 Spring Security 的安全过滤器（如认证、授权、CSRF 等）。</li>
+<li>所以它会在 <strong>普通的 Spring MVC 拦截器执行之前</strong>，完成认证和权限控制。</li>
+</ul>
+<p><strong>Spring MVC HandlerInterceptor</strong></p>
+<ul>
+<li>属于 Spring MVC 层面。</li>
+<li>在请求被分派到 <code>Controller</code> 前后执行（<code>preHandle -&gt; Controller -&gt; postHandle -&gt; afterCompletion</code>）。</li>
+</ul>
+<p>所以可以看出</p>
+<p><strong>最外层</strong> 是Servlet 过滤器（Web Filter）</p>
+<ul>
+<li>可以拦截所有请求（包括静态资源），最早介入。</li>
+</ul>
+<p><strong>中间层</strong> 是Spring Security 过滤链（本质还是 Filter，但优先级高于 MVC）</p>
+<ul>
+<li>负责认证、授权、安全控制。</li>
+<li>如果认证失败/无权限，直接返回 401/403，后续拦截器和 Controller 根本不会执行。</li>
+</ul>
+<p><strong>最内层</strong> 是Spring MVC 拦截器（HandlerInterceptor）</p>
+<ul>
+<li>只有通过了 Security 校验的请求，才会到达拦截器和 Controller。</li>
+<li>适合做业务相关的拦截，如日志、接口耗时统计、多租户上下文等。</li>
+</ul>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

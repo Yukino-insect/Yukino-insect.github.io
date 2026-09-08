@@ -1,0 +1,1342 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LaTeX 是什么：从公式排版到在本站渲染 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="写数学内容时，最先令人困扰的往往不是公式本身，而是怎样让公式既写得准确，又显示得像公式。把 x²、Δy / Δx 直接塞进正文当然也能勉强阅读；但一旦出现分式、上下标、极限、积分、矩阵或分段函数，纯文本很快就会失去结构。把复杂关系交给读者猜，并不算一种排版风格。
+LaTeX 正是为此而生的标记语言。本网站现在已经配置好 Hugo 与 MathJax：文章只要声明 math = true，并用规定的定界符书写公式，就可以直接渲染 LaTeX。
+先给结论 在本站写数学公式，只需要记住下面三件事：
+在文章 front matter 中加入 math = true。 用 $...$ 写行内公式。 用独占一行的 $$...$$ 写展示公式。 例如，下面的 Markdown：
+函数 $f(x) = x^2$ 在 $x = 3$ 处的导数是 $f&#39;(3) = 6$。 $$ f&#39;(x) = \lim_{h \to 0} \frac{f(x&#43;h)-f(x)}{h} $$ 会显示为：函数 $f(x) = x^2$ 在 $x = 3$ 处的导数是 $f&#39;(3) = 6$。
+$$ f&#39;(x) = \lim_{h \to 0} \frac{f(x&#43;h)-f(x)}{h} $$这就是完整的作者侧用法。至于它为何能生效，后面再拆开说明。
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/randomthoughts/latex-%E6%98%AF%E4%BB%80%E4%B9%88%E4%BB%8E%E5%85%AC%E5%BC%8F%E6%8E%92%E7%89%88%E5%88%B0%E5%9C%A8%E6%9C%AC%E7%AB%99%E6%B8%B2%E6%9F%93/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/randomthoughts/latex-%E6%98%AF%E4%BB%80%E4%B9%88%E4%BB%8E%E5%85%AC%E5%BC%8F%E6%8E%92%E7%89%88%E5%88%B0%E5%9C%A8%E6%9C%AC%E7%AB%99%E6%B8%B2%E6%9F%93/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="LaTeX 是什么：从公式排版到在本站渲染">
+  <meta property="og:description" content="写数学内容时，最先令人困扰的往往不是公式本身，而是怎样让公式既写得准确，又显示得像公式。把 x²、Δy / Δx 直接塞进正文当然也能勉强阅读；但一旦出现分式、上下标、极限、积分、矩阵或分段函数，纯文本很快就会失去结构。把复杂关系交给读者猜，并不算一种排版风格。
+LaTeX 正是为此而生的标记语言。本网站现在已经配置好 Hugo 与 MathJax：文章只要声明 math = true，并用规定的定界符书写公式，就可以直接渲染 LaTeX。
+先给结论 在本站写数学公式，只需要记住下面三件事：
+在文章 front matter 中加入 math = true。 用 $...$ 写行内公式。 用独占一行的 $$...$$ 写展示公式。 例如，下面的 Markdown：
+函数 $f(x) = x^2$ 在 $x = 3$ 处的导数是 $f&#39;(3) = 6$。 $$ f&#39;(x) = \lim_{h \to 0} \frac{f(x&#43;h)-f(x)}{h} $$ 会显示为：函数 $f(x) = x^2$ 在 $x = 3$ 处的导数是 $f&#39;(3) = 6$。
+$$ f&#39;(x) = \lim_{h \to 0} \frac{f(x&#43;h)-f(x)}{h} $$这就是完整的作者侧用法。至于它为何能生效，后面再拆开说明。">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="randomthoughts">
+    <meta property="article:published_time" content="2026-09-06T10:30:00+08:00">
+    <meta property="article:modified_time" content="2026-09-06T10:30:00+08:00">
+
+  
+  <meta itemprop="name" content="LaTeX 是什么：从公式排版到在本站渲染">
+  <meta itemprop="description" content="写数学内容时，最先令人困扰的往往不是公式本身，而是怎样让公式既写得准确，又显示得像公式。把 x²、Δy / Δx 直接塞进正文当然也能勉强阅读；但一旦出现分式、上下标、极限、积分、矩阵或分段函数，纯文本很快就会失去结构。把复杂关系交给读者猜，并不算一种排版风格。
+LaTeX 正是为此而生的标记语言。本网站现在已经配置好 Hugo 与 MathJax：文章只要声明 math = true，并用规定的定界符书写公式，就可以直接渲染 LaTeX。
+先给结论 在本站写数学公式，只需要记住下面三件事：
+在文章 front matter 中加入 math = true。 用 $...$ 写行内公式。 用独占一行的 $$...$$ 写展示公式。 例如，下面的 Markdown：
+函数 $f(x) = x^2$ 在 $x = 3$ 处的导数是 $f&#39;(3) = 6$。 $$ f&#39;(x) = \lim_{h \to 0} \frac{f(x&#43;h)-f(x)}{h} $$ 会显示为：函数 $f(x) = x^2$ 在 $x = 3$ 处的导数是 $f&#39;(3) = 6$。
+$$ f&#39;(x) = \lim_{h \to 0} \frac{f(x&#43;h)-f(x)}{h} $$这就是完整的作者侧用法。至于它为何能生效，后面再拆开说明。">
+  <meta itemprop="datePublished" content="2026-09-06T10:30:00+08:00">
+  <meta itemprop="dateModified" content="2026-09-06T10:30:00+08:00">
+  <meta itemprop="wordCount" content="589">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="LaTeX 是什么：从公式排版到在本站渲染">
+  <meta name="twitter:description" content="写数学内容时，最先令人困扰的往往不是公式本身，而是怎样让公式既写得准确，又显示得像公式。把 x²、Δy / Δx 直接塞进正文当然也能勉强阅读；但一旦出现分式、上下标、极限、积分、矩阵或分段函数，纯文本很快就会失去结构。把复杂关系交给读者猜，并不算一种排版风格。
+LaTeX 正是为此而生的标记语言。本网站现在已经配置好 Hugo 与 MathJax：文章只要声明 math = true，并用规定的定界符书写公式，就可以直接渲染 LaTeX。
+先给结论 在本站写数学公式，只需要记住下面三件事：
+在文章 front matter 中加入 math = true。 用 $...$ 写行内公式。 用独占一行的 $$...$$ 写展示公式。 例如，下面的 Markdown：
+函数 $f(x) = x^2$ 在 $x = 3$ 处的导数是 $f&#39;(3) = 6$。 $$ f&#39;(x) = \lim_{h \to 0} \frac{f(x&#43;h)-f(x)}{h} $$ 会显示为：函数 $f(x) = x^2$ 在 $x = 3$ 处的导数是 $f&#39;(3) = 6$。
+$$ f&#39;(x) = \lim_{h \to 0} \frac{f(x&#43;h)-f(x)}{h} $$这就是完整的作者侧用法。至于它为何能生效，后面再拆开说明。">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+<script>
+  MathJax = {
+    tex: {
+      inlineMath: { '[+]': [['$', '$']] },
+      displayMath: { '[+]': [['$$', '$$']] },
+      processEscapes: true
+    }
+  };
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-chtml.js"></script>
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">LaTeX 是什么：从公式排版到在本站渲染</h1>
+
+    
+      <div class="post-date">September 6, 2026</div>
+    
+
+    <div class="post-content">
+      <p>写数学内容时，最先令人困扰的往往不是公式本身，而是怎样让公式<strong>既写得准确，又显示得像公式</strong>。把 <code>x²</code>、<code>Δy / Δx</code> 直接塞进正文当然也能勉强阅读；但一旦出现分式、上下标、极限、积分、矩阵或分段函数，纯文本很快就会失去结构。把复杂关系交给读者猜，并不算一种排版风格。</p>
+<p>LaTeX 正是为此而生的标记语言。本网站现在已经配置好 Hugo 与 MathJax：文章只要声明 <code>math = true</code>，并用规定的定界符书写公式，就可以直接渲染 LaTeX。</p>
+<h2 id="先给结论">先给结论</h2>
+<p>在本站写数学公式，只需要记住下面三件事：</p>
+<ol>
+<li>在文章 front matter 中加入 <code>math = true</code>。</li>
+<li>用 <code>$...$</code> 写行内公式。</li>
+<li>用独占一行的 <code>$$...$$</code> 写展示公式。</li>
+</ol>
+<p>例如，下面的 Markdown：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-md" data-lang="md"><span class="line"><span class="cl">函数 $f(x) = x^2$ 在 $x = 3$ 处的导数是 $f&#39;(3) = 6$。
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">$$
+</span></span><span class="line"><span class="cl">f&#39;(x) = \lim_{h \to 0} \frac{f(x+h)-f(x)}{h}
+</span></span><span class="line"><span class="cl">$$
+</span></span></code></pre></div><p>会显示为：函数 $f(x) = x^2$ 在 $x = 3$ 处的导数是 $f'(3) = 6$。</p>
+$$
+f'(x) = \lim_{h \to 0} \frac{f(x+h)-f(x)}{h}
+$$<p>这就是完整的作者侧用法。至于它为何能生效，后面再拆开说明。</p>
+<h2 id="latex-到底是什么">LaTeX 到底是什么</h2>
+<p>LaTeX 读作“Lay-tech”或“Lah-tech”。严格来说，它不是一个所见即所得的公式编辑器，而是一套基于 TeX 的文档排版标记系统。作者写的是带命令的纯文本；排版引擎再按照这些命令生成最终版面。</p>
+<p>例如，作者写：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-latex" data-lang="latex"><span class="line"><span class="cl"><span class="k">\frac</span><span class="nb">{</span>-b <span class="k">\pm</span> <span class="k">\sqrt</span><span class="nb">{</span>b<span class="nb">^</span>2 - 4ac<span class="nb">}}{</span>2a<span class="nb">}</span>
+</span></span></code></pre></div><p>渲染后得到：</p>
+$$
+\frac{-b \pm \sqrt{b^2 - 4ac}}{2a}
+$$<p>它的重点不在于让源文件变得神秘，而在于让数学结构明确：</p>
+<ul>
+<li><code>\frac{分子}{分母}</code> 表示分式；</li>
+<li><code>^</code> 表示上标，<code>_</code> 表示下标；</li>
+<li><code>\sqrt{...}</code> 表示平方根；</li>
+<li><code>\sum</code>、<code>\int</code>、<code>\lim</code> 分别表示求和、积分、极限；</li>
+<li><code>{...}</code> 用来界定一个命令的参数范围。</li>
+</ul>
+<p>因此，<code>x^10</code> 的意思是 $x^{10}$，而不是 $x^1$ 后面恰好跟着一个普通的 <code>0</code>。当上标或下标不止一个字符时，花括号不能省略：写作 <code>$x^{10}$</code>、<code>$a_{n+1}$</code>，而不是 <code>$x^10$</code>、<code>$a_n+1$</code>。公式排版里最昂贵的错误，通常不是难，而是看起来只少了一个括号。</p>
+<h2 id="它适合做什么不适合做什么">它适合做什么，不适合做什么</h2>
+<p>LaTeX 最适合表达有明确结构的数学、物理、统计和工程公式。例如：</p>
+$$
+\int_a^b f(x)\,dx,
+\qquad
+\sum_{i=1}^{n} x_i,
+\qquad
+\begin{cases}
+x^2, & x \ge 0, \\
+-x, & x < 0.
+\end{cases}
+$$<p>它也常用于化学式、逻辑表达式和算法复杂度：$\mathrm{H_2O}$、$P \Rightarrow Q$、$O(n \log n)$。</p>
+<p>但普通句子、文件路径、命令行和程序代码仍然应使用普通 Markdown 或代码围栏。不要因为已经有了公式渲染器，就把一整段中文塞进数学模式。数学模式是给结构化符号服务的，不是给段落文字提供一种更昂贵的字体。</p>
+<h2 id="最常用的-latex-写法">最常用的 LaTeX 写法</h2>
+<p>下面这些足以覆盖多数博客文章。</p>
+<table>
+  <thead>
+      <tr>
+          <th>目的</th>
+          <th>源码</th>
+          <th>渲染结果</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>上标</td>
+          <td><code>$x^2$</code></td>
+          <td>$x^2$</td>
+      </tr>
+      <tr>
+          <td>多字符上标</td>
+          <td><code>$x^{n+1}$</code></td>
+          <td>$x^{n+1}$</td>
+      </tr>
+      <tr>
+          <td>下标</td>
+          <td><code>$a_n$</code></td>
+          <td>$a_n$</td>
+      </tr>
+      <tr>
+          <td>分式</td>
+          <td><code>$\frac{a+b}{c}$</code></td>
+          <td>$\frac{a+b}{c}$</td>
+      </tr>
+      <tr>
+          <td>根式</td>
+          <td><code>$\sqrt{x}$</code></td>
+          <td>$\sqrt{x}$</td>
+      </tr>
+      <tr>
+          <td>希腊字母</td>
+          <td><code>$\alpha, \beta, \Delta, \varepsilon$</code></td>
+          <td>$\alpha, \beta, \Delta, \varepsilon$</td>
+      </tr>
+      <tr>
+          <td>比较与趋近</td>
+          <td><code>$x \ne y,\ x \to 0,\ x \ge 0$</code></td>
+          <td>$x \ne y,\ x \to 0,\ x \ge 0$</td>
+      </tr>
+      <tr>
+          <td>极限</td>
+          <td><code>$\lim_{x \to 0} \frac{\sin x}{x}$</code></td>
+          <td>$\lim_{x \to 0} \frac{\sin x}{x}$</td>
+      </tr>
+      <tr>
+          <td>积分</td>
+          <td><code>$\int_a^b f(x)\,dx$</code></td>
+          <td>$\int_a^b f(x)\,dx$</td>
+      </tr>
+  </tbody>
+</table>
+<p>对于需要多行对齐的推导，使用 <code>aligned</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-latex" data-lang="latex"><span class="line"><span class="cl"><span class="sb">$$</span><span class="nb">
+</span></span></span><span class="line"><span class="cl"><span class="nb"></span><span class="nv">\begin</span><span class="nb">{aligned}
+</span></span></span><span class="line"><span class="cl"><span class="nb"></span><span class="o">(</span><span class="nb">x</span><span class="o">+</span><span class="nb">y</span><span class="o">)</span><span class="nb">^</span><span class="m">2</span><span class="nb"> &amp;</span><span class="o">=</span><span class="nb"> x^</span><span class="m">2</span><span class="nb"> </span><span class="o">+</span><span class="nb"> </span><span class="m">2</span><span class="nb">xy </span><span class="o">+</span><span class="nb"> y^</span><span class="m">2</span><span class="nb">, </span><span class="nv">\\</span><span class="nb">
+</span></span></span><span class="line"><span class="cl"><span class="nb"></span><span class="o">(</span><span class="nb">x</span><span class="o">-</span><span class="nb">y</span><span class="o">)</span><span class="nb">^</span><span class="m">2</span><span class="nb"> &amp;</span><span class="o">=</span><span class="nb"> x^</span><span class="m">2</span><span class="nb"> </span><span class="o">-</span><span class="nb"> </span><span class="m">2</span><span class="nb">xy </span><span class="o">+</span><span class="nb"> y^</span><span class="m">2</span><span class="nb">.
+</span></span></span><span class="line"><span class="cl"><span class="nb"></span><span class="nv">\end</span><span class="nb">{aligned}
+</span></span></span><span class="line"><span class="cl"><span class="nb"></span><span class="s">$$</span>
+</span></span></code></pre></div><p>其显示结果为：</p>
+$$
+\begin{aligned}
+(x+y)^2 &= x^2 + 2xy + y^2, \\
+(x-y)^2 &= x^2 - 2xy + y^2.
+\end{aligned}
+$$<p><code>&amp;</code> 是对齐点，<code>\\</code> 是换行。它们不是装饰；删掉其中一个，结果通常会很坦诚地告诉你什么叫语法错误。</p>
+<h2 id="当前网站如何渲染-latex">当前网站如何渲染 LaTeX</h2>
+<p>本网站是 Hugo 静态站点。Hugo 负责把 Markdown 文章构建成 HTML；浏览器随后加载 MathJax，把 HTML 中保留下来的 LaTeX 转换成可见公式。整个路径如下：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Markdown 中的 $...$ / $$...$$
+</span></span><span class="line"><span class="cl">        -&gt; Hugo Goldmark 原样透传
+</span></span><span class="line"><span class="cl">        -&gt; 生成页面保留 LaTeX 源码
+</span></span><span class="line"><span class="cl">        -&gt; 浏览器加载 MathJax
+</span></span><span class="line"><span class="cl">        -&gt; MathJax 排版为公式
+</span></span></code></pre></div><p>这里有两个缺一不可的部分。</p>
+<h3 id="1-hugo-必须保留公式源码">1. Hugo 必须保留公式源码</h3>
+<p>Markdown 渲染器本身并不理解 LaTeX 的全部语法。若让它按普通文本处理，反斜杠可能被当作 Markdown 转义字符，撇号也可能被替换成排版引号。比如公式中的 <code>\,</code> 是细小间距命令；如果反斜杠消失，它就只剩下一个逗号，含义已经变了。</p>
+<p>因此，项目根目录的 <code>hugo.toml</code> 中启用了 Goldmark 的 <code>passthrough</code> 扩展：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-toml" data-lang="toml"><span class="line"><span class="cl"><span class="p">[</span><span class="nx">markup</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">  <span class="p">[</span><span class="nx">markup</span><span class="p">.</span><span class="nx">goldmark</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">    <span class="p">[</span><span class="nx">markup</span><span class="p">.</span><span class="nx">goldmark</span><span class="p">.</span><span class="nx">extensions</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">      <span class="p">[</span><span class="nx">markup</span><span class="p">.</span><span class="nx">goldmark</span><span class="p">.</span><span class="nx">extensions</span><span class="p">.</span><span class="nx">passthrough</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">enable</span> <span class="p">=</span> <span class="kc">true</span>
+</span></span><span class="line"><span class="cl">        <span class="p">[</span><span class="nx">markup</span><span class="p">.</span><span class="nx">goldmark</span><span class="p">.</span><span class="nx">extensions</span><span class="p">.</span><span class="nx">passthrough</span><span class="p">.</span><span class="nx">delimiters</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">          <span class="nx">block</span> <span class="p">=</span> <span class="p">[[</span><span class="s1">&#39;$$&#39;</span><span class="p">,</span> <span class="s1">&#39;$$&#39;</span><span class="p">]]</span>
+</span></span><span class="line"><span class="cl">          <span class="nx">inline</span> <span class="p">=</span> <span class="p">[[</span><span class="s1">&#39;$&#39;</span><span class="p">,</span> <span class="s1">&#39;$&#39;</span><span class="p">]]</span>
+</span></span></code></pre></div><p>这段配置的含义很直接：被 <code>$...$</code> 或 <code>$$...$$</code> 包围的内容不再由 Markdown 改写，而是连同定界符一起原样输出到 HTML。没有这一步，公式源代码在到达浏览器之前就可能已经变形；后面再接入多好的渲染器也无济于事。</p>
+<h3 id="2-浏览器必须有公式排版器">2. 浏览器必须有公式排版器</h3>
+<p>原样输出 LaTeX 仍只是文本。浏览器并不会因为看见 <code>\frac</code> 就突然具备数学修养，它需要 JavaScript 排版器。</p>
+<p>本项目在 <code>layouts/partials/head-extra.html</code> 中按页面加载 MathJax 4：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-html" data-lang="html"><span class="line"><span class="cl">{{ if .Params.math }}
+</span></span><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">script</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">MathJax</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">tex</span><span class="o">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">inlineMath</span><span class="o">:</span> <span class="p">{</span> <span class="s1">&#39;[+]&#39;</span><span class="o">:</span> <span class="p">[[</span><span class="s1">&#39;$&#39;</span><span class="p">,</span> <span class="s1">&#39;$&#39;</span><span class="p">]]</span> <span class="p">},</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">displayMath</span><span class="o">:</span> <span class="p">{</span> <span class="s1">&#39;[+]&#39;</span><span class="o">:</span> <span class="p">[[</span><span class="s1">&#39;$$&#39;</span><span class="p">,</span> <span class="s1">&#39;$$&#39;</span><span class="p">]]</span> <span class="p">},</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">processEscapes</span><span class="o">:</span> <span class="kc">true</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">};</span>
+</span></span><span class="line"><span class="cl"><span class="p">&lt;/</span><span class="nt">script</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">script</span> <span class="na">defer</span> <span class="na">src</span><span class="o">=</span><span class="s">&#34;https://cdn.jsdelivr.net/npm/mathjax@4/tex-chtml.js&#34;</span><span class="p">&gt;&lt;/</span><span class="nt">script</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">{{ end }}
+</span></span></code></pre></div><p>关键点是 <code>{{ if .Params.math }}</code>。它读取文章 front matter 中的 <code>math</code> 参数：</p>
+<ul>
+<li><code>math = true</code>：加载 MathJax，公式会渲染；</li>
+<li>未设置或为 <code>false</code>：不加载 MathJax，普通文章没有额外网络请求。</li>
+</ul>
+<p>因此，新建含公式的文章时，front matter 应写成：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-toml" data-lang="toml"><span class="line"><span class="cl"><span class="err">+++</span>
+</span></span><span class="line"><span class="cl"><span class="nx">date</span> <span class="p">=</span> <span class="s1">&#39;2026-09-06T10:30:00+08:00&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="nx">draft</span> <span class="p">=</span> <span class="kc">false</span>
+</span></span><span class="line"><span class="cl"><span class="nx">title</span> <span class="p">=</span> <span class="s1">&#39;文章标题&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="nx">math</span> <span class="p">=</span> <span class="kc">true</span>
+</span></span><span class="line"><span class="cl"><span class="err">+++</span>
+</span></span></code></pre></div><p>这里的前后 <code>+++</code> 是 TOML front matter 的边界，不是数学公式的一部分。把它写错，Hugo 会先拒绝构建；这个问题至少比数学上的歧义要容易诊断一些。</p>
+<h2 id="写一篇公式文章的完整示例">写一篇公式文章的完整示例</h2>
+<p>假设要写一篇关于等比数列求和的文章，可以这样写：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-md" data-lang="md"><span class="line"><span class="cl">+++
+</span></span><span class="line"><span class="cl">date = &#39;2026-09-06T10:30:00+08:00&#39;
+</span></span><span class="line"><span class="cl">draft = false
+</span></span><span class="line"><span class="cl">title = &#39;等比数列求和公式&#39;
+</span></span><span class="line"><span class="cl">math = true
+</span></span><span class="line"><span class="cl">+++
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">设首项为 $a$，公比为 $r$，且 $r \ne 1$。
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">前 $n$ 项和为：
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">$$
+</span></span><span class="line"><span class="cl">S_n = a + ar + ar^2 + \cdots + ar^{n-1}
+</span></span><span class="line"><span class="cl">    = \frac{a(1-r^n)}{1-r}
+</span></span><span class="line"><span class="cl">$$
+</span></span></code></pre></div><p>其显示效果如下：设首项为 $a$，公比为 $r$，且 $r \ne 1$。</p>
+$$
+S_n = a + ar + ar^2 + \cdots + ar^{n-1}
+    = \frac{a(1-r^n)}{1-r}
+$$<p>行内公式适合嵌在一句话里；公式过长、需要换行或值得读者单独停下来看的内容，使用展示公式更合适。不要把很长的公式硬塞进行内模式，页面宽度和读者耐心通常都不是无限的。</p>
+<h2 id="如何本地验证">如何本地验证</h2>
+<p>写完后，在项目根目录运行：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-powershell" data-lang="powershell"><span class="line"><span class="cl"><span class="n">hugo</span> <span class="n">server</span>
+</span></span></code></pre></div><p>浏览器打开本地地址后，检查三件事：</p>
+<ol>
+<li>页面中公式是否已经排版，而不是显示 <code>$</code>、<code>\frac</code> 等原始字符；</li>
+<li>浏览器开发者工具的 Network 面板中，MathJax 脚本是否加载成功；</li>
+<li>终端中是否有 Hugo 的 front matter 或模板错误。</li>
+</ol>
+<p>也可以只构建一次：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-powershell" data-lang="powershell"><span class="line"><span class="cl"><span class="n">hugo</span> <span class="p">-</span><span class="n">-minify</span>
+</span></span></code></pre></div><p>这会生成 <code>public/</code> 目录。构建成功证明 Hugo 配置与 Markdown 语法至少能够通过；公式的最终可视效果则仍应在浏览器中确认，因为 MathJax 在客户端运行。</p>
+<h2 id="常见问题">常见问题</h2>
+<h3 id="公式原样显示没有被渲染">公式原样显示，没有被渲染</h3>
+<p>先检查文章 front matter 是否有：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-toml" data-lang="toml"><span class="line"><span class="cl"><span class="nx">math</span> <span class="p">=</span> <span class="kc">true</span>
+</span></span></code></pre></div><p>没有这个字段时，模板不会加载 MathJax。这并不是渲染器失职，而是页面没有提出请求。</p>
+<p>接着检查公式是否使用了本站约定的定界符：行内是 <code>$...$</code>，块级是 <code>$$...$$</code>。<code>\(...\)</code> 和 <code>\[...\]</code> 虽然也是常见 LaTeX 定界符，但当前 Hugo 的透传配置没有为它们注册规则；在本站请优先使用 <code>$</code> 和 <code>$$</code>，以免把可选写法误当成已启用写法。</p>
+<h3 id="页面上有公式源码但格式不对">页面上有公式源码，但格式不对</h3>
+<p>先检查大括号是否成对，例如 <code>$x^{n+1}$</code>；再检查命令拼写，例如 <code>\frac</code>、<code>\sqrt</code>、<code>\lim</code>。LaTeX 命令通常区分精确拼写，<code>\Frac</code> 并不会因为“看起来也像分数”就自动被理解。</p>
+<p>对于包含多行的 <code>aligned</code>、<code>cases</code> 等环境，确认每行除了最后一行外都以 <code>\\</code> 结束，并确保 <code>\begin{...}</code> 和 <code>\end{...}</code> 成对出现。</p>
+<h3 id="本地能看到源码线上仍没有公式">本地能看到源码，线上仍没有公式</h3>
+<p>MathJax 通过 jsDelivr CDN 从浏览器加载。应检查浏览器网络是否能访问：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">https://cdn.jsdelivr.net/npm/mathjax@4/tex-chtml.js
+</span></span></code></pre></div><p>若 CDN 请求失败，Hugo 生成的页面仍然是正常的 HTML，只是没有客户端脚本把 LaTeX 排版出来。此时应排查网络、内容安全策略或 CDN 可用性；不要反过来怀疑 <code>\frac</code> 为什么突然失去工作意愿。</p>
+<h2 id="小结">小结</h2>
+<p>LaTeX 是用文本表达数学结构的排版语言，而不是一套需要背诵的神秘咒语。对本站作者而言，实际规则可以再次压缩为：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">数学文章：front matter 中写 math = true
+</span></span><span class="line"><span class="cl">行内公式：$...$
+</span></span><span class="line"><span class="cl">展示公式：$$...$$
+</span></span><span class="line"><span class="cl">本地验证：hugo server 或 hugo --minify
+</span></span></code></pre></div><p>网站之所以能正确显示这些公式，是因为 Hugo 的 Goldmark 透传配置负责<strong>保留</strong> LaTeX，MathJax 负责在浏览器中<strong>排版</strong> LaTeX。前者保护源码，后者生成视觉结果；少了任意一环，公式都只会停留在“看起来像代码”的阶段。这样的分工并不复杂，只是比把一段字符扔进 Markdown 后祈祷它自动变漂亮可靠得多。</p>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

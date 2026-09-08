@@ -1,0 +1,1878 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>C 与 C&#43;&#43; 头文件中定义变量为什么会冲突：翻译单元、链接与 ODR | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="刚开始写 C/C&#43;&#43; 多文件项目时，很容易写出这样的代码：
+// config.hpp #ifndef CONFIG_HPP #define CONFIG_HPP int global_count = 0; #endif 然后在多个 .cpp 文件中包含它：
+// main.cpp #include &#34;config.hpp&#34; int main() { &#43;&#43;global_count; return 0; } // worker.cpp #include &#34;config.hpp&#34; void work() { &#43;&#43;global_count; } 编译链接时可能会报错：
+multiple definition of `global_count&#39; 很多人第一次看到这个错误时会觉得奇怪：
+这个变量不是在各自的 .cpp 文件里各有一份吗？既然各自唯一，为什么会冲突？
+这个问题问得很好。只是答案稍微冷淡一点：你以为它们“各自唯一”，但链接器看到的是多个具有外部链接性的同名定义。C/C&#43;&#43; 不会因为你觉得它们应该和平相处，就替你重新解释规则。
+这篇文章专门把这个问题讲清楚。
+一、先给结论 头文件里写：
+int global_count = 0; 这不是声明，而是 定义。
+如果这个头文件被多个 .cpp 包含，那么每个 .cpp 在预处理后都会得到一份：
+int global_count = 0; 于是整个程序中会出现多个 global_count 的定义。
+而普通全局变量默认具有 外部链接性，也就是它会导出一个能被其他翻译单元链接到的符号。多个 .cpp 都导出了同名的 global_count，链接器就会发现：
+main.o 里有一个 global_count 定义 worker.o 里也有一个 global_count 定义 它无法接受同一个程序里有多个外部定义，于是报 multiple definition。
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/cc&#43;&#43;/c-%E4%B8%8E-c&#43;&#43;-%E5%A4%B4%E6%96%87%E4%BB%B6%E4%B8%AD%E5%AE%9A%E4%B9%89%E5%8F%98%E9%87%8F%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BC%9A%E5%86%B2%E7%AA%81%E7%BF%BB%E8%AF%91%E5%8D%95%E5%85%83%E9%93%BE%E6%8E%A5%E4%B8%8E-odr/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/cc&#43;&#43;/c-%E4%B8%8E-c&#43;&#43;-%E5%A4%B4%E6%96%87%E4%BB%B6%E4%B8%AD%E5%AE%9A%E4%B9%89%E5%8F%98%E9%87%8F%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BC%9A%E5%86%B2%E7%AA%81%E7%BF%BB%E8%AF%91%E5%8D%95%E5%85%83%E9%93%BE%E6%8E%A5%E4%B8%8E-odr/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="C 与 C&#43;&#43; 头文件中定义变量为什么会冲突：翻译单元、链接与 ODR">
+  <meta property="og:description" content="刚开始写 C/C&#43;&#43; 多文件项目时，很容易写出这样的代码：
+// config.hpp #ifndef CONFIG_HPP #define CONFIG_HPP int global_count = 0; #endif 然后在多个 .cpp 文件中包含它：
+// main.cpp #include &#34;config.hpp&#34; int main() { &#43;&#43;global_count; return 0; } // worker.cpp #include &#34;config.hpp&#34; void work() { &#43;&#43;global_count; } 编译链接时可能会报错：
+multiple definition of `global_count&#39; 很多人第一次看到这个错误时会觉得奇怪：
+这个变量不是在各自的 .cpp 文件里各有一份吗？既然各自唯一，为什么会冲突？
+这个问题问得很好。只是答案稍微冷淡一点：你以为它们“各自唯一”，但链接器看到的是多个具有外部链接性的同名定义。C/C&#43;&#43; 不会因为你觉得它们应该和平相处，就替你重新解释规则。
+这篇文章专门把这个问题讲清楚。
+一、先给结论 头文件里写：
+int global_count = 0; 这不是声明，而是 定义。
+如果这个头文件被多个 .cpp 包含，那么每个 .cpp 在预处理后都会得到一份：
+int global_count = 0; 于是整个程序中会出现多个 global_count 的定义。
+而普通全局变量默认具有 外部链接性，也就是它会导出一个能被其他翻译单元链接到的符号。多个 .cpp 都导出了同名的 global_count，链接器就会发现：
+main.o 里有一个 global_count 定义 worker.o 里也有一个 global_count 定义 它无法接受同一个程序里有多个外部定义，于是报 multiple definition。">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="c&amp;c&#43;&#43;">
+    <meta property="article:published_time" content="2026-08-23T01:35:00+08:00">
+    <meta property="article:modified_time" content="2026-08-23T01:35:00+08:00">
+
+  
+  <meta itemprop="name" content="C 与 C&#43;&#43; 头文件中定义变量为什么会冲突：翻译单元、链接与 ODR">
+  <meta itemprop="description" content="刚开始写 C/C&#43;&#43; 多文件项目时，很容易写出这样的代码：
+// config.hpp #ifndef CONFIG_HPP #define CONFIG_HPP int global_count = 0; #endif 然后在多个 .cpp 文件中包含它：
+// main.cpp #include &#34;config.hpp&#34; int main() { &#43;&#43;global_count; return 0; } // worker.cpp #include &#34;config.hpp&#34; void work() { &#43;&#43;global_count; } 编译链接时可能会报错：
+multiple definition of `global_count&#39; 很多人第一次看到这个错误时会觉得奇怪：
+这个变量不是在各自的 .cpp 文件里各有一份吗？既然各自唯一，为什么会冲突？
+这个问题问得很好。只是答案稍微冷淡一点：你以为它们“各自唯一”，但链接器看到的是多个具有外部链接性的同名定义。C/C&#43;&#43; 不会因为你觉得它们应该和平相处，就替你重新解释规则。
+这篇文章专门把这个问题讲清楚。
+一、先给结论 头文件里写：
+int global_count = 0; 这不是声明，而是 定义。
+如果这个头文件被多个 .cpp 包含，那么每个 .cpp 在预处理后都会得到一份：
+int global_count = 0; 于是整个程序中会出现多个 global_count 的定义。
+而普通全局变量默认具有 外部链接性，也就是它会导出一个能被其他翻译单元链接到的符号。多个 .cpp 都导出了同名的 global_count，链接器就会发现：
+main.o 里有一个 global_count 定义 worker.o 里也有一个 global_count 定义 它无法接受同一个程序里有多个外部定义，于是报 multiple definition。">
+  <meta itemprop="datePublished" content="2026-08-23T01:35:00+08:00">
+  <meta itemprop="dateModified" content="2026-08-23T01:35:00+08:00">
+  <meta itemprop="wordCount" content="1385">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="C 与 C&#43;&#43; 头文件中定义变量为什么会冲突：翻译单元、链接与 ODR">
+  <meta name="twitter:description" content="刚开始写 C/C&#43;&#43; 多文件项目时，很容易写出这样的代码：
+// config.hpp #ifndef CONFIG_HPP #define CONFIG_HPP int global_count = 0; #endif 然后在多个 .cpp 文件中包含它：
+// main.cpp #include &#34;config.hpp&#34; int main() { &#43;&#43;global_count; return 0; } // worker.cpp #include &#34;config.hpp&#34; void work() { &#43;&#43;global_count; } 编译链接时可能会报错：
+multiple definition of `global_count&#39; 很多人第一次看到这个错误时会觉得奇怪：
+这个变量不是在各自的 .cpp 文件里各有一份吗？既然各自唯一，为什么会冲突？
+这个问题问得很好。只是答案稍微冷淡一点：你以为它们“各自唯一”，但链接器看到的是多个具有外部链接性的同名定义。C/C&#43;&#43; 不会因为你觉得它们应该和平相处，就替你重新解释规则。
+这篇文章专门把这个问题讲清楚。
+一、先给结论 头文件里写：
+int global_count = 0; 这不是声明，而是 定义。
+如果这个头文件被多个 .cpp 包含，那么每个 .cpp 在预处理后都会得到一份：
+int global_count = 0; 于是整个程序中会出现多个 global_count 的定义。
+而普通全局变量默认具有 外部链接性，也就是它会导出一个能被其他翻译单元链接到的符号。多个 .cpp 都导出了同名的 global_count，链接器就会发现：
+main.o 里有一个 global_count 定义 worker.o 里也有一个 global_count 定义 它无法接受同一个程序里有多个外部定义，于是报 multiple definition。">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">C 与 C&#43;&#43; 头文件中定义变量为什么会冲突：翻译单元、链接与 ODR</h1>
+
+    
+      <div class="post-date">August 23, 2026</div>
+    
+
+    <div class="post-content">
+      <p>刚开始写 C/C++ 多文件项目时，很容易写出这样的代码：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// config.hpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="cp">#ifndef CONFIG_HPP
+</span></span></span><span class="line"><span class="cl"><span class="cp">#define CONFIG_HPP
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">global_count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="cp">#endif
+</span></span></span></code></pre></div><p>然后在多个 <code>.cpp</code> 文件中包含它：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// main.cpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&#34;config.hpp&#34;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="o">++</span><span class="n">global_count</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// worker.cpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&#34;config.hpp&#34;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">work</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="o">++</span><span class="n">global_count</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>编译链接时可能会报错：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">multiple definition of `global_count&#39;
+</span></span></code></pre></div><p>很多人第一次看到这个错误时会觉得奇怪：</p>
+<p><strong>这个变量不是在各自的 <code>.cpp</code> 文件里各有一份吗？既然各自唯一，为什么会冲突？</strong></p>
+<p>这个问题问得很好。只是答案稍微冷淡一点：你以为它们“各自唯一”，但链接器看到的是多个具有外部链接性的同名定义。C/C++ 不会因为你觉得它们应该和平相处，就替你重新解释规则。</p>
+<p>这篇文章专门把这个问题讲清楚。</p>
+<h2 id="一先给结论">一、先给结论</h2>
+<p>头文件里写：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">global_count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span></code></pre></div><p>这不是声明，而是 <strong>定义</strong>。</p>
+<p>如果这个头文件被多个 <code>.cpp</code> 包含，那么每个 <code>.cpp</code> 在预处理后都会得到一份：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">global_count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span></code></pre></div><p>于是整个程序中会出现多个 <code>global_count</code> 的定义。</p>
+<p>而普通全局变量默认具有 <strong>外部链接性</strong>，也就是它会导出一个能被其他翻译单元链接到的符号。多个 <code>.cpp</code> 都导出了同名的 <code>global_count</code>，链接器就会发现：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">main.o   里有一个 global_count 定义
+</span></span><span class="line"><span class="cl">worker.o 里也有一个 global_count 定义
+</span></span></code></pre></div><p>它无法接受同一个程序里有多个外部定义，于是报 <code>multiple definition</code>。</p>
+<p>核心知识点是：</p>
+<ul>
+<li><code>#include</code> 是文本包含</li>
+<li>每个 <code>.c</code> / <code>.cpp</code> 会形成一个翻译单元</li>
+<li>声明和定义不是一回事</li>
+<li>全局变量默认具有外部链接性</li>
+<li>链接器会合并多个目标文件</li>
+<li>C++ 有 ODR，也就是 One Definition Rule</li>
+<li><code>extern</code>、<code>static</code>、<code>inline</code> 变量会改变问题的性质</li>
+</ul>
+<p>一个问题能牵出这么多概念，也算它相当会给初学者添麻烦了。</p>
+<h2 id="二include-不是模块导入">二、include 不是模块导入</h2>
+<p>在 C/C++ 中：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&#34;config.hpp&#34;</span><span class="cp">
+</span></span></span></code></pre></div><p>不是“导入一个模块”，而是把 <code>config.hpp</code> 的内容复制到当前位置。</p>
+<p>也就是说：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// main.cpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&#34;config.hpp&#34;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="o">++</span><span class="n">global_count</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>预处理后大致会变成：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// main.cpp 预处理后，简化理解
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">global_count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="o">++</span><span class="n">global_count</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>另一个文件：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// worker.cpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&#34;config.hpp&#34;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">work</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="o">++</span><span class="n">global_count</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>预处理后大致会变成：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// worker.cpp 预处理后，简化理解
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">global_count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">work</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="o">++</span><span class="n">global_count</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>所以问题不是“头文件被共享了一次”，而是“头文件内容被复制进了每一个包含它的源文件”。</p>
+<h2 id="三翻译单元是什么">三、翻译单元是什么</h2>
+<p>C/C++ 的编译不是把所有 <code>.cpp</code> 一起揉成一个大文件处理。</p>
+<p>通常每个 <code>.cpp</code> 会单独经过：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">预处理
+</span></span><span class="line"><span class="cl">编译
+</span></span><span class="line"><span class="cl">汇编
+</span></span></code></pre></div><p>生成自己的目标文件：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">main.cpp   -&gt; main.o
+</span></span><span class="line"><span class="cl">worker.cpp -&gt; worker.o
+</span></span></code></pre></div><p>每个源文件经过预处理后形成的完整输入，叫做 <strong>翻译单元</strong>。</p>
+<p>可以粗略理解成：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">一个 .cpp + 它包含进来的所有头文件内容 = 一个翻译单元
+</span></span></code></pre></div><p>例如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">main.cpp + config.hpp   -&gt; main 翻译单元 -&gt; main.o
+</span></span><span class="line"><span class="cl">worker.cpp + config.hpp -&gt; worker 翻译单元 -&gt; worker.o
+</span></span></code></pre></div><p>在编译阶段，编译器一次通常只看一个翻译单元。</p>
+<p>所以从 <code>main.cpp</code> 的编译视角看：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">global_count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span></code></pre></div><p>确实只有一个。</p>
+<p>从 <code>worker.cpp</code> 的编译视角看：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">global_count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span></code></pre></div><p>也确实只有一个。</p>
+<p>问题出在后面的链接阶段。</p>
+<h2 id="四链接器看到的不是一个-cpp">四、链接器看到的不是一个 cpp</h2>
+<p>编译完成后，链接器会把多个目标文件合成一个可执行文件：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">main.o + worker.o + 标准库 -&gt; app
+</span></span></code></pre></div><p>这时它会看到：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">main.o:
+</span></span><span class="line"><span class="cl">  定义了 global_count
+</span></span><span class="line"><span class="cl">  定义了 main
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">worker.o:
+</span></span><span class="line"><span class="cl">  定义了 global_count
+</span></span><span class="line"><span class="cl">  定义了 work
+</span></span></code></pre></div><p><code>main</code> 和 <code>work</code> 名字不同，没问题。</p>
+<p>但 <code>global_count</code> 出现了两次，而且都是外部可见的定义。于是链接器就会报错。</p>
+<p>这就是“各自 <code>.cpp</code> 中唯一”和“整个程序中冲突”的区别：</p>
+<table>
+  <thead>
+      <tr>
+          <th>视角</th>
+          <th>看到什么</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>编译器处理 <code>main.cpp</code></td>
+          <td>一个 <code>global_count</code></td>
+      </tr>
+      <tr>
+          <td>编译器处理 <code>worker.cpp</code></td>
+          <td>一个 <code>global_count</code></td>
+      </tr>
+      <tr>
+          <td>链接器处理整个程序</td>
+          <td>两个外部定义的 <code>global_count</code></td>
+      </tr>
+  </tbody>
+</table>
+<p>编译器觉得每个房间都只坐了一个人，链接器进大厅一看，两个人拿着同一张身份证。问题当然就出现了。</p>
+<h2 id="五声明和定义">五、声明和定义</h2>
+<p>要理解这个问题，必须区分声明和定义。</p>
+<p>声明告诉编译器：这个名字存在。</p>
+<p>定义不仅告诉编译器名字存在，还真正创建实体。</p>
+<p>变量声明：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">extern</span> <span class="kt">int</span> <span class="n">global_count</span><span class="p">;</span>
+</span></span></code></pre></div><p>含义是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">有一个 int 类型的 global_count，它的定义在别处。
+</span></span></code></pre></div><p>变量定义：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">global_count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span></code></pre></div><p>含义是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">创建一个 int 类型的 global_count，并初始化为 0。
+</span></span></code></pre></div><p>即使不写初始化：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">global_count</span><span class="p">;</span>
+</span></span></code></pre></div><p>在命名空间作用域或文件作用域下，它通常也是定义。不要因为它没有 <code>= 0</code> 就以为它只是声明。C/C++ 在这种地方并不会因为你少写几个字符就变得温柔。</p>
+<p>函数也类似：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">add</span><span class="p">(</span><span class="kt">int</span> <span class="n">a</span><span class="p">,</span> <span class="kt">int</span> <span class="n">b</span><span class="p">);</span>
+</span></span></code></pre></div><p>这是函数声明。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">add</span><span class="p">(</span><span class="kt">int</span> <span class="n">a</span><span class="p">,</span> <span class="kt">int</span> <span class="n">b</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="n">a</span> <span class="o">+</span> <span class="n">b</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>这是函数定义。</p>
+<p>头文件中最适合放的是声明，而不是普通全局变量定义。</p>
+<h2 id="六正确写法头文件-extern源文件定义">六、正确写法：头文件 extern，源文件定义</h2>
+<p>如果你想让整个程序共享同一个全局变量，推荐写法是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// config.hpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="cp">#ifndef CONFIG_HPP
+</span></span></span><span class="line"><span class="cl"><span class="cp">#define CONFIG_HPP
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="k">extern</span> <span class="kt">int</span> <span class="n">global_count</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="cp">#endif
+</span></span></span></code></pre></div><p>然后在一个 <code>.cpp</code> 文件中提供唯一的定义：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// config.cpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&#34;config.hpp&#34;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">global_count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span></code></pre></div><p>其他 <code>.cpp</code> 只需要包含头文件：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// main.cpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&#34;config.hpp&#34;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="o">++</span><span class="n">global_count</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// worker.cpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&#34;config.hpp&#34;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">work</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="o">++</span><span class="n">global_count</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>这样整个程序中只有一个定义：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">config.o:
+</span></span><span class="line"><span class="cl">  定义 global_count
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">main.o:
+</span></span><span class="line"><span class="cl">  引用 global_count
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">worker.o:
+</span></span><span class="line"><span class="cl">  引用 global_count
+</span></span></code></pre></div><p>链接器会把 <code>main.o</code> 和 <code>worker.o</code> 中对 <code>global_count</code> 的引用，解析到 <code>config.o</code> 中的那一个定义。</p>
+<p>这才是“整个程序共享一个变量”的典型写法。</p>
+<h2 id="七extern-不是定义吗">七、extern 不是定义吗</h2>
+<p>这一点很容易混：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">extern</span> <span class="kt">int</span> <span class="n">global_count</span><span class="p">;</span>
+</span></span></code></pre></div><p>是声明，不是定义。</p>
+<p>但下面这个通常是定义：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">extern</span> <span class="kt">int</span> <span class="n">global_count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span></code></pre></div><p>因为它带了初始化。</p>
+<p>可以这样理解：</p>
+<table>
+  <thead>
+      <tr>
+          <th>写法</th>
+          <th>含义</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>extern int x;</code></td>
+          <td>声明，定义在别处</td>
+      </tr>
+      <tr>
+          <td><code>int x;</code></td>
+          <td>定义</td>
+      </tr>
+      <tr>
+          <td><code>int x = 0;</code></td>
+          <td>定义</td>
+      </tr>
+      <tr>
+          <td><code>extern int x = 0;</code></td>
+          <td>定义，而且显式外部链接</td>
+      </tr>
+  </tbody>
+</table>
+<p>所以不要在头文件里写：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">extern</span> <span class="kt">int</span> <span class="n">global_count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span></code></pre></div><p>它并不会因为有 <code>extern</code> 就变得安全。初始化已经把它变成定义了。</p>
+<h2 id="八头文件保护宏为什么没用">八、头文件保护宏为什么没用</h2>
+<p>很多人会问：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="cp">#ifndef CONFIG_HPP
+</span></span></span><span class="line"><span class="cl"><span class="cp">#define CONFIG_HPP
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">global_count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="cp">#endif
+</span></span></span></code></pre></div><p>不是已经有头文件保护宏了吗？为什么还会多重定义？</p>
+<p>原因是：<strong>头文件保护宏只能防止同一个翻译单元内重复包含，不能防止多个翻译单元分别包含。</strong></p>
+<p>例如一个文件里这样写：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&#34;config.hpp&#34;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&#34;config.hpp&#34;</span><span class="cp">
+</span></span></span></code></pre></div><p>头文件保护宏可以保证 <code>config.hpp</code> 的内容只在当前 <code>.cpp</code> 中出现一次。</p>
+<p>但如果有两个源文件：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">main.cpp   include config.hpp
+</span></span><span class="line"><span class="cl">worker.cpp include config.hpp
+</span></span></code></pre></div><p>它们是两个不同的翻译单元。每个翻译单元都会各自处理一遍头文件保护宏。</p>
+<p>可以粗略理解成：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">main.cpp:
+</span></span><span class="line"><span class="cl">  CONFIG_HPP 没定义 -&gt; 放入 int global_count = 0 -&gt; 定义 CONFIG_HPP
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">worker.cpp:
+</span></span><span class="line"><span class="cl">  CONFIG_HPP 没定义 -&gt; 放入 int global_count = 0 -&gt; 定义 CONFIG_HPP
+</span></span></code></pre></div><p>宏的状态不会跨 <code>.cpp</code> 文件共享。</p>
+<p>所以头文件保护宏解决的是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">同一个 .cpp 中重复 include
+</span></span></code></pre></div><p>解决不了：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">多个 .cpp 都 include 同一个头文件
+</span></span></code></pre></div><h2 id="九外部链接性是什么">九、外部链接性是什么</h2>
+<p>文件作用域或命名空间作用域下的普通全局变量通常具有 <strong>外部链接性</strong>。</p>
+<p>例如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">global_count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span></code></pre></div><p>这个名字不只在当前 <code>.cpp</code> 内部可见。它会成为一个外部符号，可以被其他目标文件引用。</p>
+<p>这意味着整个程序层面通常只能有一个这样的定义。</p>
+<p>如果多个翻译单元都定义了同名外部符号：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">main.o:
+</span></span><span class="line"><span class="cl">  global_count
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">worker.o:
+</span></span><span class="line"><span class="cl">  global_count
+</span></span></code></pre></div><p>链接器就会冲突。</p>
+<p>这和局部变量完全不同。</p>
+<p>例如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">f</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>这个 <code>count</code> 是局部变量，没有外部链接性。另一个函数里也可以有自己的 <code>count</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">g</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>它们不会冲突，因为它们不是外部符号，也不需要在链接阶段被当成同一个全局名字处理。</p>
+<h2 id="十static每个翻译单元一份">十、static：每个翻译单元一份</h2>
+<p>如果你真的希望每个 <code>.cpp</code> 都有自己独立的一份变量，可以在头文件里写 <code>static</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// config.hpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="cp">#ifndef CONFIG_HPP
+</span></span></span><span class="line"><span class="cl"><span class="cp">#define CONFIG_HPP
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="k">static</span> <span class="kt">int</span> <span class="n">global_count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="cp">#endif
+</span></span></span></code></pre></div><p><code>static</code> 修饰文件作用域变量时，表示 <strong>内部链接性</strong>。</p>
+<p>含义是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">这个变量只属于当前翻译单元，不导出为外部符号。
+</span></span></code></pre></div><p>于是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">main.cpp   包含 config.hpp -&gt; main.o   有自己的 global_count
+</span></span><span class="line"><span class="cl">worker.cpp 包含 config.hpp -&gt; worker.o 有自己的 global_count
+</span></span></code></pre></div><p>它们名字相同，但都只在各自翻译单元内部可见，链接器不会把它们当成同一个外部符号。</p>
+<p>这时不会多重定义，但要注意：这已经不是“全程序共享一个变量”了，而是“每个 <code>.cpp</code> 各有一份变量”。</p>
+<p>例如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// config.hpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="k">static</span> <span class="kt">int</span> <span class="n">global_count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// main.cpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&#34;config.hpp&#34;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">inc_main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="o">++</span><span class="n">global_count</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// worker.cpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&#34;config.hpp&#34;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">inc_worker</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="o">++</span><span class="n">global_count</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p><code>inc_main</code> 改的是 <code>main.cpp</code> 那一份。</p>
+<p><code>inc_worker</code> 改的是 <code>worker.cpp</code> 那一份。</p>
+<p>如果你以为它们共享同一个变量，那程序行为就会变得很难看懂。不是它复杂，是你给了它两种身份。</p>
+<h2 id="十一c17-inline-变量">十一、C++17 inline 变量</h2>
+<p>C++17 引入了 <strong>inline 变量</strong>，可以安全地在头文件中定义全局变量：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// config.hpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="cp">#ifndef CONFIG_HPP
+</span></span></span><span class="line"><span class="cl"><span class="cp">#define CONFIG_HPP
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="kr">inline</span> <span class="kt">int</span> <span class="n">global_count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="cp">#endif
+</span></span></span></code></pre></div><p>这表示允许这个变量定义出现在多个翻译单元中，但它们在整个程序里表示同一个实体。</p>
+<p>也就是说：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">main.cpp   包含 inline int global_count = 0;
+</span></span><span class="line"><span class="cl">worker.cpp 包含 inline int global_count = 0;
+</span></span></code></pre></div><p>链接器会把这些 inline 变量定义合并成一个变量。</p>
+<p>这和 <code>static</code> 不一样：</p>
+<table>
+  <thead>
+      <tr>
+          <th>写法</th>
+          <th>是否冲突</th>
+          <th>是否共享同一份</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>int x = 0;</code> 放头文件</td>
+          <td>冲突</td>
+          <td>不合法</td>
+      </tr>
+      <tr>
+          <td><code>extern int x;</code> 头文件 + 一个 <code>.cpp</code> 定义</td>
+          <td>不冲突</td>
+          <td>是</td>
+      </tr>
+      <tr>
+          <td><code>static int x = 0;</code> 放头文件</td>
+          <td>不冲突</td>
+          <td>否，每个翻译单元一份</td>
+      </tr>
+      <tr>
+          <td><code>inline int x = 0;</code> 放头文件</td>
+          <td>不冲突</td>
+          <td>是，C++17 起</td>
+      </tr>
+  </tbody>
+</table>
+<p><code>inline</code> 变量很适合头文件库、全局配置对象、常量对象等场景。</p>
+<p>但前提是你使用的是 C++17 或更高版本。</p>
+<h2 id="十二inline-变量和-inline-函数的关系">十二、inline 变量和 inline 函数的关系</h2>
+<p>很多人听到 <code>inline</code> 会想到“建议编译器内联展开函数”。但在 C++ 中，<code>inline</code> 还有一个非常重要的含义：</p>
+<p><strong>允许同一个定义出现在多个翻译单元中，只要这些定义完全一致。</strong></p>
+<p>例如头文件里常见的 inline 函数：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// math_utils.hpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="kr">inline</span> <span class="kt">int</span> <span class="nf">add</span><span class="p">(</span><span class="kt">int</span> <span class="n">a</span><span class="p">,</span> <span class="kt">int</span> <span class="n">b</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="n">a</span> <span class="o">+</span> <span class="n">b</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>这个头文件被多个 <code>.cpp</code> 包含不会多重定义，因为 <code>inline</code> 函数允许多处定义。</p>
+<p>C++17 的 inline 变量把类似能力扩展到了变量：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="kr">inline</span> <span class="kt">int</span> <span class="n">global_count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span></code></pre></div><p>所以这里的 <code>inline</code> 不应该只理解成性能优化提示。它更重要的是链接规则。</p>
+<h2 id="十三const-的特殊情况">十三、const 的特殊情况</h2>
+<p><code>const</code> 变量在 C 和 C++ 中有一个很容易踩的差异。</p>
+<p>在 C++ 中，命名空间作用域下的非 <code>extern</code> <code>const</code> 变量默认具有内部链接性：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// constants.hpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="k">const</span> <span class="kt">int</span> <span class="n">max_size</span> <span class="o">=</span> <span class="mi">100</span><span class="p">;</span>
+</span></span></code></pre></div><p>如果这个头文件被多个 <code>.cpp</code> 包含，通常不会产生多重定义。因为每个翻译单元都有自己的一份 <code>max_size</code>，它不是外部符号。</p>
+<p>但这也意味着它不一定是全程序共享的同一个对象。</p>
+<p>如果你只是把它当编译期常量使用，这通常没问题：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">buffer</span><span class="p">[</span><span class="n">max_size</span><span class="p">];</span>
+</span></span></code></pre></div><p>如果你在意它的地址是否全程序唯一，那就要小心。</p>
+<p>C++17 之后，更推荐写：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="kr">inline</span> <span class="k">constexpr</span> <span class="kt">int</span> <span class="n">max_size</span> <span class="o">=</span> <span class="mi">100</span><span class="p">;</span>
+</span></span></code></pre></div><p>这样它可以放在头文件里，并且作为 inline 变量遵守相应规则。</p>
+<p>在 C 中，文件作用域 <code>const</code> 默认仍然具有外部链接性：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="c1">// constants.h
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="k">const</span> <span class="kt">int</span> <span class="n">max_size</span> <span class="o">=</span> <span class="mi">100</span><span class="p">;</span>
+</span></span></code></pre></div><p>如果被多个 <code>.c</code> 包含，可能导致多重定义。</p>
+<p>C 中更稳妥的写法是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="c1">// constants.h
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="k">extern</span> <span class="k">const</span> <span class="kt">int</span> <span class="n">max_size</span><span class="p">;</span>
+</span></span></code></pre></div><p>然后在一个 <code>.c</code> 文件中定义：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="c1">// constants.c
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&#34;constants.h&#34;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="k">const</span> <span class="kt">int</span> <span class="n">max_size</span> <span class="o">=</span> <span class="mi">100</span><span class="p">;</span>
+</span></span></code></pre></div><p>如果只是整数常量，C 中也常见使用宏或枚举：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#define MAX_SIZE 100
+</span></span></span></code></pre></div><p>或者：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">enum</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">MAX_SIZE</span> <span class="o">=</span> <span class="mi">100</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><p>宏没有类型，枚举常量只能表达整数值。选择哪种方式，要看场景。总之，不要以为 C 和 C++ 的 <code>const</code> 行为完全一样。它们只是长得像，并不保证性格一致。</p>
+<h2 id="十四c-语言里的-tentative-definition">十四、C 语言里的 tentative definition</h2>
+<p>C 语言中还有一个概念叫 <strong>tentative definition</strong>，也就是暂定定义。</p>
+<p>例如文件作用域：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">global_count</span><span class="p">;</span>
+</span></span></code></pre></div><p>在 C 里是暂定定义。如果同一个翻译单元后面没有真正的定义，它会被当作：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">global_count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span></code></pre></div><p>如果你把它放进头文件：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="c1">// config.h
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">global_count</span><span class="p">;</span>
+</span></span></code></pre></div><p>再被多个 <code>.c</code> 包含，就会在多个翻译单元中都产生外部定义。</p>
+<p>旧工具链有时会因为 common symbol 机制让这种写法侥幸链接通过。但这不是值得依赖的好习惯。现代 GCC 默认使用 <code>-fno-common</code> 后，这类代码更容易直接报多重定义。</p>
+<p>正确写法仍然是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="c1">// config.h
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="k">extern</span> <span class="kt">int</span> <span class="n">global_count</span><span class="p">;</span>
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="c1">// config.c
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&#34;config.h&#34;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">global_count</span><span class="p">;</span>
+</span></span></code></pre></div><p>这才清楚。</p>
+<h2 id="十五namespace-不能解决这个问题">十五、namespace 不能解决这个问题</h2>
+<p>C++ 里有人会这样写：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// config.hpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="k">namespace</span> <span class="n">config</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">global_count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>这依然是定义。</p>
+<p>如果多个 <code>.cpp</code> 包含这个头文件，就会产生多个：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="n">config</span><span class="o">::</span><span class="n">global_count</span>
+</span></span></code></pre></div><p>链接时仍然可能多重定义。</p>
+<p>命名空间只是改变名字所在的作用域，并不会自动让变量变成“每个 <code>.cpp</code> 私有”或“全程序唯一共享”。</p>
+<p>正确写法之一：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// config.hpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="k">namespace</span> <span class="n">config</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">extern</span> <span class="kt">int</span> <span class="n">global_count</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// config.cpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&#34;config.hpp&#34;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="k">namespace</span> <span class="n">config</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">global_count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>C++17 起也可以：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// config.hpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="k">namespace</span> <span class="n">config</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">inline</span> <span class="kt">int</span> <span class="n">global_count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><h2 id="十六类中的-static-成员变量">十六、类中的 static 成员变量</h2>
+<p>类里的 <code>static</code> 成员变量也有类似问题。</p>
+<p>例如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// Counter.hpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">Counter</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="k">public</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">    <span class="k">static</span> <span class="kt">int</span> <span class="n">value</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><p>这只是声明，不是定义。</p>
+<p>在 C++17 之前，通常需要在一个 <code>.cpp</code> 中定义：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// Counter.cpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&#34;Counter.hpp&#34;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">Counter</span><span class="o">::</span><span class="n">value</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span></code></pre></div><p>如果你把定义写进头文件：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// Counter.hpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">Counter</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="k">public</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">    <span class="k">static</span> <span class="kt">int</span> <span class="n">value</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">Counter</span><span class="o">::</span><span class="n">value</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span></code></pre></div><p>多个 <code>.cpp</code> 包含后，也会多重定义。</p>
+<p>C++17 起可以写 inline static 成员：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// Counter.hpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">Counter</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="k">public</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">inline</span> <span class="k">static</span> <span class="kt">int</span> <span class="n">value</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><p>这就可以放在头文件中。</p>
+<h2 id="十七odr-是什么">十七、ODR 是什么</h2>
+<p>ODR 是 One Definition Rule，通常翻译为 <strong>单一定义规则</strong>。</p>
+<p>C++ 中大致要求：</p>
+<ul>
+<li>一个翻译单元内，任何变量、函数、类类型等不能有冲突的重复定义</li>
+<li>整个程序中，具有外部链接性的普通变量和普通函数通常只能有一个定义</li>
+<li>某些实体允许多个定义，例如类定义、模板定义、inline 函数、inline 变量，但这些定义必须一致</li>
+</ul>
+<p>例如类定义通常放在头文件里：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// Student.hpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">Student</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="k">public</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">id</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">age</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><p>多个 <code>.cpp</code> 包含它不会出问题，因为类型定义允许在多个翻译单元中出现，只要内容一致。</p>
+<p>函数声明也可以放头文件：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">print_student</span><span class="p">(</span><span class="k">const</span> <span class="n">Student</span><span class="o">&amp;</span> <span class="n">student</span><span class="p">);</span>
+</span></span></code></pre></div><p>因为它只是声明。</p>
+<p>普通函数定义不加 <code>inline</code> 放头文件会出问题：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// math_utils.hpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">add</span><span class="p">(</span><span class="kt">int</span> <span class="n">a</span><span class="p">,</span> <span class="kt">int</span> <span class="n">b</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="n">a</span> <span class="o">+</span> <span class="n">b</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>多个 <code>.cpp</code> 包含后，会产生多个 <code>add</code> 定义。</p>
+<p>正确方式之一是加 <code>inline</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// math_utils.hpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="kr">inline</span> <span class="kt">int</span> <span class="nf">add</span><span class="p">(</span><span class="kt">int</span> <span class="n">a</span><span class="p">,</span> <span class="kt">int</span> <span class="n">b</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="n">a</span> <span class="o">+</span> <span class="n">b</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>变量也是同理。普通变量定义不能随便放头文件，C++17 起的 inline 变量除外。</p>
+<h2 id="十八作用域链接性存储期不要混在一起">十八、作用域、链接性、存储期不要混在一起</h2>
+<p>这个问题容易让人混淆三个概念：</p>
+<table>
+  <thead>
+      <tr>
+          <th>概念</th>
+          <th>问的问题</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>作用域</td>
+          <td>这个名字在源码的哪里可见</td>
+      </tr>
+      <tr>
+          <td>链接性</td>
+          <td>这个名字在不同翻译单元之间是否表示同一个实体</td>
+      </tr>
+      <tr>
+          <td>存储期</td>
+          <td>这个对象什么时候创建、什么时候销毁</td>
+      </tr>
+  </tbody>
+</table>
+<p>例如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">global_count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span></code></pre></div><p>它在命名空间作用域：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">作用域：从声明点开始，在当前命名空间内可见
+</span></span><span class="line"><span class="cl">链接性：默认外部链接
+</span></span><span class="line"><span class="cl">存储期：静态存储期，程序启动前后创建，程序结束时销毁
+</span></span></code></pre></div><p>而：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">static</span> <span class="kt">int</span> <span class="n">global_count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span></code></pre></div><p>它仍然有静态存储期，但链接性变成内部链接：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">作用域：当前文件中从声明点开始可见
+</span></span><span class="line"><span class="cl">链接性：内部链接
+</span></span><span class="line"><span class="cl">存储期：静态存储期
+</span></span></code></pre></div><p>所以 <code>static</code> 并不是“让变量生命周期变长”这么简单。放在不同位置，它的含义不同。</p>
+<p>局部静态变量：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">f</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">static</span> <span class="kt">int</span> <span class="n">count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="o">++</span><span class="n">count</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>这里的 <code>count</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">作用域：只在函数 f 内可见
+</span></span><span class="line"><span class="cl">链接性：无链接
+</span></span><span class="line"><span class="cl">存储期：静态存储期
+</span></span></code></pre></div><p>它不会导致头文件全局变量那种链接冲突，因为它不是一个外部符号。</p>
+<h2 id="十九应该如何选择写法">十九、应该如何选择写法</h2>
+<p>如果你想让全程序共享一个变量：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// config.hpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">extern</span> <span class="kt">int</span> <span class="n">global_count</span><span class="p">;</span>
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// config.cpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kt">int</span> <span class="n">global_count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span></code></pre></div><p>这是最传统、最清楚的写法。</p>
+<p>如果你使用 C++17 或更高，并且希望变量直接定义在头文件中：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// config.hpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kr">inline</span> <span class="kt">int</span> <span class="n">global_count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span></code></pre></div><p>这是现代 C++ 可用的写法。</p>
+<p>如果你希望每个 <code>.cpp</code> 都有独立的一份：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// config.hpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">static</span> <span class="kt">int</span> <span class="n">global_count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span></code></pre></div><p>可以这么写，但要明确它们不是同一个变量。</p>
+<p>如果只是常量：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// C++17+
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kr">inline</span> <span class="k">constexpr</span> <span class="kt">int</span> <span class="n">max_size</span> <span class="o">=</span> <span class="mi">100</span><span class="p">;</span>
+</span></span></code></pre></div><p>通常很适合放在头文件里。</p>
+<p>如果是 C 项目中的共享全局变量：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="c1">// config.h
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">extern</span> <span class="kt">int</span> <span class="n">global_count</span><span class="p">;</span>
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="c1">// config.c
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kt">int</span> <span class="n">global_count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span></code></pre></div><p>不要把普通变量定义直接写进头文件。</p>
+<h2 id="二十一个完整示例">二十、一个完整示例</h2>
+<p>推荐目录结构：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">project/
+</span></span><span class="line"><span class="cl">  include/
+</span></span><span class="line"><span class="cl">    config.hpp
+</span></span><span class="line"><span class="cl">  src/
+</span></span><span class="line"><span class="cl">    config.cpp
+</span></span><span class="line"><span class="cl">    main.cpp
+</span></span><span class="line"><span class="cl">    worker.cpp
+</span></span></code></pre></div><p><code>include/config.hpp</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="cp">#ifndef CONFIG_HPP
+</span></span></span><span class="line"><span class="cl"><span class="cp">#define CONFIG_HPP
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="k">extern</span> <span class="kt">int</span> <span class="n">global_count</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="cp">#endif
+</span></span></span></code></pre></div><p><code>src/config.cpp</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&#34;config.hpp&#34;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">global_count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span></code></pre></div><p><code>src/worker.cpp</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&#34;config.hpp&#34;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">work</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="o">++</span><span class="n">global_count</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p><code>src/main.cpp</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&#34;config.hpp&#34;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">work</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="o">++</span><span class="n">global_count</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">work</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="n">global_count</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>编译：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">g++ -Iinclude src/main.cpp src/worker.cpp src/config.cpp -o app
+</span></span></code></pre></div><p>这里必须把 <code>src/config.cpp</code> 也参与编译链接。否则会变成另一种错误：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">undefined reference to `global_count&#39;
+</span></span></code></pre></div><p>因为头文件里的 <code>extern int global_count;</code> 只是声明，它承诺“别处有定义”。如果你没有把真正定义所在的 <code>.cpp</code> 链接进来，链接器当然找不到。</p>
+<h2 id="二十一常见错误对照">二十一、常见错误对照</h2>
+<h3 id="multiple-definition">multiple definition</h3>
+<p>头文件中写了变量定义：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// config.hpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kt">int</span> <span class="n">global_count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span></code></pre></div><p>多个 <code>.cpp</code> 包含后报：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">multiple definition of `global_count&#39;
+</span></span></code></pre></div><p>解决：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// config.hpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">extern</span> <span class="kt">int</span> <span class="n">global_count</span><span class="p">;</span>
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// config.cpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kt">int</span> <span class="n">global_count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span></code></pre></div><p>或者 C++17：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// config.hpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kr">inline</span> <span class="kt">int</span> <span class="n">global_count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span></code></pre></div><h3 id="undefined-reference">undefined reference</h3>
+<p>头文件中只有声明：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// config.hpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">extern</span> <span class="kt">int</span> <span class="n">global_count</span><span class="p">;</span>
+</span></span></code></pre></div><p>但没有任何 <code>.cpp</code> 定义它，或者定义所在 <code>.cpp</code> 没参与链接，就会报：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">undefined reference to `global_count&#39;
+</span></span></code></pre></div><p>解决：提供一个定义，并参与构建。</p>
+<h3 id="每个文件都有一份结果状态不共享">每个文件都有一份，结果状态不共享</h3>
+<p>头文件中写：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">static</span> <span class="kt">int</span> <span class="n">global_count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span></code></pre></div><p>不会多重定义，但每个翻译单元都有一份。</p>
+<p>如果你希望所有 <code>.cpp</code> 共享同一个计数器，这不是正确写法。</p>
+<h2 id="二十二总结">二十二、总结</h2>
+<p>头文件中定义普通全局变量会冲突，是因为 <code>#include</code> 会把定义复制进每个包含它的 <code>.cpp</code>。每个 <code>.cpp</code> 单独编译时确实各自只有一个变量定义，但链接器最终要把所有目标文件合成一个程序。</p>
+<p>如果这个变量具有外部链接性，那么多个目标文件中出现同名定义，就违反了整个程序层面的规则。</p>
+<p>最重要的判断方式是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">头文件里的是声明，还是定义？
+</span></span><span class="line"><span class="cl">这个名字有没有外部链接性？
+</span></span><span class="line"><span class="cl">我想要全程序共享一份，还是每个翻译单元一份？
+</span></span></code></pre></div><p>对应选择：</p>
+<table>
+  <thead>
+      <tr>
+          <th>需求</th>
+          <th>推荐写法</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>全程序共享一个变量，C/C++ 通用</td>
+          <td>头文件 <code>extern</code> 声明，一个源文件定义</td>
+      </tr>
+      <tr>
+          <td>C++17 起头文件中定义共享变量</td>
+          <td><code>inline</code> 变量</td>
+      </tr>
+      <tr>
+          <td>每个 <code>.cpp</code> 独立一份</td>
+          <td><code>static</code> 变量或内部链接</td>
+      </tr>
+      <tr>
+          <td>C++17 起头文件常量</td>
+          <td><code>inline constexpr</code></td>
+      </tr>
+  </tbody>
+</table>
+<p>所以，那个变量并不是“在各自 <code>.cpp</code> 中唯一就没事”。它在编译阶段看起来各自唯一，在链接阶段却都以同一个外部名字出现。链接器不负责理解你的心理预期，它只负责执行规则。</p>
+<p>而这正是 C/C++ 多文件工程必须掌握的知识点：<strong>翻译单元、链接性、声明与定义、以及 ODR。</strong></p>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

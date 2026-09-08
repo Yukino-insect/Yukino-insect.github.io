@@ -1,0 +1,1334 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Redis 基础 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="Redis 是一款基于内存的高性能键值数据库。它不仅可以作为缓存使用，也提供了丰富的数据结构、持久化、复制、Lua 脚本、发布订阅、Stream 等能力。
+理解 Redis 时，不要只把它看成一个“更快的 Map”。更准确的说法是：Redis 是一个以内存为主要工作介质、以数据结构命令为核心接口的存储系统。
+一、Redis 的基本特征 Redis 的核心特点包括：
+数据主要存储在内存中，读写延迟低。 单线程执行命令，避免了大量锁竞争；网络 I/O 等部分在新版本中可以使用多线程辅助。 支持 String、Hash、List、Set、ZSet、Bitmap、HyperLogLog、Geo、Stream 等数据结构。 支持 RDB、AOF、RDB &#43; AOF 混合持久化。 支持主从复制、Sentinel、Cluster 等高可用和扩展方案。 需要注意的是，Redis 快并不意味着可以无节制地存放所有数据。Redis 的成本主要来自内存，适合放热点数据、短期状态、计数、索引、轻量消息等。
+二、Key 的设计原则 Redis 中所有 key 都是字符串。好的 key 设计会直接影响可读性、维护成本和集群扩展。
+常见命名方式：
+业务:对象:标识:属性 例如：
+user:1001:profile user:1001:following article:9527:likes cache:product:20001 实践建议：
+key 名要稳定、清晰，不要把无意义的随机字符串作为业务 key。 避免超长 key，key 本身也会占内存。 给缓存类 key 设置 TTL，避免长期堆积。 避免大 key，例如一个包含几百万成员的 Set、Hash 或 List。 Cluster 场景下，跨 key 操作要注意 hash slot；必要时使用 hash tag，例如 order:{1001}:items 和 order:{1001}:status。 三、String String 是 Redis 最基础的数据类型，值可以是普通字符串、数字、JSON、序列化字节等。它是二进制安全的，因此也可以保存图片、压缩数据等二进制内容，只是实际业务中通常不建议把大文件放进 Redis。
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/redis/redis%E5%9F%BA%E7%A1%80/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/redis/redis%E5%9F%BA%E7%A1%80/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="Redis 基础">
+  <meta property="og:description" content="Redis 是一款基于内存的高性能键值数据库。它不仅可以作为缓存使用，也提供了丰富的数据结构、持久化、复制、Lua 脚本、发布订阅、Stream 等能力。
+理解 Redis 时，不要只把它看成一个“更快的 Map”。更准确的说法是：Redis 是一个以内存为主要工作介质、以数据结构命令为核心接口的存储系统。
+一、Redis 的基本特征 Redis 的核心特点包括：
+数据主要存储在内存中，读写延迟低。 单线程执行命令，避免了大量锁竞争；网络 I/O 等部分在新版本中可以使用多线程辅助。 支持 String、Hash、List、Set、ZSet、Bitmap、HyperLogLog、Geo、Stream 等数据结构。 支持 RDB、AOF、RDB &#43; AOF 混合持久化。 支持主从复制、Sentinel、Cluster 等高可用和扩展方案。 需要注意的是，Redis 快并不意味着可以无节制地存放所有数据。Redis 的成本主要来自内存，适合放热点数据、短期状态、计数、索引、轻量消息等。
+二、Key 的设计原则 Redis 中所有 key 都是字符串。好的 key 设计会直接影响可读性、维护成本和集群扩展。
+常见命名方式：
+业务:对象:标识:属性 例如：
+user:1001:profile user:1001:following article:9527:likes cache:product:20001 实践建议：
+key 名要稳定、清晰，不要把无意义的随机字符串作为业务 key。 避免超长 key，key 本身也会占内存。 给缓存类 key 设置 TTL，避免长期堆积。 避免大 key，例如一个包含几百万成员的 Set、Hash 或 List。 Cluster 场景下，跨 key 操作要注意 hash slot；必要时使用 hash tag，例如 order:{1001}:items 和 order:{1001}:status。 三、String String 是 Redis 最基础的数据类型，值可以是普通字符串、数字、JSON、序列化字节等。它是二进制安全的，因此也可以保存图片、压缩数据等二进制内容，只是实际业务中通常不建议把大文件放进 Redis。">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="redis">
+    <meta property="article:published_time" content="2025-09-06T20:47:53+08:00">
+    <meta property="article:modified_time" content="2025-09-06T20:47:53+08:00">
+
+  
+  <meta itemprop="name" content="Redis 基础">
+  <meta itemprop="description" content="Redis 是一款基于内存的高性能键值数据库。它不仅可以作为缓存使用，也提供了丰富的数据结构、持久化、复制、Lua 脚本、发布订阅、Stream 等能力。
+理解 Redis 时，不要只把它看成一个“更快的 Map”。更准确的说法是：Redis 是一个以内存为主要工作介质、以数据结构命令为核心接口的存储系统。
+一、Redis 的基本特征 Redis 的核心特点包括：
+数据主要存储在内存中，读写延迟低。 单线程执行命令，避免了大量锁竞争；网络 I/O 等部分在新版本中可以使用多线程辅助。 支持 String、Hash、List、Set、ZSet、Bitmap、HyperLogLog、Geo、Stream 等数据结构。 支持 RDB、AOF、RDB &#43; AOF 混合持久化。 支持主从复制、Sentinel、Cluster 等高可用和扩展方案。 需要注意的是，Redis 快并不意味着可以无节制地存放所有数据。Redis 的成本主要来自内存，适合放热点数据、短期状态、计数、索引、轻量消息等。
+二、Key 的设计原则 Redis 中所有 key 都是字符串。好的 key 设计会直接影响可读性、维护成本和集群扩展。
+常见命名方式：
+业务:对象:标识:属性 例如：
+user:1001:profile user:1001:following article:9527:likes cache:product:20001 实践建议：
+key 名要稳定、清晰，不要把无意义的随机字符串作为业务 key。 避免超长 key，key 本身也会占内存。 给缓存类 key 设置 TTL，避免长期堆积。 避免大 key，例如一个包含几百万成员的 Set、Hash 或 List。 Cluster 场景下，跨 key 操作要注意 hash slot；必要时使用 hash tag，例如 order:{1001}:items 和 order:{1001}:status。 三、String String 是 Redis 最基础的数据类型，值可以是普通字符串、数字、JSON、序列化字节等。它是二进制安全的，因此也可以保存图片、压缩数据等二进制内容，只是实际业务中通常不建议把大文件放进 Redis。">
+  <meta itemprop="datePublished" content="2025-09-06T20:47:53+08:00">
+  <meta itemprop="dateModified" content="2025-09-06T20:47:53+08:00">
+  <meta itemprop="wordCount" content="490">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Redis 基础">
+  <meta name="twitter:description" content="Redis 是一款基于内存的高性能键值数据库。它不仅可以作为缓存使用，也提供了丰富的数据结构、持久化、复制、Lua 脚本、发布订阅、Stream 等能力。
+理解 Redis 时，不要只把它看成一个“更快的 Map”。更准确的说法是：Redis 是一个以内存为主要工作介质、以数据结构命令为核心接口的存储系统。
+一、Redis 的基本特征 Redis 的核心特点包括：
+数据主要存储在内存中，读写延迟低。 单线程执行命令，避免了大量锁竞争；网络 I/O 等部分在新版本中可以使用多线程辅助。 支持 String、Hash、List、Set、ZSet、Bitmap、HyperLogLog、Geo、Stream 等数据结构。 支持 RDB、AOF、RDB &#43; AOF 混合持久化。 支持主从复制、Sentinel、Cluster 等高可用和扩展方案。 需要注意的是，Redis 快并不意味着可以无节制地存放所有数据。Redis 的成本主要来自内存，适合放热点数据、短期状态、计数、索引、轻量消息等。
+二、Key 的设计原则 Redis 中所有 key 都是字符串。好的 key 设计会直接影响可读性、维护成本和集群扩展。
+常见命名方式：
+业务:对象:标识:属性 例如：
+user:1001:profile user:1001:following article:9527:likes cache:product:20001 实践建议：
+key 名要稳定、清晰，不要把无意义的随机字符串作为业务 key。 避免超长 key，key 本身也会占内存。 给缓存类 key 设置 TTL，避免长期堆积。 避免大 key，例如一个包含几百万成员的 Set、Hash 或 List。 Cluster 场景下，跨 key 操作要注意 hash slot；必要时使用 hash tag，例如 order:{1001}:items 和 order:{1001}:status。 三、String String 是 Redis 最基础的数据类型，值可以是普通字符串、数字、JSON、序列化字节等。它是二进制安全的，因此也可以保存图片、压缩数据等二进制内容，只是实际业务中通常不建议把大文件放进 Redis。">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">Redis 基础</h1>
+
+    
+      <div class="post-date">September 6, 2025</div>
+    
+
+    <div class="post-content">
+      <p>Redis 是一款基于内存的高性能键值数据库。它不仅可以作为缓存使用，也提供了丰富的数据结构、持久化、复制、Lua 脚本、发布订阅、Stream 等能力。</p>
+<p>理解 Redis 时，不要只把它看成一个“更快的 Map”。更准确的说法是：Redis 是一个以内存为主要工作介质、以数据结构命令为核心接口的存储系统。</p>
+<h2 id="一redis-的基本特征">一、Redis 的基本特征</h2>
+<p>Redis 的核心特点包括：</p>
+<ol>
+<li>数据主要存储在内存中，读写延迟低。</li>
+<li>单线程执行命令，避免了大量锁竞争；网络 I/O 等部分在新版本中可以使用多线程辅助。</li>
+<li>支持 String、Hash、List、Set、ZSet、Bitmap、HyperLogLog、Geo、Stream 等数据结构。</li>
+<li>支持 RDB、AOF、RDB + AOF 混合持久化。</li>
+<li>支持主从复制、Sentinel、Cluster 等高可用和扩展方案。</li>
+</ol>
+<p>需要注意的是，Redis 快并不意味着可以无节制地存放所有数据。Redis 的成本主要来自内存，适合放热点数据、短期状态、计数、索引、轻量消息等。</p>
+<h2 id="二key-的设计原则">二、Key 的设计原则</h2>
+<p>Redis 中所有 key 都是字符串。好的 key 设计会直接影响可读性、维护成本和集群扩展。</p>
+<p>常见命名方式：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">业务:对象:标识:属性
+</span></span></code></pre></div><p>例如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">user:1001:profile
+</span></span><span class="line"><span class="cl">user:1001:following
+</span></span><span class="line"><span class="cl">article:9527:likes
+</span></span><span class="line"><span class="cl">cache:product:20001
+</span></span></code></pre></div><p>实践建议：</p>
+<ol>
+<li>key 名要稳定、清晰，不要把无意义的随机字符串作为业务 key。</li>
+<li>避免超长 key，key 本身也会占内存。</li>
+<li>给缓存类 key 设置 TTL，避免长期堆积。</li>
+<li>避免大 key，例如一个包含几百万成员的 Set、Hash 或 List。</li>
+<li>Cluster 场景下，跨 key 操作要注意 hash slot；必要时使用 hash tag，例如 <code>order:{1001}:items</code> 和 <code>order:{1001}:status</code>。</li>
+</ol>
+<h2 id="三string">三、String</h2>
+<p>String 是 Redis 最基础的数据类型，值可以是普通字符串、数字、JSON、序列化字节等。它是二进制安全的，因此也可以保存图片、压缩数据等二进制内容，只是实际业务中通常不建议把大文件放进 Redis。</p>
+<p>常用命令：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">SET user:1001:name <span class="s2">&#34;Tom&#34;</span>
+</span></span><span class="line"><span class="cl">GET user:1001:name
+</span></span><span class="line"><span class="cl">DEL user:1001:name
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">INCR article:9527:view_count
+</span></span><span class="line"><span class="cl">INCRBY article:9527:view_count <span class="m">10</span>
+</span></span><span class="line"><span class="cl">DECR stock:sku:20001
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">SET cache:product:20001 <span class="s2">&#34;{...}&#34;</span> EX <span class="m">300</span>
+</span></span><span class="line"><span class="cl">SET lock:order:1001 <span class="s2">&#34;request-id&#34;</span> NX PX <span class="m">30000</span>
+</span></span></code></pre></div><p>适合场景：</p>
+<ol>
+<li>缓存对象。</li>
+<li>计数器。</li>
+<li>分布式锁的基础实现。</li>
+<li>短期状态标记。</li>
+</ol>
+<h2 id="四hash">四、Hash</h2>
+<p>Hash 是字段和值的映射，适合存储对象的多个属性。和把整个对象序列化成一个 String 相比，Hash 可以单独读取或修改某个字段。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">HSET user:1001 name <span class="s2">&#34;Tom&#34;</span> age <span class="m">18</span> city <span class="s2">&#34;Hangzhou&#34;</span>
+</span></span><span class="line"><span class="cl">HGET user:1001 name
+</span></span><span class="line"><span class="cl">HMGET user:1001 name city
+</span></span><span class="line"><span class="cl">HINCRBY user:1001 login_count <span class="m">1</span>
+</span></span><span class="line"><span class="cl">HGETALL user:1001
+</span></span><span class="line"><span class="cl">HDEL user:1001 city
+</span></span></code></pre></div><p>适合场景：</p>
+<ol>
+<li>用户资料、商品信息等对象缓存。</li>
+<li>多字段计数。</li>
+<li>局部更新频繁的对象。</li>
+</ol>
+<p>注意：当对象字段很多或者单个字段值很大时，Hash 也会变成大 key。不要因为 Hash 看起来像对象，就把一个业务域的所有数据都塞进去。</p>
+<h2 id="五list">五、List</h2>
+<p>List 是有序列表，可以从两端插入和弹出。它适合实现简单队列、最新列表、任务缓冲等。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">LPUSH timeline:1001 <span class="s2">&#34;post-1&#34;</span>
+</span></span><span class="line"><span class="cl">LPUSH timeline:1001 <span class="s2">&#34;post-2&#34;</span>
+</span></span><span class="line"><span class="cl">LRANGE timeline:1001 <span class="m">0</span> <span class="m">9</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">RPUSH queue:email <span class="s2">&#34;task-1&#34;</span>
+</span></span><span class="line"><span class="cl">BLPOP queue:email <span class="m">0</span>
+</span></span></code></pre></div><p>适合场景：</p>
+<ol>
+<li>简单先进先出或后进先出队列。</li>
+<li>最近 N 条记录。</li>
+<li>轻量任务缓冲。</li>
+</ol>
+<p>限制也很清楚：List 没有完善的消费者组、消息确认、重试和死信机制。如果要做更可靠的消息队列，优先考虑 Redis Stream，或者使用专业 MQ。</p>
+<h2 id="六set">六、Set</h2>
+<p>Set 是无序且元素唯一的集合，适合去重、成员判断和集合运算。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">SADD article:9527:tags redis cache database
+</span></span><span class="line"><span class="cl">SISMEMBER article:9527:tags redis
+</span></span><span class="line"><span class="cl">SCARD article:9527:tags
+</span></span><span class="line"><span class="cl">SMEMBERS article:9527:tags
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">SINTER user:1001:following user:1002:following
+</span></span><span class="line"><span class="cl">SUNION role:admin:users role:editor:users
+</span></span><span class="line"><span class="cl">SDIFF user:1001:following user:1002:following
+</span></span></code></pre></div><p>适合场景：</p>
+<ol>
+<li>标签。</li>
+<li>用户关系。</li>
+<li>去重集合。</li>
+<li>共同好友、共同关注等集合运算。</li>
+</ol>
+<p>Set 的查询和成员判断很快，但成员数量过大时会形成大 key。关于大规模 Set 的建模，可以参考单独的《Redis Set》文章。</p>
+<h2 id="七zset">七、ZSet</h2>
+<p>ZSet 是有序集合。每个成员都有一个 score，Redis 会根据 score 排序。成员唯一，但 score 可以相同。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">ZADD rank:article <span class="m">100</span> <span class="s2">&#34;article-1&#34;</span>
+</span></span><span class="line"><span class="cl">ZADD rank:article <span class="m">230</span> <span class="s2">&#34;article-2&#34;</span>
+</span></span><span class="line"><span class="cl">ZINCRBY rank:article <span class="m">10</span> <span class="s2">&#34;article-1&#34;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">ZREVRANGE rank:article <span class="m">0</span> <span class="m">9</span> WITHSCORES
+</span></span><span class="line"><span class="cl">ZRANK rank:article <span class="s2">&#34;article-1&#34;</span>
+</span></span><span class="line"><span class="cl">ZREVRANK rank:article <span class="s2">&#34;article-1&#34;</span>
+</span></span><span class="line"><span class="cl">ZSCORE rank:article <span class="s2">&#34;article-1&#34;</span>
+</span></span></code></pre></div><p>适合场景：</p>
+<ol>
+<li>排行榜。</li>
+<li>延迟队列。</li>
+<li>根据时间戳排序的事件列表。</li>
+<li>带权重的 Top N 查询。</li>
+</ol>
+<h2 id="八bitmap">八、Bitmap</h2>
+<p>Bitmap 不是独立的数据类型，而是基于 String 的位操作能力。它适合表示大量二值状态。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">SETBIT user:1001:signin:2025 <span class="m">0</span> <span class="m">1</span>
+</span></span><span class="line"><span class="cl">SETBIT user:1001:signin:2025 <span class="m">1</span> <span class="m">1</span>
+</span></span><span class="line"><span class="cl">GETBIT user:1001:signin:2025 <span class="m">1</span>
+</span></span><span class="line"><span class="cl">BITCOUNT user:1001:signin:2025
+</span></span></code></pre></div><p>适合场景：</p>
+<ol>
+<li>用户签到。</li>
+<li>是否活跃。</li>
+<li>是否完成某个动作。</li>
+<li>权限或状态标记。</li>
+</ol>
+<p>Bitmap 的优势是省内存，但前提是偏移量不能过于稀疏。如果最大 offset 极大而实际数据很少，就会浪费空间。</p>
+<h2 id="九hyperloglog">九、HyperLogLog</h2>
+<p>HyperLogLog 用于基数统计，也就是估算不重复元素数量。它不是精确计数，但占用空间很小。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">PFADD uv:2025-09-06 user1 user2 user3
+</span></span><span class="line"><span class="cl">PFCOUNT uv:2025-09-06
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">PFADD uv:2025-09-07 user2 user4
+</span></span><span class="line"><span class="cl">PFMERGE uv:2025-09 uv:2025-09-06 uv:2025-09-07
+</span></span><span class="line"><span class="cl">PFCOUNT uv:2025-09
+</span></span></code></pre></div><p>适合场景：</p>
+<ol>
+<li>网站 UV。</li>
+<li>活跃用户估算。</li>
+<li>大规模去重计数。</li>
+</ol>
+<p>如果业务要求精确值，就不要使用 HyperLogLog。</p>
+<h2 id="十geo">十、Geo</h2>
+<p>Geo 用于存储经纬度并进行距离计算和范围查询。底层基于 ZSet 实现。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">GEOADD city:china 114.0579 22.5431 shenzhen
+</span></span><span class="line"><span class="cl">GEOADD city:china 120.1551 30.2741 hangzhou
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">GEOPOS city:china shenzhen hangzhou
+</span></span><span class="line"><span class="cl">GEODIST city:china shenzhen hangzhou km
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">GEOSEARCH city:china FROMLONLAT 120.1551 30.2741 BYRADIUS <span class="m">300</span> km ASC
+</span></span></code></pre></div><p>适合场景：</p>
+<ol>
+<li>附近的人。</li>
+<li>附近门店。</li>
+<li>地理围栏的粗略查询。</li>
+</ol>
+<p>Geo 适合做初筛。如果要做复杂地理空间计算，仍然应该使用专业的地理空间数据库或搜索引擎能力。</p>
+<h2 id="十一stream">十一、Stream</h2>
+<p>Stream 是 Redis 提供的追加型消息数据结构，支持消息 ID、消费者组、Pending List、ACK 等机制。它比 List 更适合实现可靠一些的队列。</p>
+<p>写入和读取：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">XADD stream:order * orderId <span class="m">1001</span> status created
+</span></span><span class="line"><span class="cl">XLEN stream:order
+</span></span><span class="line"><span class="cl">XRANGE stream:order - +
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">XREAD COUNT <span class="m">2</span> STREAMS stream:order 0-0
+</span></span><span class="line"><span class="cl">XREAD BLOCK <span class="m">0</span> COUNT <span class="m">1</span> STREAMS stream:order $
+</span></span></code></pre></div><p>消费者组：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">XGROUP CREATE stream:order group:order <span class="m">0</span> MKSTREAM
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">XREADGROUP GROUP group:order consumer-1 COUNT <span class="m">1</span> STREAMS stream:order &gt;
+</span></span><span class="line"><span class="cl">XPENDING stream:order group:order
+</span></span><span class="line"><span class="cl">XACK stream:order group:order 1750000000000-0
+</span></span></code></pre></div><p>Stream 适合：</p>
+<ol>
+<li>异步任务。</li>
+<li>事件流。</li>
+<li>需要消费者组的轻量消息队列。</li>
+</ol>
+<p>但它仍然不是 Kafka、RocketMQ、RabbitMQ 的完全替代品。对于跨服务大规模消息系统，要根据吞吐、堆积、重试、顺序性、运维成本等因素选择。</p>
+<h2 id="十二过期和淘汰">十二、过期和淘汰</h2>
+<p>Redis 可以给 key 设置过期时间：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">EXPIRE cache:product:20001 <span class="m">300</span>
+</span></span><span class="line"><span class="cl">TTL cache:product:20001
+</span></span><span class="line"><span class="cl">SET cache:product:20001 <span class="s2">&#34;{...}&#34;</span> EX <span class="m">300</span>
+</span></span></code></pre></div><p>过期不等于立刻删除。Redis 会结合惰性删除和定期删除来清理过期 key。</p>
+<p>当内存达到 <code>maxmemory</code> 限制时，会根据 <code>maxmemory-policy</code> 执行淘汰策略。常见策略包括：</p>
+<ol>
+<li><code>noeviction</code>：不淘汰，写入时报错。</li>
+<li><code>allkeys-lru</code>：从所有 key 中淘汰最近最少使用的数据。</li>
+<li><code>allkeys-lfu</code>：从所有 key 中淘汰使用频率最低的数据。</li>
+<li><code>volatile-lru</code>：只从设置了过期时间的 key 中按 LRU 淘汰。</li>
+<li><code>volatile-ttl</code>：优先淘汰 TTL 更短的 key。</li>
+<li><code>allkeys-random</code> / <code>volatile-random</code>：随机淘汰。</li>
+</ol>
+<p>缓存场景通常会选择 <code>allkeys-lru</code> 或 <code>allkeys-lfu</code>。如果 Redis 中混放了不能丢的数据，就需要更谨慎地规划实例，不要让缓存淘汰策略误伤核心数据。</p>
+<h2 id="十三学习-redis-的主线">十三、学习 Redis 的主线</h2>
+<p>学习 Redis 可以按这条线推进：</p>
+<ol>
+<li>先掌握 key 设计、TTL、内存淘汰和常用数据类型。</li>
+<li>再理解缓存一致性、穿透、击穿、雪崩、大 key、热 key。</li>
+<li>然后学习持久化、主从复制、Sentinel、Cluster。</li>
+<li>最后再根据业务需要深入 Stream、Lua、分布式锁、Bitmap、Bloom Filter 等专题。</li>
+</ol>
+<p>Redis 的难点不在命令本身，而在什么时候该用、什么时候不该用，以及规模上来后如何控制内存、延迟和一致性风险。</p>
+<h2 id="参考资料">参考资料</h2>
+<ul>
+<li>Redis 官方文档：<a href="https://redis.io/docs/latest/develop/data-types/">https://redis.io/docs/latest/develop/data-types/</a>
+</li>
+<li>Redis 内存优化：<a href="https://redis.io/docs/latest/operate/oss_and_stack/management/optimization/memory-optimization/">https://redis.io/docs/latest/operate/oss_and_stack/management/optimization/memory-optimization/</a>
+</li>
+</ul>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

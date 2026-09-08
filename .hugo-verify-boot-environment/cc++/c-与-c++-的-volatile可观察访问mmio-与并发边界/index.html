@@ -1,0 +1,1292 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>C 与 C&#43;&#43; 的 volatile：可观察访问、MMIO 与并发边界 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="volatile 常被描述为“告诉编译器变量可能被改变”。这只是动机，不是它完整且可操作的语义。更准确地说：对 volatile 对象的访问是程序的可观察访问，编译器不能像处理普通对象那样，随意删除、把多次访问合并为一次，或长期以寄存器中的旧值代替它。
+这使 volatile 很适合内存映射 I/O（MMIO）和少数受严格限制的场景；却也正因为如此，它经常被误拿来处理多线程。必须先划清边界：保留一次设备寄存器访问，和建立线程之间的同步关系，是两件完全不同的事。
+volatile -&gt; 让指定对象的读写保持为可观察访问 不是 -&gt; 原子操作、互斥、线程同步、通用内存屏障 一、普通对象为什么会被优化 考虑一个普通变量：
+int status = 0; while (status == 0) { /* 循环体没有修改 status */ } 从编译器只看当前线程的角度，循环体内没有改变 status 的代码；它可能将读取提到循环外，甚至推导出循环永不结束。对普通内存对象，这是合理优化：编译器没有义务猜测某块 RAM 会在背后神秘改变。
+若地址实际对应硬件寄存器，或值会由当前执行流之外的受支持机制改变，这种优化便违背程序意图：
+volatile int device_status; while (device_status == 0) { /* 每次判断都需要重新读取 */ } volatile 让每次条件判断中的读取成为不可随意省略的可观察访问。注意它约束的是访问，不是这个整数的值：它不会让寄存器按你希望的时间改变，也不会使设备立即响应。
+二、典型场景：内存映射 I/O（MMIO） 嵌入式设备常把硬件控制器寄存器映射到一段地址空间。CPU 对该地址的 load/store 不再表示普通 RAM 读写，而是同硬件交互：
+#include &lt;stdint.h&gt; #define UART_STATUS (*(volatile uint32_t *)0x40001000u) void wait_for_uart(void) { while ((UART_STATUS &amp; 0x01u) == 0u) { /* 等待接收数据就绪 */ } } 这里的每一次 UART_STATUS 读取都可能得到不同值；对某些设备，读取甚至具有“读后清除”等副作用。volatile 的作用是确保编译器将该读取作为一次真实的访问保留。
+但这个宏仍然隐含了设备协议：
+0x40001000 -&gt; 必须是已映射、当前上下文可访问的寄存器地址 uint32_t -&gt; 必须是设备要求的 32 位访问宽度 0x01u -&gt; 必须是手册定义的状态位 读取/写入顺序 -&gt; 必须遵守设备与平台的同步要求 地址能通过编译，不代表地址有效。任意把整数转指针再解引用，在普通用户程序中常会导致访问异常；驱动之所以可以这样做，是因为页表、处理器架构、编译器和设备规范共同允许这次访问。
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/cc&#43;&#43;/c-%E4%B8%8E-c&#43;&#43;-%E7%9A%84-volatile%E5%8F%AF%E8%A7%82%E5%AF%9F%E8%AE%BF%E9%97%AEmmio-%E4%B8%8E%E5%B9%B6%E5%8F%91%E8%BE%B9%E7%95%8C/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/cc&#43;&#43;/c-%E4%B8%8E-c&#43;&#43;-%E7%9A%84-volatile%E5%8F%AF%E8%A7%82%E5%AF%9F%E8%AE%BF%E9%97%AEmmio-%E4%B8%8E%E5%B9%B6%E5%8F%91%E8%BE%B9%E7%95%8C/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="C 与 C&#43;&#43; 的 volatile：可观察访问、MMIO 与并发边界">
+  <meta property="og:description" content="volatile 常被描述为“告诉编译器变量可能被改变”。这只是动机，不是它完整且可操作的语义。更准确地说：对 volatile 对象的访问是程序的可观察访问，编译器不能像处理普通对象那样，随意删除、把多次访问合并为一次，或长期以寄存器中的旧值代替它。
+这使 volatile 很适合内存映射 I/O（MMIO）和少数受严格限制的场景；却也正因为如此，它经常被误拿来处理多线程。必须先划清边界：保留一次设备寄存器访问，和建立线程之间的同步关系，是两件完全不同的事。
+volatile -&gt; 让指定对象的读写保持为可观察访问 不是 -&gt; 原子操作、互斥、线程同步、通用内存屏障 一、普通对象为什么会被优化 考虑一个普通变量：
+int status = 0; while (status == 0) { /* 循环体没有修改 status */ } 从编译器只看当前线程的角度，循环体内没有改变 status 的代码；它可能将读取提到循环外，甚至推导出循环永不结束。对普通内存对象，这是合理优化：编译器没有义务猜测某块 RAM 会在背后神秘改变。
+若地址实际对应硬件寄存器，或值会由当前执行流之外的受支持机制改变，这种优化便违背程序意图：
+volatile int device_status; while (device_status == 0) { /* 每次判断都需要重新读取 */ } volatile 让每次条件判断中的读取成为不可随意省略的可观察访问。注意它约束的是访问，不是这个整数的值：它不会让寄存器按你希望的时间改变，也不会使设备立即响应。
+二、典型场景：内存映射 I/O（MMIO） 嵌入式设备常把硬件控制器寄存器映射到一段地址空间。CPU 对该地址的 load/store 不再表示普通 RAM 读写，而是同硬件交互：
+#include &lt;stdint.h&gt; #define UART_STATUS (*(volatile uint32_t *)0x40001000u) void wait_for_uart(void) { while ((UART_STATUS &amp; 0x01u) == 0u) { /* 等待接收数据就绪 */ } } 这里的每一次 UART_STATUS 读取都可能得到不同值；对某些设备，读取甚至具有“读后清除”等副作用。volatile 的作用是确保编译器将该读取作为一次真实的访问保留。
+但这个宏仍然隐含了设备协议：
+0x40001000 -&gt; 必须是已映射、当前上下文可访问的寄存器地址 uint32_t -&gt; 必须是设备要求的 32 位访问宽度 0x01u -&gt; 必须是手册定义的状态位 读取/写入顺序 -&gt; 必须遵守设备与平台的同步要求 地址能通过编译，不代表地址有效。任意把整数转指针再解引用，在普通用户程序中常会导致访问异常；驱动之所以可以这样做，是因为页表、处理器架构、编译器和设备规范共同允许这次访问。">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="c&amp;c&#43;&#43;">
+    <meta property="article:published_time" content="2026-08-28T10:10:00+08:00">
+    <meta property="article:modified_time" content="2026-08-28T10:10:00+08:00">
+
+  
+  <meta itemprop="name" content="C 与 C&#43;&#43; 的 volatile：可观察访问、MMIO 与并发边界">
+  <meta itemprop="description" content="volatile 常被描述为“告诉编译器变量可能被改变”。这只是动机，不是它完整且可操作的语义。更准确地说：对 volatile 对象的访问是程序的可观察访问，编译器不能像处理普通对象那样，随意删除、把多次访问合并为一次，或长期以寄存器中的旧值代替它。
+这使 volatile 很适合内存映射 I/O（MMIO）和少数受严格限制的场景；却也正因为如此，它经常被误拿来处理多线程。必须先划清边界：保留一次设备寄存器访问，和建立线程之间的同步关系，是两件完全不同的事。
+volatile -&gt; 让指定对象的读写保持为可观察访问 不是 -&gt; 原子操作、互斥、线程同步、通用内存屏障 一、普通对象为什么会被优化 考虑一个普通变量：
+int status = 0; while (status == 0) { /* 循环体没有修改 status */ } 从编译器只看当前线程的角度，循环体内没有改变 status 的代码；它可能将读取提到循环外，甚至推导出循环永不结束。对普通内存对象，这是合理优化：编译器没有义务猜测某块 RAM 会在背后神秘改变。
+若地址实际对应硬件寄存器，或值会由当前执行流之外的受支持机制改变，这种优化便违背程序意图：
+volatile int device_status; while (device_status == 0) { /* 每次判断都需要重新读取 */ } volatile 让每次条件判断中的读取成为不可随意省略的可观察访问。注意它约束的是访问，不是这个整数的值：它不会让寄存器按你希望的时间改变，也不会使设备立即响应。
+二、典型场景：内存映射 I/O（MMIO） 嵌入式设备常把硬件控制器寄存器映射到一段地址空间。CPU 对该地址的 load/store 不再表示普通 RAM 读写，而是同硬件交互：
+#include &lt;stdint.h&gt; #define UART_STATUS (*(volatile uint32_t *)0x40001000u) void wait_for_uart(void) { while ((UART_STATUS &amp; 0x01u) == 0u) { /* 等待接收数据就绪 */ } } 这里的每一次 UART_STATUS 读取都可能得到不同值；对某些设备，读取甚至具有“读后清除”等副作用。volatile 的作用是确保编译器将该读取作为一次真实的访问保留。
+但这个宏仍然隐含了设备协议：
+0x40001000 -&gt; 必须是已映射、当前上下文可访问的寄存器地址 uint32_t -&gt; 必须是设备要求的 32 位访问宽度 0x01u -&gt; 必须是手册定义的状态位 读取/写入顺序 -&gt; 必须遵守设备与平台的同步要求 地址能通过编译，不代表地址有效。任意把整数转指针再解引用，在普通用户程序中常会导致访问异常；驱动之所以可以这样做，是因为页表、处理器架构、编译器和设备规范共同允许这次访问。">
+  <meta itemprop="datePublished" content="2026-08-28T10:10:00+08:00">
+  <meta itemprop="dateModified" content="2026-08-28T10:10:00+08:00">
+  <meta itemprop="wordCount" content="448">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="C 与 C&#43;&#43; 的 volatile：可观察访问、MMIO 与并发边界">
+  <meta name="twitter:description" content="volatile 常被描述为“告诉编译器变量可能被改变”。这只是动机，不是它完整且可操作的语义。更准确地说：对 volatile 对象的访问是程序的可观察访问，编译器不能像处理普通对象那样，随意删除、把多次访问合并为一次，或长期以寄存器中的旧值代替它。
+这使 volatile 很适合内存映射 I/O（MMIO）和少数受严格限制的场景；却也正因为如此，它经常被误拿来处理多线程。必须先划清边界：保留一次设备寄存器访问，和建立线程之间的同步关系，是两件完全不同的事。
+volatile -&gt; 让指定对象的读写保持为可观察访问 不是 -&gt; 原子操作、互斥、线程同步、通用内存屏障 一、普通对象为什么会被优化 考虑一个普通变量：
+int status = 0; while (status == 0) { /* 循环体没有修改 status */ } 从编译器只看当前线程的角度，循环体内没有改变 status 的代码；它可能将读取提到循环外，甚至推导出循环永不结束。对普通内存对象，这是合理优化：编译器没有义务猜测某块 RAM 会在背后神秘改变。
+若地址实际对应硬件寄存器，或值会由当前执行流之外的受支持机制改变，这种优化便违背程序意图：
+volatile int device_status; while (device_status == 0) { /* 每次判断都需要重新读取 */ } volatile 让每次条件判断中的读取成为不可随意省略的可观察访问。注意它约束的是访问，不是这个整数的值：它不会让寄存器按你希望的时间改变，也不会使设备立即响应。
+二、典型场景：内存映射 I/O（MMIO） 嵌入式设备常把硬件控制器寄存器映射到一段地址空间。CPU 对该地址的 load/store 不再表示普通 RAM 读写，而是同硬件交互：
+#include &lt;stdint.h&gt; #define UART_STATUS (*(volatile uint32_t *)0x40001000u) void wait_for_uart(void) { while ((UART_STATUS &amp; 0x01u) == 0u) { /* 等待接收数据就绪 */ } } 这里的每一次 UART_STATUS 读取都可能得到不同值；对某些设备，读取甚至具有“读后清除”等副作用。volatile 的作用是确保编译器将该读取作为一次真实的访问保留。
+但这个宏仍然隐含了设备协议：
+0x40001000 -&gt; 必须是已映射、当前上下文可访问的寄存器地址 uint32_t -&gt; 必须是设备要求的 32 位访问宽度 0x01u -&gt; 必须是手册定义的状态位 读取/写入顺序 -&gt; 必须遵守设备与平台的同步要求 地址能通过编译，不代表地址有效。任意把整数转指针再解引用，在普通用户程序中常会导致访问异常；驱动之所以可以这样做，是因为页表、处理器架构、编译器和设备规范共同允许这次访问。">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">C 与 C&#43;&#43; 的 volatile：可观察访问、MMIO 与并发边界</h1>
+
+    
+      <div class="post-date">August 28, 2026</div>
+    
+
+    <div class="post-content">
+      <p><code>volatile</code> 常被描述为“告诉编译器变量可能被改变”。这只是动机，不是它完整且可操作的语义。更准确地说：对 volatile 对象的访问是程序的<strong>可观察访问</strong>，编译器不能像处理普通对象那样，随意删除、把多次访问合并为一次，或长期以寄存器中的旧值代替它。</p>
+<p>这使 <code>volatile</code> 很适合内存映射 I/O（MMIO）和少数受严格限制的场景；却也正因为如此，它经常被误拿来处理多线程。必须先划清边界：保留一次设备寄存器访问，和建立线程之间的同步关系，是两件完全不同的事。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">volatile -&gt; 让指定对象的读写保持为可观察访问
+</span></span><span class="line"><span class="cl">不是      -&gt; 原子操作、互斥、线程同步、通用内存屏障
+</span></span></code></pre></div><h2 id="一普通对象为什么会被优化">一、普通对象为什么会被优化</h2>
+<p>考虑一个普通变量：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">status</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">while</span> <span class="p">(</span><span class="n">status</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="cm">/* 循环体没有修改 status */</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>从编译器只看当前线程的角度，循环体内没有改变 <code>status</code> 的代码；它可能将读取提到循环外，甚至推导出循环永不结束。对普通内存对象，这是合理优化：编译器没有义务猜测某块 RAM 会在背后神秘改变。</p>
+<p>若地址实际对应硬件寄存器，或值会由当前执行流之外的受支持机制改变，这种优化便违背程序意图：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">volatile</span> <span class="kt">int</span> <span class="n">device_status</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">while</span> <span class="p">(</span><span class="n">device_status</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="cm">/* 每次判断都需要重新读取 */</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p><code>volatile</code> 让每次条件判断中的读取成为不可随意省略的可观察访问。注意它约束的是<strong>访问</strong>，不是这个整数的值：它不会让寄存器按你希望的时间改变，也不会使设备立即响应。</p>
+<h2 id="二典型场景内存映射-iommio">二、典型场景：内存映射 I/O（MMIO）</h2>
+<p>嵌入式设备常把硬件控制器寄存器映射到一段地址空间。CPU 对该地址的 load/store 不再表示普通 RAM 读写，而是同硬件交互：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;stdint.h&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="cp">#define UART_STATUS (*(volatile uint32_t *)0x40001000u)
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">wait_for_uart</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">while</span> <span class="p">((</span><span class="n">UART_STATUS</span> <span class="o">&amp;</span> <span class="mh">0x01u</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0u</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="cm">/* 等待接收数据就绪 */</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>这里的每一次 <code>UART_STATUS</code> 读取都可能得到不同值；对某些设备，读取甚至具有“读后清除”等副作用。<code>volatile</code> 的作用是确保编译器将该读取作为一次真实的访问保留。</p>
+<p>但这个宏仍然隐含了设备协议：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">0x40001000          -&gt; 必须是已映射、当前上下文可访问的寄存器地址
+</span></span><span class="line"><span class="cl">uint32_t            -&gt; 必须是设备要求的 32 位访问宽度
+</span></span><span class="line"><span class="cl">0x01u               -&gt; 必须是手册定义的状态位
+</span></span><span class="line"><span class="cl">读取/写入顺序       -&gt; 必须遵守设备与平台的同步要求
+</span></span></code></pre></div><p>地址能通过编译，不代表地址有效。任意把整数转指针再解引用，在普通用户程序中常会导致访问异常；驱动之所以可以这样做，是因为页表、处理器架构、编译器和设备规范共同允许这次访问。</p>
+<h3 id="1-访问宽度与对齐是协议的一部分">1. 访问宽度与对齐是协议的一部分</h3>
+<p>不要将下列指针类型视作可以随意互换：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">volatile</span> <span class="kt">uint8_t</span>  <span class="o">*</span><span class="n">byte_reg</span><span class="p">;</span>  <span class="c1">// 8 位访问
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">volatile</span> <span class="kt">uint16_t</span> <span class="o">*</span><span class="n">half_reg</span><span class="p">;</span>  <span class="c1">// 16 位访问
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">volatile</span> <span class="kt">uint32_t</span> <span class="o">*</span><span class="n">word_reg</span><span class="p">;</span>  <span class="c1">// 32 位访问
+</span></span></span></code></pre></div><p>设备要求一次 32 位写入时，四次 8 位写入并不等价；设备可能拒绝、拆分、忽略，或产生不同副作用。地址对齐、端序和寄存器的读/写权限同样必须由芯片或设备规范确认。</p>
+<h3 id="2-const-volatile软件不能写硬件仍可改变">2. <code>const volatile</code>：软件不能写，硬件仍可改变</h3>
+<p>只读硬件状态寄存器可用 <code>const volatile</code> 表达：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">const</span> <span class="k">volatile</span> <span class="kt">uint32_t</span> <span class="o">*</span><span class="k">const</span> <span class="n">status_register</span> <span class="o">=</span>
+</span></span><span class="line"><span class="cl">    <span class="p">(</span><span class="k">const</span> <span class="k">volatile</span> <span class="kt">uint32_t</span> <span class="o">*</span><span class="p">)</span><span class="mh">0x40001000u</span><span class="p">;</span>
+</span></span></code></pre></div><p>从右向左读：<code>status_register</code> 是一个不可改指向的指针；它指向的 32 位对象不能通过该指针由软件写入，却可能由硬件改变，故读取仍是 volatile 访问。</p>
+<p>这种限定只能约束 C/C++ 代码的写法，并不能阻止硬件本身更新寄存器。恰好相反，这正是它存在的原因。</p>
+<h2 id="三volatile-int--与-int-volatile修饰谁">三、<code>volatile int *</code> 与 <code>int *volatile</code>：修饰谁？</h2>
+<p>声明中的 <code>volatile</code> 紧邻谁，谁就被修饰：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">volatile</span> <span class="kt">int</span> <span class="o">*</span><span class="n">pointer_to_volatile</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="o">*</span><span class="k">volatile</span> <span class="n">volatile_pointer</span><span class="p">;</span>
+</span></span></code></pre></div><p>第一行表示：<code>*pointer_to_volatile</code> 是 volatile <code>int</code>。通过该指针读写目标，都是 volatile 访问；指针变量自身未必 volatile。</p>
+<p>第二行表示：指针变量 <code>volatile_pointer</code> 自身是 volatile。每次读取它保存的地址值必须保留，但它所指向的 <code>int</code> 不是 volatile。</p>
+<p>若两者都需要：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">volatile</span> <span class="kt">int</span> <span class="o">*</span><span class="k">volatile</span> <span class="n">pointer</span><span class="p">;</span>
+</span></span></code></pre></div><p>这不是语法游戏。在 MMIO 中通常想要的是第一种：设备寄存器是易变的，而保存寄存器地址的局部指针变量一般并不需要易变。声明已难以读懂时，使用 <code>typedef</code>、C++ <code>using</code> 或一个清晰的寄存器访问封装，远比让每位读者重新解析星号优先级更有效。</p>
+<h2 id="四volatile-的保证边界三层顺序问题">四、<code>volatile</code> 的保证边界：三层顺序问题</h2>
+<p>驱动与并发代码中，“顺序”至少有三个层面。把它们都交给 <code>volatile</code>，就像要求一把尺同时修理电路、校准时钟和锁门一样不切实际。</p>
+<table>
+  <thead>
+      <tr>
+          <th>层次</th>
+          <th>关键问题</th>
+          <th>正确工具</th>
+          <th><code>volatile</code> 是否足够</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>编译器层</td>
+          <td>一次特殊对象访问会否被删除、合并或缓存</td>
+          <td><code>volatile</code>、平台 I/O 访问器</td>
+          <td>仅对 volatile 访问有效</td>
+      </tr>
+      <tr>
+          <td>CPU/内存系统层</td>
+          <td>RAM 与 MMIO 访问是否按协议顺序对外可见</td>
+          <td>架构内存屏障、I/O 屏障</td>
+          <td>否</td>
+      </tr>
+      <tr>
+          <td>设备/DMA 层</td>
+          <td>设备是否看见描述符，CPU 是否看见设备写回的数据</td>
+          <td>DMA 映射/同步、缓存维护、协议</td>
+          <td>否</td>
+      </tr>
+  </tbody>
+</table>
+<p>例如，驱动先在普通 RAM 填写 DMA 描述符，再写一个 MMIO 门铃寄存器通知设备：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">普通 RAM：描述符、队列索引
+</span></span><span class="line"><span class="cl">                 ↓ 必须先按协议对设备可见
+</span></span><span class="line"><span class="cl">MMIO：通知寄存器（doorbell / QueueNotify）
+</span></span></code></pre></div><p><code>volatile</code> 可以保证“写门铃”不是一条被优化器删除的无用写入，却不能独自保证设备在收到门铃时已观察到描述符的完整内容。此处需要什么屏障、DMA 同步或缓存操作，取决于处理器、互连、IOMMU、设备和内核提供的 I/O API。不要因为某个平台上恰好正常工作，便把偶然当作跨平台的内存模型。</p>
+<h2 id="五为什么-volatile-不是线程同步工具">五、为什么 <code>volatile</code> 不是线程同步工具</h2>
+<p>下面是经典但错误的 C++ 模式：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">volatile</span> <span class="kt">bool</span> <span class="n">ready</span> <span class="o">=</span> <span class="nb">false</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">data</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// 线程 A
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">data</span> <span class="o">=</span> <span class="mi">42</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="n">ready</span> <span class="o">=</span> <span class="nb">true</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// 线程 B
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">while</span> <span class="p">(</span><span class="o">!</span><span class="n">ready</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="n">std</span><span class="o">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="n">data</span><span class="p">;</span>
+</span></span></code></pre></div><p><code>volatile</code> 不能建立 C++ 线程内存模型的 <em>happens-before</em> 关系，也不保证 <code>data</code> 与 <code>ready</code> 的访问不存在数据竞争。即使某个 CPU、某个优化级别下看起来一直正确，它依旧不是受语言标准保证的并发程序。</p>
+<p>C++ 应使用原子类型并选择正确的内存序：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;atomic&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="n">std</span><span class="o">::</span><span class="n">atomic</span><span class="o">&lt;</span><span class="kt">bool</span><span class="o">&gt;</span> <span class="n">ready</span><span class="p">{</span><span class="nb">false</span><span class="p">};</span>
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">data</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// 线程 A
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">data</span> <span class="o">=</span> <span class="mi">42</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="n">ready</span><span class="p">.</span><span class="n">store</span><span class="p">(</span><span class="nb">true</span><span class="p">,</span> <span class="n">std</span><span class="o">::</span><span class="n">memory_order_release</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// 线程 B
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">while</span> <span class="p">(</span><span class="o">!</span><span class="n">ready</span><span class="p">.</span><span class="n">load</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">memory_order_acquire</span><span class="p">))</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="n">std</span><span class="o">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="n">data</span><span class="p">;</span> <span class="c1">// 可以观察到线程 A 在 release 前写入的 data
+</span></span></span></code></pre></div><p>发布（release）与获取（acquire）配对后，线程 B 在观察到 <code>ready == true</code> 时，可以观察到线程 A 在 <code>store</code> 前的写入。若要维护多个共享变量之间更复杂的不变式，<code>std::mutex</code>、条件变量或更高层任务框架通常比手工设计原子协议更合适。</p>
+<p>C11 同样提供 <code>&lt;stdatomic.h&gt;</code> 中的 <code>_Atomic</code> 与原子操作。无论 C 还是 C++，都不应使用 <code>volatile</code> 充当一般线程同步原语。</p>
+<h3 id="1-原子也不等于锁">1. 原子也不等于锁</h3>
+<p>将 <code>volatile</code> 改为 <code>std::atomic</code> 只是解决了特定对象的原子访问与必要同步；它不自动让多个变量构成一致事务。例如“检查余额、扣款、记录日志”这类复合不变式，往往应由互斥锁或经过完整证明的并发数据结构保护。关键字再短，也不会替你设计临界区。</p>
+<h2 id="六信号处理有限而严格的例外">六、信号处理：有限而严格的例外</h2>
+<p>在 C 中，异步信号处理器与普通代码之间传递简单标志时，常见类型是 <code>volatile sig_atomic_t</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;signal.h&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="k">static</span> <span class="k">volatile</span> <span class="kt">sig_atomic_t</span> <span class="n">stop_requested</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">handle_signal</span><span class="p">(</span><span class="kt">int</span> <span class="n">signal_number</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="p">(</span><span class="kt">void</span><span class="p">)</span><span class="n">signal_number</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">stop_requested</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>它适合非常有限的通信模式。信号处理器中可安全调用的函数、可访问的数据，以及多线程进程中的语义均受到严格限制；<code>volatile</code> 不会把任意信号处理代码变成安全代码。</p>
+<p>C++ 应优先依照所用平台与标准库对信号的约束设计处理逻辑，不要把这条最小 C 模式扩大成一般异步编程方案。</p>
+<h2 id="七常见错误与诊断清单">七、常见错误与诊断清单</h2>
+<h3 id="1-用-volatile-轮询另一线程">1. 用 <code>volatile</code> 轮询另一线程</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">volatile</span> <span class="kt">bool</span> <span class="n">done</span> <span class="o">=</span> <span class="nb">false</span><span class="p">;</span>
+</span></span></code></pre></div><p>这是不正确的跨线程完成标志。使用 <code>std::atomic&lt;bool&gt;</code>、条件变量、互斥锁或任务框架，并依据是否需要等待、取消、传递数据和保护不变式选择工具。</p>
+<h3 id="2-把-volatile-当作万能屏障">2. 把 <code>volatile</code> 当作万能屏障</h3>
+<p>它不替代架构 fence、DMA 同步或内核的 <code>readl</code>/<code>writel</code> 等访问器。设备驱动应先确认协议要求“哪份数据必须先对谁可见”，再使用平台规定的屏障与缓存同步操作；无差别加屏障只会降低性能并掩盖设计不清。</p>
+<h3 id="3-对寄存器做未经确认的读改写">3. 对寄存器做未经确认的读—改—写</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="o">*</span><span class="n">reg</span> <span class="o">|=</span> <span class="n">MASK</span><span class="p">;</span>
+</span></span></code></pre></div><p>这至少是一次读取、一次运算、一次写回。寄存器可能只写、读后清除、写 1 清除，或者被中断与其他 CPU 同时访问；因此必须先查手册，不能因 C 语法看起来紧凑便假定安全。</p>
+<p>面对一个 <code>volatile</code> 声明，可以依次检查：</p>
+<ol>
+<li>对象为何会在当前执行流之外改变，或为何每次访问有副作用？</li>
+<li>访问宽度、对齐、端序和读写权限是否与硬件/协议一致？</li>
+<li>它是对象 volatile，还是仅指针变量 volatile？是否应为 <code>const volatile</code>？</li>
+<li>是否存在 RAM、DMA 或其他 CPU 之间的顺序需求？它们由何种屏障/同步原语满足？</li>
+<li>若目标是线程通信，为什么不用原子和锁？若答案只是“以前有人这样写”，那么还没有答案。</li>
+</ol>
+<h2 id="八总结">八、总结</h2>
+<p><code>volatile</code> 的职责很具体：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">对 volatile 对象的每次读写，都是编译器不能任意省略、合并或缓存的可观察访问。
+</span></span></code></pre></div><p>它的正确舞台主要是 MMIO 和少数严格受限的场景。它并不提供：</p>
+<ul>
+<li>多线程的原子性、互斥或 happens-before；</li>
+<li>CPU 与设备之间通用的内存排序；</li>
+<li>DMA 缓冲区的一致性；</li>
+<li>对硬件寄存器语义的任何理解。</li>
+</ul>
+<p>一旦区分“必须发出这次访问”和“其他参与者必须以何种次序看见数据”，<code>volatile</code> 的位置就会非常清楚：它是底层访问接口的一部分，而不是并发问题的通行答案。把它用在正确边界内，它很精确；越过边界，它只会让错误显得更像底层代码而已。</p>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

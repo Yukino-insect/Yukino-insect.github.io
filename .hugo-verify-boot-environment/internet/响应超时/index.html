@@ -1,0 +1,1472 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>响应超时 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="这篇笔记来自一个导出文件的场景：后端直接把 Excel 内容写入 response，结果出现超时或断连异常。后来改成先生成临时文件，再把文件拷贝到响应流中，问题缓解了。
+这个现象很常见，但不能简单理解成“TCP 写入不连续就一定会超时”。更准确的说法是：
+导出接口如果一边计算一边写响应，可能长时间没有稳定输出数据，触发浏览器、Nginx、网关、Servlet 容器或 HTTP 客户端的超时；先生成临时文件再输出，可以把耗时的生成阶段和连续的下载阶段分开，从而降低响应中断的概率。
+一、导出接口为什么容易超时 导出 Excel、PDF、CSV 这类接口通常有几个特点：
+查询数据慢。 数据转换慢。 文件生成慢。 响应体很大。 客户端等待时间长。 中间可能经过 Nginx、网关、负载均衡。 如果后端直接写 response.getOutputStream()，但中间隔很久才写出下一段数据，就可能触发某些超时限制。
+这些超时可能来自不同层：
+层级 常见超时 浏览器 下载等待、连接中断 Nginx / 网关 proxy_read_timeout、idle timeout Servlet 容器 async timeout、连接写超时 HTTP 客户端 read timeout、response timeout 操作系统 TCP 连接超时、重传、发送缓冲区阻塞 所以排查时不要一上来就归因到 TCP。网络问题最讨厌的地方就是它长得都很像，但病因并不一样。
+二、先生成临时文件为什么可能有效 原始方式：
+查询数据 -&gt; 生成一部分 Excel -&gt; 写一部分 response -&gt; 继续查询和生成 -&gt; 再写 response 如果中间某一步很慢，响应流可能长时间没有新数据输出。
+改成临时文件后：
+查询数据 -&gt; 完整生成临时文件 -&gt; 设置响应头 -&gt; 连续拷贝文件到 response 这样有几个好处：
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/internet/%E5%93%8D%E5%BA%94%E8%B6%85%E6%97%B6/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/internet/%E5%93%8D%E5%BA%94%E8%B6%85%E6%97%B6/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="响应超时">
+  <meta property="og:description" content="这篇笔记来自一个导出文件的场景：后端直接把 Excel 内容写入 response，结果出现超时或断连异常。后来改成先生成临时文件，再把文件拷贝到响应流中，问题缓解了。
+这个现象很常见，但不能简单理解成“TCP 写入不连续就一定会超时”。更准确的说法是：
+导出接口如果一边计算一边写响应，可能长时间没有稳定输出数据，触发浏览器、Nginx、网关、Servlet 容器或 HTTP 客户端的超时；先生成临时文件再输出，可以把耗时的生成阶段和连续的下载阶段分开，从而降低响应中断的概率。
+一、导出接口为什么容易超时 导出 Excel、PDF、CSV 这类接口通常有几个特点：
+查询数据慢。 数据转换慢。 文件生成慢。 响应体很大。 客户端等待时间长。 中间可能经过 Nginx、网关、负载均衡。 如果后端直接写 response.getOutputStream()，但中间隔很久才写出下一段数据，就可能触发某些超时限制。
+这些超时可能来自不同层：
+层级 常见超时 浏览器 下载等待、连接中断 Nginx / 网关 proxy_read_timeout、idle timeout Servlet 容器 async timeout、连接写超时 HTTP 客户端 read timeout、response timeout 操作系统 TCP 连接超时、重传、发送缓冲区阻塞 所以排查时不要一上来就归因到 TCP。网络问题最讨厌的地方就是它长得都很像，但病因并不一样。
+二、先生成临时文件为什么可能有效 原始方式：
+查询数据 -&gt; 生成一部分 Excel -&gt; 写一部分 response -&gt; 继续查询和生成 -&gt; 再写 response 如果中间某一步很慢，响应流可能长时间没有新数据输出。
+改成临时文件后：
+查询数据 -&gt; 完整生成临时文件 -&gt; 设置响应头 -&gt; 连续拷贝文件到 response 这样有几个好处：">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="internet">
+    <meta property="article:published_time" content="2026-02-16T18:14:45+08:00">
+    <meta property="article:modified_time" content="2026-02-16T18:14:45+08:00">
+
+  
+  <meta itemprop="name" content="响应超时">
+  <meta itemprop="description" content="这篇笔记来自一个导出文件的场景：后端直接把 Excel 内容写入 response，结果出现超时或断连异常。后来改成先生成临时文件，再把文件拷贝到响应流中，问题缓解了。
+这个现象很常见，但不能简单理解成“TCP 写入不连续就一定会超时”。更准确的说法是：
+导出接口如果一边计算一边写响应，可能长时间没有稳定输出数据，触发浏览器、Nginx、网关、Servlet 容器或 HTTP 客户端的超时；先生成临时文件再输出，可以把耗时的生成阶段和连续的下载阶段分开，从而降低响应中断的概率。
+一、导出接口为什么容易超时 导出 Excel、PDF、CSV 这类接口通常有几个特点：
+查询数据慢。 数据转换慢。 文件生成慢。 响应体很大。 客户端等待时间长。 中间可能经过 Nginx、网关、负载均衡。 如果后端直接写 response.getOutputStream()，但中间隔很久才写出下一段数据，就可能触发某些超时限制。
+这些超时可能来自不同层：
+层级 常见超时 浏览器 下载等待、连接中断 Nginx / 网关 proxy_read_timeout、idle timeout Servlet 容器 async timeout、连接写超时 HTTP 客户端 read timeout、response timeout 操作系统 TCP 连接超时、重传、发送缓冲区阻塞 所以排查时不要一上来就归因到 TCP。网络问题最讨厌的地方就是它长得都很像，但病因并不一样。
+二、先生成临时文件为什么可能有效 原始方式：
+查询数据 -&gt; 生成一部分 Excel -&gt; 写一部分 response -&gt; 继续查询和生成 -&gt; 再写 response 如果中间某一步很慢，响应流可能长时间没有新数据输出。
+改成临时文件后：
+查询数据 -&gt; 完整生成临时文件 -&gt; 设置响应头 -&gt; 连续拷贝文件到 response 这样有几个好处：">
+  <meta itemprop="datePublished" content="2026-02-16T18:14:45+08:00">
+  <meta itemprop="dateModified" content="2026-02-16T18:14:45+08:00">
+  <meta itemprop="wordCount" content="669">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="响应超时">
+  <meta name="twitter:description" content="这篇笔记来自一个导出文件的场景：后端直接把 Excel 内容写入 response，结果出现超时或断连异常。后来改成先生成临时文件，再把文件拷贝到响应流中，问题缓解了。
+这个现象很常见，但不能简单理解成“TCP 写入不连续就一定会超时”。更准确的说法是：
+导出接口如果一边计算一边写响应，可能长时间没有稳定输出数据，触发浏览器、Nginx、网关、Servlet 容器或 HTTP 客户端的超时；先生成临时文件再输出，可以把耗时的生成阶段和连续的下载阶段分开，从而降低响应中断的概率。
+一、导出接口为什么容易超时 导出 Excel、PDF、CSV 这类接口通常有几个特点：
+查询数据慢。 数据转换慢。 文件生成慢。 响应体很大。 客户端等待时间长。 中间可能经过 Nginx、网关、负载均衡。 如果后端直接写 response.getOutputStream()，但中间隔很久才写出下一段数据，就可能触发某些超时限制。
+这些超时可能来自不同层：
+层级 常见超时 浏览器 下载等待、连接中断 Nginx / 网关 proxy_read_timeout、idle timeout Servlet 容器 async timeout、连接写超时 HTTP 客户端 read timeout、response timeout 操作系统 TCP 连接超时、重传、发送缓冲区阻塞 所以排查时不要一上来就归因到 TCP。网络问题最讨厌的地方就是它长得都很像，但病因并不一样。
+二、先生成临时文件为什么可能有效 原始方式：
+查询数据 -&gt; 生成一部分 Excel -&gt; 写一部分 response -&gt; 继续查询和生成 -&gt; 再写 response 如果中间某一步很慢，响应流可能长时间没有新数据输出。
+改成临时文件后：
+查询数据 -&gt; 完整生成临时文件 -&gt; 设置响应头 -&gt; 连续拷贝文件到 response 这样有几个好处：">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">响应超时</h1>
+
+    
+      <div class="post-date">February 16, 2026</div>
+    
+
+    <div class="post-content">
+      <p>这篇笔记来自一个导出文件的场景：后端直接把 Excel 内容写入 <code>response</code>，结果出现超时或断连异常。后来改成先生成临时文件，再把文件拷贝到响应流中，问题缓解了。</p>
+<p>这个现象很常见，但不能简单理解成“TCP 写入不连续就一定会超时”。更准确的说法是：</p>
+<blockquote>
+<p>导出接口如果一边计算一边写响应，可能长时间没有稳定输出数据，触发浏览器、Nginx、网关、Servlet 容器或 HTTP 客户端的超时；先生成临时文件再输出，可以把耗时的生成阶段和连续的下载阶段分开，从而降低响应中断的概率。</p></blockquote>
+<h2 id="一导出接口为什么容易超时">一、导出接口为什么容易超时</h2>
+<p>导出 Excel、PDF、CSV 这类接口通常有几个特点：</p>
+<ol>
+<li>查询数据慢。</li>
+<li>数据转换慢。</li>
+<li>文件生成慢。</li>
+<li>响应体很大。</li>
+<li>客户端等待时间长。</li>
+<li>中间可能经过 Nginx、网关、负载均衡。</li>
+</ol>
+<p>如果后端直接写 <code>response.getOutputStream()</code>，但中间隔很久才写出下一段数据，就可能触发某些超时限制。</p>
+<p>这些超时可能来自不同层：</p>
+<table>
+  <thead>
+      <tr>
+          <th>层级</th>
+          <th>常见超时</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>浏览器</td>
+          <td>下载等待、连接中断</td>
+      </tr>
+      <tr>
+          <td>Nginx / 网关</td>
+          <td><code>proxy_read_timeout</code>、idle timeout</td>
+      </tr>
+      <tr>
+          <td>Servlet 容器</td>
+          <td>async timeout、连接写超时</td>
+      </tr>
+      <tr>
+          <td>HTTP 客户端</td>
+          <td>read timeout、response timeout</td>
+      </tr>
+      <tr>
+          <td>操作系统 TCP</td>
+          <td>连接超时、重传、发送缓冲区阻塞</td>
+      </tr>
+  </tbody>
+</table>
+<p>所以排查时不要一上来就归因到 TCP。网络问题最讨厌的地方就是它长得都很像，但病因并不一样。</p>
+<h2 id="二先生成临时文件为什么可能有效">二、先生成临时文件为什么可能有效</h2>
+<p>原始方式：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">查询数据
+</span></span><span class="line"><span class="cl">  -&gt; 生成一部分 Excel
+</span></span><span class="line"><span class="cl">  -&gt; 写一部分 response
+</span></span><span class="line"><span class="cl">  -&gt; 继续查询和生成
+</span></span><span class="line"><span class="cl">  -&gt; 再写 response
+</span></span></code></pre></div><p>如果中间某一步很慢，响应流可能长时间没有新数据输出。</p>
+<p>改成临时文件后：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">查询数据
+</span></span><span class="line"><span class="cl">  -&gt; 完整生成临时文件
+</span></span><span class="line"><span class="cl">  -&gt; 设置响应头
+</span></span><span class="line"><span class="cl">  -&gt; 连续拷贝文件到 response
+</span></span></code></pre></div><p>这样有几个好处：</p>
+<ol>
+<li>生成阶段没有急着占用客户端响应连接。</li>
+<li>下载阶段可以更连续地输出字节。</li>
+<li>可以提前知道文件大小，设置 <code>Content-Length</code>。</li>
+<li>如果生成失败，可以返回正常 JSON 错误，而不是返回半个损坏文件。</li>
+<li>便于重试、清理和记录导出结果。</li>
+</ol>
+<p>但这不是万能解法。文件非常大时，临时文件会占用磁盘；并发导出很多时，也要考虑磁盘空间、清理策略和限流。</p>
+<h2 id="三http-请求常见的几类超时">三、HTTP 请求常见的几类超时</h2>
+<h3 id="1-连接超时">1. 连接超时</h3>
+<p>连接超时发生在建立连接阶段。</p>
+<p>例如客户端要连接服务端：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">client -&gt; server:443
+</span></span></code></pre></div><p>如果网络不可达、端口没开、防火墙阻断，TCP 三次握手一直无法完成，就会触发连接超时。</p>
+<p>Java 示例：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">Socket</span><span class="w"> </span><span class="n">socket</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">Socket</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">socket</span><span class="p">.</span><span class="na">connect</span><span class="p">(</span><span class="k">new</span><span class="w"> </span><span class="n">InetSocketAddress</span><span class="p">(</span><span class="s">&#34;127.0.0.1&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">8080</span><span class="p">),</span><span class="w"> </span><span class="n">3000</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><p>这里的 <code>3000</code> 就是连接超时时间，单位是毫秒。</p>
+<h3 id="2-读超时">2. 读超时</h3>
+<p>读超时发生在连接已经建立之后，客户端等待服务端返回数据时。</p>
+<p>Java 原生 Socket 示例：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">socket</span><span class="p">.</span><span class="na">setSoTimeout</span><span class="p">(</span><span class="n">5000</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><p><code>SO_TIMEOUT</code> 对 <code>read()</code> 生效。如果 5 秒内读不到数据，会抛出 <code>SocketTimeoutException</code>。</p>
+<p>读超时不是连接失败，而是连接建立后太久没有读到期望的数据。</p>
+<h3 id="3-写超时">3. 写超时</h3>
+<p>写超时和读超时不太一样。</p>
+<p>应用调用 <code>write()</code> 时，通常只是把数据写入操作系统内核的 TCP 发送缓冲区。只要缓冲区有空间，<code>write()</code> 可能很快返回，并不代表对方已经收到数据。</p>
+<p>当下面情况发生时，写操作才可能阻塞：</p>
+<ol>
+<li>对端读取很慢。</li>
+<li>网络拥塞。</li>
+<li>对端接收窗口变小。</li>
+<li>本机发送缓冲区被写满。</li>
+<li>连接半开或对端异常。</li>
+</ol>
+<p>在 C 语言中可以通过 <code>SO_SNDTIMEO</code> 设置发送超时。但 <code>java.net.Socket</code> 没有直接暴露写超时 API。很多 Java HTTP 客户端或服务器框架会在更上层提供写超时、响应超时或 idle timeout。</p>
+<h3 id="4-整体请求超时">4. 整体请求超时</h3>
+<p>有些客户端提供的是整个请求的最大耗时。例如 JDK 11 <code>HttpRequest#timeout()</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">HttpRequest</span><span class="w"> </span><span class="n">request</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">HttpRequest</span><span class="p">.</span><span class="na">newBuilder</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">.</span><span class="na">uri</span><span class="p">(</span><span class="n">URI</span><span class="p">.</span><span class="na">create</span><span class="p">(</span><span class="s">&#34;https://example.com&#34;</span><span class="p">))</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">.</span><span class="na">timeout</span><span class="p">(</span><span class="n">Duration</span><span class="p">.</span><span class="na">ofSeconds</span><span class="p">(</span><span class="n">5</span><span class="p">))</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">.</span><span class="na">build</span><span class="p">();</span><span class="w">
+</span></span></span></code></pre></div><p>它关注的是这次请求总共不能超过多久，而不是单纯的 TCP 读写。</p>
+<h3 id="5-连接池获取超时">5. 连接池获取超时</h3>
+<p>在微服务里，HTTP 客户端通常使用连接池。</p>
+<p>如果连接池满了，新请求需要等待可用连接。等待太久就会触发连接池获取超时。</p>
+<p>这类问题经常被误认为“下游接口慢”，但实际可能是本服务连接池被打满了。</p>
+<h2 id="四socket-是什么">四、Socket 是什么</h2>
+<p>Socket 可以从两个角度理解。</p>
+<h3 id="1-编程接口">1. 编程接口</h3>
+<p>Socket 是应用程序使用 TCP 或 UDP 的编程接口。</p>
+<p>Java 程序并不会自己实现 TCP，而是通过 JVM 调用操作系统提供的 socket 能力：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Java Socket API
+</span></span><span class="line"><span class="cl">  -&gt; JDK 内部实现
+</span></span><span class="line"><span class="cl">  -&gt; 操作系统 socket 系统调用
+</span></span><span class="line"><span class="cl">  -&gt; TCP/IP 协议栈
+</span></span><span class="line"><span class="cl">  -&gt; 网卡
+</span></span></code></pre></div><h3 id="2-网络连接端点">2. 网络连接端点</h3>
+<p>一个 TCP 连接由四元组唯一标识：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">源 IP + 源端口 + 目标 IP + 目标端口
+</span></span></code></pre></div><p>例如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">192.168.1.10:51523 -&gt; 10.0.0.2:8080
+</span></span></code></pre></div><p>这里不能简单说“一个端口就是一个 Socket”。更准确地说，端口只是 socket 地址的一部分。服务端可以监听一个端口，同时和很多客户端建立不同的 TCP 连接。</p>
+<h2 id="五java-中的几种-io-模型">五、Java 中的几种 IO 模型</h2>
+<h3 id="1-bio阻塞-io">1. BIO：阻塞 IO</h3>
+<p>常见类：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">java.net.Socket
+</span></span><span class="line"><span class="cl">java.net.ServerSocket
+</span></span></code></pre></div><p>示例：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">ServerSocket</span><span class="w"> </span><span class="n">server</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">ServerSocket</span><span class="p">(</span><span class="n">8080</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">Socket</span><span class="w"> </span><span class="n">socket</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">server</span><span class="p">.</span><span class="na">accept</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">InputStream</span><span class="w"> </span><span class="n">in</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">socket</span><span class="p">.</span><span class="na">getInputStream</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">OutputStream</span><span class="w"> </span><span class="n">out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">socket</span><span class="p">.</span><span class="na">getOutputStream</span><span class="p">();</span><span class="w">
+</span></span></span></code></pre></div><p>特点：</p>
+<ol>
+<li><code>accept()</code> 阻塞。</li>
+<li><code>read()</code> 阻塞。</li>
+<li>传统模型是一连接一线程。</li>
+</ol>
+<p>优点是简单，缺点是高并发下线程数量、上下文切换和内存成本较高。</p>
+<h3 id="2-nio非阻塞-io--多路复用">2. NIO：非阻塞 IO + 多路复用</h3>
+<p>常见类：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">java.nio.channels.SocketChannel
+</span></span><span class="line"><span class="cl">java.nio.channels.ServerSocketChannel
+</span></span><span class="line"><span class="cl">java.nio.channels.Selector
+</span></span></code></pre></div><p>核心思想是用一个线程监听多个连接上的事件：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Selector 监听多个 Channel
+</span></span><span class="line"><span class="cl">  -&gt; 某个连接可读或可写
+</span></span><span class="line"><span class="cl">  -&gt; 程序处理对应事件
+</span></span></code></pre></div><p>示例：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">Selector</span><span class="w"> </span><span class="n">selector</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Selector</span><span class="p">.</span><span class="na">open</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">ServerSocketChannel</span><span class="w"> </span><span class="n">server</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ServerSocketChannel</span><span class="p">.</span><span class="na">open</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">server</span><span class="p">.</span><span class="na">configureBlocking</span><span class="p">(</span><span class="kc">false</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">server</span><span class="p">.</span><span class="na">register</span><span class="p">(</span><span class="n">selector</span><span class="p">,</span><span class="w"> </span><span class="n">SelectionKey</span><span class="p">.</span><span class="na">OP_ACCEPT</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">while</span><span class="w"> </span><span class="p">(</span><span class="kc">true</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">selector</span><span class="p">.</span><span class="na">select</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">SelectionKey</span><span class="w"> </span><span class="n">key</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">selector</span><span class="p">.</span><span class="na">selectedKeys</span><span class="p">())</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="c1">// 处理 accept / read / write</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>NIO 常用于高并发服务器、网关、RPC 框架等。</p>
+<h3 id="3-aio异步-io">3. AIO：异步 IO</h3>
+<p>常见类：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">java.nio.channels.AsynchronousSocketChannel
+</span></span></code></pre></div><p>基本思想是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">发起 IO 操作
+</span></span><span class="line"><span class="cl">  -&gt; 方法立即返回
+</span></span><span class="line"><span class="cl">  -&gt; IO 完成后回调通知
+</span></span></code></pre></div><p>示例：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">channel</span><span class="p">.</span><span class="na">read</span><span class="p">(</span><span class="n">buffer</span><span class="p">,</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">CompletionHandler</span><span class="o">&lt;</span><span class="n">Integer</span><span class="p">,</span><span class="w"> </span><span class="n">Void</span><span class="o">&gt;</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nd">@Override</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">completed</span><span class="p">(</span><span class="n">Integer</span><span class="w"> </span><span class="n">result</span><span class="p">,</span><span class="w"> </span><span class="n">Void</span><span class="w"> </span><span class="n">attachment</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="c1">// IO 完成</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nd">@Override</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">failed</span><span class="p">(</span><span class="n">Throwable</span><span class="w"> </span><span class="n">exc</span><span class="p">,</span><span class="w"> </span><span class="n">Void</span><span class="w"> </span><span class="n">attachment</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="c1">// IO 失败</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">});</span><span class="w">
+</span></span></span></code></pre></div><p>在 Java 生态中，实际高并发网络框架更常见的是基于 NIO 的 Netty、Reactor Netty 等。</p>
+<h2 id="六tcp-写入发送缓冲区和窗口">六、TCP 写入、发送缓冲区和窗口</h2>
+<p>当应用调用：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">outputStream</span><span class="p">.</span><span class="na">write</span><span class="p">(</span><span class="n">bytes</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><p>大致流程是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">用户态应用
+</span></span><span class="line"><span class="cl">  -&gt; 内核 TCP 发送缓冲区
+</span></span><span class="line"><span class="cl">  -&gt; TCP 协议栈发送数据
+</span></span><span class="line"><span class="cl">  -&gt; 对端接收缓冲区
+</span></span><span class="line"><span class="cl">  -&gt; 对端应用读取
+</span></span></code></pre></div><p><code>write()</code> 成功通常只表示数据已经交给本机内核，不表示对端应用已经处理。</p>
+<h3 id="1-发送缓冲区什么时候会满">1. 发送缓冲区什么时候会满</h3>
+<p>常见原因包括：</p>
+<ol>
+<li>对端应用读取太慢。</li>
+<li>对端接收缓冲区快满。</li>
+<li>网络质量差，ACK 回来慢。</li>
+<li>拥塞控制降低发送速率。</li>
+<li>客户端暂停下载或网络断开。</li>
+</ol>
+<p>当发送缓冲区满了，阻塞 IO 的 <code>write()</code> 才可能卡住。</p>
+<h3 id="2-tcp-窗口是什么">2. TCP 窗口是什么</h3>
+<p>TCP 窗口可以理解为“当前允许发送方继续发送多少数据”。</p>
+<p>它主要涉及两个窗口：</p>
+<ol>
+<li>接收窗口 <code>rwnd</code>：由接收方通告，表示自己还能接收多少数据。</li>
+<li>拥塞窗口 <code>cwnd</code>：由发送方根据网络拥塞情况维护。</li>
+</ol>
+<p>发送方实际能发送的数据量大致受下面这个值限制：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">min(rwnd, cwnd)
+</span></span></code></pre></div><p>如果接收方来不及读取数据，接收窗口可能变小，甚至变成 0。发送方继续写入时，发送缓冲区就可能逐渐被填满，最后导致写操作阻塞。</p>
+<h2 id="七http-客户端超时配置">七、HTTP 客户端超时配置</h2>
+<p>真实项目里更常配置的是 HTTP 客户端超时，而不是直接操作 TCP Socket。</p>
+<p>常见超时有三类：</p>
+<ol>
+<li><code>connect timeout</code>：建立连接最多等多久。</li>
+<li><code>read/socket/response timeout</code>：连接建立后等待响应数据最多等多久。</li>
+<li><code>connection request timeout</code>：从连接池获取连接最多等多久。</li>
+</ol>
+<h3 id="1-httpurlconnection">1. HttpURLConnection</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">URL</span><span class="w"> </span><span class="n">url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">URL</span><span class="p">(</span><span class="s">&#34;https://example.com&#34;</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">HttpURLConnection</span><span class="w"> </span><span class="n">conn</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">HttpURLConnection</span><span class="p">)</span><span class="w"> </span><span class="n">url</span><span class="p">.</span><span class="na">openConnection</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">conn</span><span class="p">.</span><span class="na">setConnectTimeout</span><span class="p">(</span><span class="n">3000</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">conn</span><span class="p">.</span><span class="na">setReadTimeout</span><span class="p">(</span><span class="n">5000</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><h3 id="2-jdk-11-httpclient">2. JDK 11 HttpClient</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">HttpClient</span><span class="w"> </span><span class="n">client</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">HttpClient</span><span class="p">.</span><span class="na">newBuilder</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">.</span><span class="na">connectTimeout</span><span class="p">(</span><span class="n">Duration</span><span class="p">.</span><span class="na">ofSeconds</span><span class="p">(</span><span class="n">3</span><span class="p">))</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">.</span><span class="na">build</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">HttpRequest</span><span class="w"> </span><span class="n">request</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">HttpRequest</span><span class="p">.</span><span class="na">newBuilder</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">.</span><span class="na">uri</span><span class="p">(</span><span class="n">URI</span><span class="p">.</span><span class="na">create</span><span class="p">(</span><span class="s">&#34;https://example.com&#34;</span><span class="p">))</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">.</span><span class="na">timeout</span><span class="p">(</span><span class="n">Duration</span><span class="p">.</span><span class="na">ofSeconds</span><span class="p">(</span><span class="n">5</span><span class="p">))</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">.</span><span class="na">build</span><span class="p">();</span><span class="w">
+</span></span></span></code></pre></div><h3 id="3-resttemplate">3. RestTemplate</h3>
+<p><code>RestTemplate</code> 默认配置容易遗漏超时，项目中应明确指定。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">SimpleClientHttpRequestFactory</span><span class="w"> </span><span class="n">factory</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">SimpleClientHttpRequestFactory</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">factory</span><span class="p">.</span><span class="na">setConnectTimeout</span><span class="p">(</span><span class="n">3000</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">factory</span><span class="p">.</span><span class="na">setReadTimeout</span><span class="p">(</span><span class="n">5000</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">RestTemplate</span><span class="w"> </span><span class="n">restTemplate</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">RestTemplate</span><span class="p">(</span><span class="n">factory</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><p>如果使用 Apache HttpClient 连接池：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">RequestConfig</span><span class="w"> </span><span class="n">config</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">RequestConfig</span><span class="p">.</span><span class="na">custom</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">.</span><span class="na">setConnectTimeout</span><span class="p">(</span><span class="n">3000</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">.</span><span class="na">setSocketTimeout</span><span class="p">(</span><span class="n">5000</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">.</span><span class="na">setConnectionRequestTimeout</span><span class="p">(</span><span class="n">2000</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">.</span><span class="na">build</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">CloseableHttpClient</span><span class="w"> </span><span class="n">httpClient</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">HttpClients</span><span class="p">.</span><span class="na">custom</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">.</span><span class="na">setDefaultRequestConfig</span><span class="p">(</span><span class="n">config</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">.</span><span class="na">build</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">RestTemplate</span><span class="w"> </span><span class="n">restTemplate</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">RestTemplate</span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">new</span><span class="w"> </span><span class="n">HttpComponentsClientHttpRequestFactory</span><span class="p">(</span><span class="n">httpClient</span><span class="p">));</span><span class="w">
+</span></span></span></code></pre></div><h3 id="4-webclient">4. WebClient</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">HttpClient</span><span class="w"> </span><span class="n">httpClient</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">HttpClient</span><span class="p">.</span><span class="na">create</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">.</span><span class="na">option</span><span class="p">(</span><span class="n">ChannelOption</span><span class="p">.</span><span class="na">CONNECT_TIMEOUT_MILLIS</span><span class="p">,</span><span class="w"> </span><span class="n">3000</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">.</span><span class="na">responseTimeout</span><span class="p">(</span><span class="n">Duration</span><span class="p">.</span><span class="na">ofSeconds</span><span class="p">(</span><span class="n">5</span><span class="p">));</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">WebClient</span><span class="w"> </span><span class="n">webClient</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">WebClient</span><span class="p">.</span><span class="na">builder</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">.</span><span class="na">clientConnector</span><span class="p">(</span><span class="k">new</span><span class="w"> </span><span class="n">ReactorClientHttpConnector</span><span class="p">(</span><span class="n">httpClient</span><span class="p">))</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">.</span><span class="na">build</span><span class="p">();</span><span class="w">
+</span></span></span></code></pre></div><h3 id="5-okhttp">5. OkHttp</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">OkHttpClient</span><span class="w"> </span><span class="n">client</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">OkHttpClient</span><span class="p">.</span><span class="na">Builder</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">.</span><span class="na">connectTimeout</span><span class="p">(</span><span class="n">3</span><span class="p">,</span><span class="w"> </span><span class="n">TimeUnit</span><span class="p">.</span><span class="na">SECONDS</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">.</span><span class="na">readTimeout</span><span class="p">(</span><span class="n">5</span><span class="p">,</span><span class="w"> </span><span class="n">TimeUnit</span><span class="p">.</span><span class="na">SECONDS</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">.</span><span class="na">writeTimeout</span><span class="p">(</span><span class="n">5</span><span class="p">,</span><span class="w"> </span><span class="n">TimeUnit</span><span class="p">.</span><span class="na">SECONDS</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">.</span><span class="na">callTimeout</span><span class="p">(</span><span class="n">10</span><span class="p">,</span><span class="w"> </span><span class="n">TimeUnit</span><span class="p">.</span><span class="na">SECONDS</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">.</span><span class="na">build</span><span class="p">();</span><span class="w">
+</span></span></span></code></pre></div><p>OkHttp 明确提供了写超时和整体调用超时，语义比原生 <code>java.net.Socket</code> 更完整。</p>
+<h2 id="八导出接口的推荐处理方式">八、导出接口的推荐处理方式</h2>
+<h3 id="1-小文件可以直接流式写出">1. 小文件可以直接流式写出</h3>
+<p>如果文件生成很快、数据量不大，可以直接写响应：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">response</span><span class="p">.</span><span class="na">setContentType</span><span class="p">(</span><span class="s">&#34;application/vnd.openxmlformats-officedocument.spreadsheetml.sheet&#34;</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">response</span><span class="p">.</span><span class="na">setHeader</span><span class="p">(</span><span class="s">&#34;Content-Disposition&#34;</span><span class="p">,</span><span class="w"> </span><span class="s">&#34;attachment; filename=\&#34;export.xlsx\&#34;&#34;</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">try</span><span class="w"> </span><span class="p">(</span><span class="n">ServletOutputStream</span><span class="w"> </span><span class="n">out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">response</span><span class="p">.</span><span class="na">getOutputStream</span><span class="p">())</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">workbook</span><span class="p">.</span><span class="na">write</span><span class="p">(</span><span class="n">out</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">out</span><span class="p">.</span><span class="na">flush</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>注意不要在已经写出部分文件后再尝试返回 JSON 错误，因为响应头和响应体可能已经提交。</p>
+<h3 id="2-大文件建议先生成文件">2. 大文件建议先生成文件</h3>
+<p>更稳妥的流程：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">生成临时文件
+</span></span><span class="line"><span class="cl">  -&gt; 检查文件生成是否成功
+</span></span><span class="line"><span class="cl">  -&gt; 设置响应头
+</span></span><span class="line"><span class="cl">  -&gt; 设置 Content-Length
+</span></span><span class="line"><span class="cl">  -&gt; 拷贝文件到 response
+</span></span><span class="line"><span class="cl">  -&gt; finally 删除临时文件
+</span></span></code></pre></div><p>示例：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">Path</span><span class="w"> </span><span class="n">tempFile</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Files</span><span class="p">.</span><span class="na">createTempFile</span><span class="p">(</span><span class="s">&#34;export-&#34;</span><span class="p">,</span><span class="w"> </span><span class="s">&#34;.xlsx&#34;</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">try</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">generateExcel</span><span class="p">(</span><span class="n">tempFile</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">response</span><span class="p">.</span><span class="na">setContentType</span><span class="p">(</span><span class="s">&#34;application/vnd.openxmlformats-officedocument.spreadsheetml.sheet&#34;</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">response</span><span class="p">.</span><span class="na">setHeader</span><span class="p">(</span><span class="s">&#34;Content-Disposition&#34;</span><span class="p">,</span><span class="w"> </span><span class="s">&#34;attachment; filename=\&#34;export.xlsx\&#34;&#34;</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">response</span><span class="p">.</span><span class="na">setContentLengthLong</span><span class="p">(</span><span class="n">Files</span><span class="p">.</span><span class="na">size</span><span class="p">(</span><span class="n">tempFile</span><span class="p">));</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">try</span><span class="w"> </span><span class="p">(</span><span class="n">InputStream</span><span class="w"> </span><span class="n">in</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Files</span><span class="p">.</span><span class="na">newInputStream</span><span class="p">(</span><span class="n">tempFile</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">         </span><span class="n">OutputStream</span><span class="w"> </span><span class="n">out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">response</span><span class="p">.</span><span class="na">getOutputStream</span><span class="p">())</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">in</span><span class="p">.</span><span class="na">transferTo</span><span class="p">(</span><span class="n">out</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">out</span><span class="p">.</span><span class="na">flush</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w"> </span><span class="k">finally</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">Files</span><span class="p">.</span><span class="na">deleteIfExists</span><span class="p">(</span><span class="n">tempFile</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><h3 id="3-超大文件可以改成异步导出">3. 超大文件可以改成异步导出</h3>
+<p>如果导出耗时很长，推荐改成异步任务：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">用户点击导出
+</span></span><span class="line"><span class="cl">  -&gt; 后端创建导出任务
+</span></span><span class="line"><span class="cl">  -&gt; 返回任务 ID
+</span></span><span class="line"><span class="cl">  -&gt; 后台生成文件
+</span></span><span class="line"><span class="cl">  -&gt; 前端轮询或通知
+</span></span><span class="line"><span class="cl">  -&gt; 用户下载已生成文件
+</span></span></code></pre></div><p>这种方式对用户体验和系统稳定性都更友好。</p>
+<h2 id="九排查响应超时的思路">九、排查响应超时的思路</h2>
+<p>遇到导出超时，可以按顺序看：</p>
+<ol>
+<li>后端日志是生成阶段报错，还是写 response 时报错。</li>
+<li>浏览器是否主动取消下载。</li>
+<li>Nginx 或网关是否有 <code>upstream timed out</code>。</li>
+<li>后端是否长时间没有向响应写任何数据。</li>
+<li>是否设置了 <code>Content-Length</code>。</li>
+<li>文件是否过大，客户端下载是否很慢。</li>
+<li>是否有连接池、线程池耗尽。</li>
+<li>是否有代理层 idle timeout。</li>
+<li>客户端是否设置了过短的 read timeout。</li>
+</ol>
+<h2 id="十生产环境建议">十、生产环境建议</h2>
+<ol>
+<li>所有 HTTP 客户端都显式设置连接超时、读取超时和连接池获取超时。</li>
+<li>导出接口按文件大小选择直接流式、临时文件或异步任务。</li>
+<li>网关和 Nginx 的超时要与业务耗时匹配。</li>
+<li>大文件下载要考虑限流、断点续传、对象存储和 CDN。</li>
+<li>避免在响应已经写出后才进行复杂业务校验。</li>
+<li>对导出任务增加并发限制，防止拖垮数据库和磁盘。</li>
+</ol>
+<h2 id="十一一句话总结">十一、一句话总结</h2>
+<p>响应超时不一定是 TCP 问题。导出接口直接写 response 时，真正的问题往往是生成耗时、响应长时间无数据、代理 idle timeout 或客户端等待超时。先生成临时文件再输出，能把“慢生成”和“连续下载”拆开，因此更稳定。</p>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

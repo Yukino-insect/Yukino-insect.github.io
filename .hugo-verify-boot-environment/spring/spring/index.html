@@ -1,0 +1,1354 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Spring | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="Spring Framework 的核心价值不是“提供很多注解”，而是把 Java 应用里最容易重复、最容易失控的基础能力收进框架：对象创建、依赖管理、横切逻辑、事务边界、事件通知、Web 请求处理和资源整合。
+可以把 Spring 看成三层：
+容器层：IoC 容器负责创建 Bean、注入依赖、管理生命周期。 增强层：AOP 在方法调用前后织入事务、日志、权限、监控等横切逻辑。 应用层：MVC、事务、缓存、事件、安全、集成等模块都建立在容器和 AOP 之上。 所以学习 Spring 时，不必一开始就记住所有注解。先看清楚“谁创建对象、谁调用方法、谁接管请求、谁决定事务提交或回滚”，后面的知识才会各归其位。很遗憾，框架不会因为注解长得亲切就变简单，最多只是把复杂性包装得体面一些。
+一、Spring 解决了什么问题 传统 Java 应用通常会遇到几类重复问题：
+问题 传统写法 Spring 的处理方式 对象创建分散 到处 new 对象 由 IoC 容器统一创建和装配 依赖关系混乱 构造顺序和依赖链手动维护 通过依赖注入声明关系 横切逻辑重复 每个方法里写日志、事务、权限 通过 AOP 统一织入 事务边界不清 手动获取连接、提交、回滚 通过 @Transactional 声明事务 Web 流程重复 手动解析请求和响应 由 Spring MVC 统一分发和转换 扩展点零散 各模块自己定义生命周期 通过 Bean 生命周期和后置处理器扩展 Spring 的基本思路是：业务代码只表达业务依赖和业务动作，通用基础设施交给框架接管。
+二、IoC：对象由容器管理 IoC 是 Inversion of Control，控制反转。它反转的是对象创建和依赖组装的控制权。
+没有 IoC 时，业务类通常自己创建依赖：
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/spring/spring/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/spring/spring/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="Spring">
+  <meta property="og:description" content="Spring Framework 的核心价值不是“提供很多注解”，而是把 Java 应用里最容易重复、最容易失控的基础能力收进框架：对象创建、依赖管理、横切逻辑、事务边界、事件通知、Web 请求处理和资源整合。
+可以把 Spring 看成三层：
+容器层：IoC 容器负责创建 Bean、注入依赖、管理生命周期。 增强层：AOP 在方法调用前后织入事务、日志、权限、监控等横切逻辑。 应用层：MVC、事务、缓存、事件、安全、集成等模块都建立在容器和 AOP 之上。 所以学习 Spring 时，不必一开始就记住所有注解。先看清楚“谁创建对象、谁调用方法、谁接管请求、谁决定事务提交或回滚”，后面的知识才会各归其位。很遗憾，框架不会因为注解长得亲切就变简单，最多只是把复杂性包装得体面一些。
+一、Spring 解决了什么问题 传统 Java 应用通常会遇到几类重复问题：
+问题 传统写法 Spring 的处理方式 对象创建分散 到处 new 对象 由 IoC 容器统一创建和装配 依赖关系混乱 构造顺序和依赖链手动维护 通过依赖注入声明关系 横切逻辑重复 每个方法里写日志、事务、权限 通过 AOP 统一织入 事务边界不清 手动获取连接、提交、回滚 通过 @Transactional 声明事务 Web 流程重复 手动解析请求和响应 由 Spring MVC 统一分发和转换 扩展点零散 各模块自己定义生命周期 通过 Bean 生命周期和后置处理器扩展 Spring 的基本思路是：业务代码只表达业务依赖和业务动作，通用基础设施交给框架接管。
+二、IoC：对象由容器管理 IoC 是 Inversion of Control，控制反转。它反转的是对象创建和依赖组装的控制权。
+没有 IoC 时，业务类通常自己创建依赖：">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="spring">
+    <meta property="article:published_time" content="2025-12-22T22:02:38+08:00">
+    <meta property="article:modified_time" content="2025-12-22T22:02:38+08:00">
+
+  
+  <meta itemprop="name" content="Spring">
+  <meta itemprop="description" content="Spring Framework 的核心价值不是“提供很多注解”，而是把 Java 应用里最容易重复、最容易失控的基础能力收进框架：对象创建、依赖管理、横切逻辑、事务边界、事件通知、Web 请求处理和资源整合。
+可以把 Spring 看成三层：
+容器层：IoC 容器负责创建 Bean、注入依赖、管理生命周期。 增强层：AOP 在方法调用前后织入事务、日志、权限、监控等横切逻辑。 应用层：MVC、事务、缓存、事件、安全、集成等模块都建立在容器和 AOP 之上。 所以学习 Spring 时，不必一开始就记住所有注解。先看清楚“谁创建对象、谁调用方法、谁接管请求、谁决定事务提交或回滚”，后面的知识才会各归其位。很遗憾，框架不会因为注解长得亲切就变简单，最多只是把复杂性包装得体面一些。
+一、Spring 解决了什么问题 传统 Java 应用通常会遇到几类重复问题：
+问题 传统写法 Spring 的处理方式 对象创建分散 到处 new 对象 由 IoC 容器统一创建和装配 依赖关系混乱 构造顺序和依赖链手动维护 通过依赖注入声明关系 横切逻辑重复 每个方法里写日志、事务、权限 通过 AOP 统一织入 事务边界不清 手动获取连接、提交、回滚 通过 @Transactional 声明事务 Web 流程重复 手动解析请求和响应 由 Spring MVC 统一分发和转换 扩展点零散 各模块自己定义生命周期 通过 Bean 生命周期和后置处理器扩展 Spring 的基本思路是：业务代码只表达业务依赖和业务动作，通用基础设施交给框架接管。
+二、IoC：对象由容器管理 IoC 是 Inversion of Control，控制反转。它反转的是对象创建和依赖组装的控制权。
+没有 IoC 时，业务类通常自己创建依赖：">
+  <meta itemprop="datePublished" content="2025-12-22T22:02:38+08:00">
+  <meta itemprop="dateModified" content="2025-12-22T22:02:38+08:00">
+  <meta itemprop="wordCount" content="416">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Spring">
+  <meta name="twitter:description" content="Spring Framework 的核心价值不是“提供很多注解”，而是把 Java 应用里最容易重复、最容易失控的基础能力收进框架：对象创建、依赖管理、横切逻辑、事务边界、事件通知、Web 请求处理和资源整合。
+可以把 Spring 看成三层：
+容器层：IoC 容器负责创建 Bean、注入依赖、管理生命周期。 增强层：AOP 在方法调用前后织入事务、日志、权限、监控等横切逻辑。 应用层：MVC、事务、缓存、事件、安全、集成等模块都建立在容器和 AOP 之上。 所以学习 Spring 时，不必一开始就记住所有注解。先看清楚“谁创建对象、谁调用方法、谁接管请求、谁决定事务提交或回滚”，后面的知识才会各归其位。很遗憾，框架不会因为注解长得亲切就变简单，最多只是把复杂性包装得体面一些。
+一、Spring 解决了什么问题 传统 Java 应用通常会遇到几类重复问题：
+问题 传统写法 Spring 的处理方式 对象创建分散 到处 new 对象 由 IoC 容器统一创建和装配 依赖关系混乱 构造顺序和依赖链手动维护 通过依赖注入声明关系 横切逻辑重复 每个方法里写日志、事务、权限 通过 AOP 统一织入 事务边界不清 手动获取连接、提交、回滚 通过 @Transactional 声明事务 Web 流程重复 手动解析请求和响应 由 Spring MVC 统一分发和转换 扩展点零散 各模块自己定义生命周期 通过 Bean 生命周期和后置处理器扩展 Spring 的基本思路是：业务代码只表达业务依赖和业务动作，通用基础设施交给框架接管。
+二、IoC：对象由容器管理 IoC 是 Inversion of Control，控制反转。它反转的是对象创建和依赖组装的控制权。
+没有 IoC 时，业务类通常自己创建依赖：">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">Spring</h1>
+
+    
+      <div class="post-date">December 22, 2025</div>
+    
+
+    <div class="post-content">
+      <p>Spring Framework 的核心价值不是“提供很多注解”，而是把 Java 应用里最容易重复、最容易失控的基础能力收进框架：对象创建、依赖管理、横切逻辑、事务边界、事件通知、Web 请求处理和资源整合。</p>
+<p>可以把 Spring 看成三层：</p>
+<ul>
+<li><strong>容器层</strong>：IoC 容器负责创建 Bean、注入依赖、管理生命周期。</li>
+<li><strong>增强层</strong>：AOP 在方法调用前后织入事务、日志、权限、监控等横切逻辑。</li>
+<li><strong>应用层</strong>：MVC、事务、缓存、事件、安全、集成等模块都建立在容器和 AOP 之上。</li>
+</ul>
+<p>所以学习 Spring 时，不必一开始就记住所有注解。先看清楚“谁创建对象、谁调用方法、谁接管请求、谁决定事务提交或回滚”，后面的知识才会各归其位。很遗憾，框架不会因为注解长得亲切就变简单，最多只是把复杂性包装得体面一些。</p>
+<h2 id="一spring-解决了什么问题">一、Spring 解决了什么问题</h2>
+<p>传统 Java 应用通常会遇到几类重复问题：</p>
+<table>
+  <thead>
+      <tr>
+          <th>问题</th>
+          <th>传统写法</th>
+          <th>Spring 的处理方式</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>对象创建分散</td>
+          <td>到处 <code>new</code> 对象</td>
+          <td>由 IoC 容器统一创建和装配</td>
+      </tr>
+      <tr>
+          <td>依赖关系混乱</td>
+          <td>构造顺序和依赖链手动维护</td>
+          <td>通过依赖注入声明关系</td>
+      </tr>
+      <tr>
+          <td>横切逻辑重复</td>
+          <td>每个方法里写日志、事务、权限</td>
+          <td>通过 AOP 统一织入</td>
+      </tr>
+      <tr>
+          <td>事务边界不清</td>
+          <td>手动获取连接、提交、回滚</td>
+          <td>通过 <code>@Transactional</code> 声明事务</td>
+      </tr>
+      <tr>
+          <td>Web 流程重复</td>
+          <td>手动解析请求和响应</td>
+          <td>由 Spring MVC 统一分发和转换</td>
+      </tr>
+      <tr>
+          <td>扩展点零散</td>
+          <td>各模块自己定义生命周期</td>
+          <td>通过 Bean 生命周期和后置处理器扩展</td>
+      </tr>
+  </tbody>
+</table>
+<p>Spring 的基本思路是：<strong>业务代码只表达业务依赖和业务动作，通用基础设施交给框架接管</strong>。</p>
+<h2 id="二ioc对象由容器管理">二、IoC：对象由容器管理</h2>
+<p>IoC 是 Inversion of Control，控制反转。它反转的是对象创建和依赖组装的控制权。</p>
+<p>没有 IoC 时，业务类通常自己创建依赖：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">OrderService</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="kd">final</span><span class="w"> </span><span class="n">UserService</span><span class="w"> </span><span class="n">userService</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">UserService</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>使用 Spring 后，业务类只声明自己需要什么：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="nd">@Service</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">OrderService</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="kd">final</span><span class="w"> </span><span class="n">UserService</span><span class="w"> </span><span class="n">userService</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="nf">OrderService</span><span class="p">(</span><span class="n">UserService</span><span class="w"> </span><span class="n">userService</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">this</span><span class="p">.</span><span class="na">userService</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">userService</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p><code>OrderService</code> 不再关心 <code>UserService</code> 怎样创建、什么时候创建、是否需要代理、是否还有别的依赖。这些问题都交给容器。</p>
+<h3 id="1-常见-bean-来源">1. 常见 Bean 来源</h3>
+<p>Spring 可以从多种入口注册 Bean：</p>
+<ul>
+<li><code>@Component</code>、<code>@Service</code>、<code>@Repository</code>、<code>@Controller</code></li>
+<li><code>@Configuration</code> + <code>@Bean</code></li>
+<li><code>@Import</code></li>
+<li><code>FactoryBean</code></li>
+<li>自动配置类</li>
+<li>XML 配置</li>
+</ul>
+<p>它们最终都会变成容器中的 <code>BeanDefinition</code>。<code>BeanDefinition</code> 描述的是“这个 Bean 应该怎样创建”，真正的对象实例会在后续生命周期中被创建出来。</p>
+<h3 id="2-推荐注入方式">2. 推荐注入方式</h3>
+<p>业务代码优先使用构造器注入：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="nd">@Service</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">PaymentService</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="kd">final</span><span class="w"> </span><span class="n">OrderRepository</span><span class="w"> </span><span class="n">orderRepository</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="kd">final</span><span class="w"> </span><span class="n">PayClient</span><span class="w"> </span><span class="n">payClient</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="nf">PaymentService</span><span class="p">(</span><span class="n">OrderRepository</span><span class="w"> </span><span class="n">orderRepository</span><span class="p">,</span><span class="w"> </span><span class="n">PayClient</span><span class="w"> </span><span class="n">payClient</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">this</span><span class="p">.</span><span class="na">orderRepository</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">orderRepository</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">this</span><span class="p">.</span><span class="na">payClient</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">payClient</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>构造器注入的好处很直接：</p>
+<ul>
+<li>依赖在对象创建时就完整，不容易出现半初始化状态。</li>
+<li>字段可以声明为 <code>final</code>，语义更清楚。</li>
+<li>单元测试时可以直接传入 mock 对象。</li>
+<li>循环依赖更容易暴露，而不是被字段注入暂时掩盖。</li>
+</ul>
+<p>字段注入虽然写起来短，但依赖关系隐藏在类内部，不利于测试和重构。它不是不能用，只是别把“少写几行”误认成“设计更好”。</p>
+<h2 id="三aop在方法调用外层织入能力">三、AOP：在方法调用外层织入能力</h2>
+<p>AOP 是 Aspect-Oriented Programming，面向切面编程。它解决的是横切关注点重复散落的问题。</p>
+<p>例如事务管理。如果不用 AOP，业务方法里会混入大量事务代码：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="kd">public</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">createOrder</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">transaction</span><span class="p">.</span><span class="na">begin</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">try</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">saveOrder</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">transaction</span><span class="p">.</span><span class="na">commit</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(</span><span class="n">Exception</span><span class="w"> </span><span class="n">ex</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">transaction</span><span class="p">.</span><span class="na">rollback</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">ex</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>使用 Spring 后，业务方法只声明事务边界：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="nd">@Transactional</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">public</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">createOrder</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">saveOrder</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>Spring 会为 Bean 创建代理对象。外部调用代理方法时，代理在目标方法前后执行事务拦截器，决定创建事务、提交、回滚和清理资源。</p>
+<h3 id="1-spring-aop-的核心限制">1. Spring AOP 的核心限制</h3>
+<p>Spring AOP 基于代理，所以它主要有几个边界：</p>
+<ul>
+<li>只拦截 Spring Bean 的方法调用。</li>
+<li>默认只拦截外部通过代理对象发起的调用。</li>
+<li>同类内部方法自调用不会经过代理。</li>
+<li><code>final</code> 类或 <code>final</code> 方法不适合被 CGLIB 代理增强。</li>
+<li>JDK 动态代理基于接口，CGLIB 基于子类。</li>
+</ul>
+<p>这也是很多 <code>@Transactional</code> 不生效问题的来源。不是注解突然心情不好，而是调用根本没有经过代理。</p>
+<h3 id="2-常见-aop-场景">2. 常见 AOP 场景</h3>
+<p>Spring 生态中大量能力都依赖 AOP 或类似的拦截思想：</p>
+<ul>
+<li>声明式事务：<code>@Transactional</code></li>
+<li>方法级权限：<code>@PreAuthorize</code></li>
+<li>缓存：<code>@Cacheable</code>、<code>@CacheEvict</code></li>
+<li>日志和审计</li>
+<li>限流、幂等、分布式锁</li>
+<li>参数校验和业务前置检查</li>
+</ul>
+<p>其中事务、缓存、权限这类框架能力更适合使用声明式 AOP；高度业务化、分支很多的逻辑则不要强行塞进切面。</p>
+<h2 id="四mvc请求进入应用的主通道">四、MVC：请求进入应用的主通道</h2>
+<p>Spring MVC 是 Spring 在 Servlet 体系上的 Web 框架。它的核心入口是 <code>DispatcherServlet</code>。</p>
+<p>一次典型请求大致会经过下面的流程：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">HTTP request
+</span></span><span class="line"><span class="cl"> -&gt; Servlet Filter
+</span></span><span class="line"><span class="cl"> -&gt; DispatcherServlet
+</span></span><span class="line"><span class="cl"> -&gt; HandlerMapping
+</span></span><span class="line"><span class="cl"> -&gt; HandlerAdapter
+</span></span><span class="line"><span class="cl"> -&gt; Controller method
+</span></span><span class="line"><span class="cl"> -&gt; HandlerMethodReturnValueHandler
+</span></span><span class="line"><span class="cl"> -&gt; HttpMessageConverter / ViewResolver
+</span></span><span class="line"><span class="cl"> -&gt; HTTP response
+</span></span></code></pre></div><p>其中几个组件最重要：</p>
+<table>
+  <thead>
+      <tr>
+          <th>组件</th>
+          <th>作用</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>DispatcherServlet</code></td>
+          <td>前端控制器，统一接收请求并协调后续组件</td>
+      </tr>
+      <tr>
+          <td><code>HandlerMapping</code></td>
+          <td>根据请求路径、方法、条件找到处理器</td>
+      </tr>
+      <tr>
+          <td><code>HandlerAdapter</code></td>
+          <td>适配并调用 Controller 方法</td>
+      </tr>
+      <tr>
+          <td><code>HandlerMethodArgumentResolver</code></td>
+          <td>把请求数据解析成方法参数</td>
+      </tr>
+      <tr>
+          <td><code>HandlerMethodReturnValueHandler</code></td>
+          <td>处理 Controller 返回值</td>
+      </tr>
+      <tr>
+          <td><code>HttpMessageConverter</code></td>
+          <td>在 Java 对象和 HTTP body 之间转换</td>
+      </tr>
+      <tr>
+          <td><code>HandlerExceptionResolver</code></td>
+          <td>把异常转换成响应</td>
+      </tr>
+  </tbody>
+</table>
+<p>理解这条链路后，<code>@RequestParam</code>、<code>@RequestBody</code>、<code>@ModelAttribute</code>、全局异常处理、自定义参数解析器都不再是孤立知识点。</p>
+<h2 id="五事务aop-和资源管理的组合">五、事务：AOP 和资源管理的组合</h2>
+<p>Spring 事务的入口通常是 <code>@Transactional</code>，但真正执行事务的是事务拦截器和事务管理器。</p>
+<p>一个声明式事务大致包含这些步骤：</p>
+<ol>
+<li>AOP 代理拦截方法调用。</li>
+<li><code>TransactionInterceptor</code> 读取事务属性。</li>
+<li>选择合适的 <code>PlatformTransactionManager</code>。</li>
+<li>获取或创建事务资源，例如 JDBC <code>Connection</code>。</li>
+<li>执行业务方法。</li>
+<li>根据返回结果或异常决定提交还是回滚。</li>
+<li>清理线程绑定的事务上下文和数据库资源。</li>
+</ol>
+<p>事务不是“给方法加个注解”这么轻。它牵涉代理、线程上下文、数据库连接、传播行为、隔离级别和异常规则。专题文章里再拆它，否则这篇总览会膨胀得很不体面。</p>
+<h2 id="六spring-boot-的位置">六、Spring Boot 的位置</h2>
+<p>Spring Boot 不是 Spring 的替代品，而是 Spring 的工程化封装。</p>
+<p>它主要做了几件事：</p>
+<ul>
+<li>用起步依赖统一管理常用依赖组合。</li>
+<li>用自动配置减少手动注册 Bean 的工作。</li>
+<li>用内嵌服务器简化部署。</li>
+<li>用 <code>application.yml</code> / <code>application.properties</code> 统一配置入口。</li>
+<li>用 Actuator、测试支持、日志默认值提高工程可用性。</li>
+</ul>
+<p>如果 Spring Framework 解决的是“框架能力如何工作”，Spring Boot 解决的就是“这些能力怎样被快速、稳定地组装成一个应用”。</p>
+<h2 id="七模块之间的关系">七、模块之间的关系</h2>
+<p>可以用下面这张文字图理解 Spring 生态的层次：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Spring Boot
+</span></span><span class="line"><span class="cl">  -&gt; 自动配置、Starter、配置加载、内嵌容器
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">Spring Framework
+</span></span><span class="line"><span class="cl">  -&gt; IoC 容器
+</span></span><span class="line"><span class="cl">  -&gt; AOP 代理
+</span></span><span class="line"><span class="cl">  -&gt; 事务、事件、缓存
+</span></span><span class="line"><span class="cl">  -&gt; Spring MVC
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">扩展生态
+</span></span><span class="line"><span class="cl">  -&gt; Spring Security
+</span></span><span class="line"><span class="cl">  -&gt; Spring Cloud Gateway
+</span></span><span class="line"><span class="cl">  -&gt; Spring Integration
+</span></span><span class="line"><span class="cl">  -&gt; WebFlux / Reactor
+</span></span></code></pre></div><p>Boot 负责装配，Framework 负责基础能力，扩展生态负责更具体的工程场景。</p>
+<h2 id="八总结">八、总结</h2>
+<p>学习 Spring 时，建议始终抓住四个问题：</p>
+<ul>
+<li><strong>对象从哪里来</strong>：看 IoC、BeanDefinition、Bean 生命周期。</li>
+<li><strong>方法怎样被增强</strong>：看 AOP、代理、拦截器链。</li>
+<li><strong>请求怎样被处理</strong>：看 Spring MVC、参数解析、返回值处理、异常解析。</li>
+<li><strong>工程怎样启动和装配</strong>：看 Spring Boot、自动配置、配置加载、Starter。</li>
+</ul>
+<p>只要这四条线清楚，Spring 的大量注解就会从“需要背诵的符号”变成“挂在某条执行链路上的入口”。这才算真正理解它，而不是和注解进行一种礼貌但无效的寒暄。</p>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

@@ -1,0 +1,1286 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>自增主键的使用 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="我实习时做过一个建表功能，第一反应是用自增主键。后来被提醒：生产环境里不一定都适合用自增主键，尤其涉及数据迁移、分库分表和跨系统合并时，自增 ID 会带来额外约束。
+自增主键不是坏设计。它在单库单表里简单、紧凑、写入顺序友好。但它也不是万能答案。更准确的判断应该是：自增主键适合表内标识，不一定适合全局标识和对外暴露。
+一、自增主键的优点 自增主键常见优点有：
+简单：数据库自动生成，业务不用关心 ID 生成。 紧凑：bigint 比 UUID 字符串更省空间。 顺序写入：对 InnoDB 聚簇索引友好，页分裂通常更少。 Join 成本低：短数字主键适合关联表保存和比较。 表内唯一：单表内天然适合作为技术主键。 所以在单库单表、内部系统、数据不出域、并发压力可控的场景，自增主键仍然很好用。
+二、自增主键的问题 生产里不喜欢自增主键，通常不是因为它“慢”，而是因为它会限制架构演进。
+1. 多库多实例容易冲突 一旦出现分库分表、多主写入、离线导入、灾备回放，每个库都从 1 开始生成 ID，就可能撞号。
+可以通过设置不同步长解决一部分问题：
+auto_increment_increment = 2 auto_increment_offset = 1 但这只是特定部署下的规避方案，并没有让自增 ID 变成真正的全局 ID。
+2. 数据迁移和合库成本高 如果两个系统都有 id = 10001 的订单，合并时就必须改 ID，并同步修改所有引用它的外键、日志、缓存、明细表和历史数据。
+主键一旦参与大量关联，迁移时改它就很痛。是的，痛不是什么技术术语，但工程里它通常相当准确。
+3. 对外暴露可预测 自增 ID 连续递增，如果直接出现在接口里：
+/order/detail?id=10001 用户可能枚举 ID，探测其他数据，甚至推断业务量增长。权限校验当然必须做，但对外 ID 仍应尽量避免过于可预测。
+4. 极高并发下可能出现热点 递增主键会让新数据集中写入 B&#43; 树最右侧叶子页。优点是顺序写入，缺点是极高并发时可能出现右端热点、页级并发争用或自增分配相关等待。
+这不是说自增主键普遍性能差。大多数业务系统里，它反而比随机 UUID 更友好。只有在高并发写入、批量插入、特殊复制模式或热点表设计下，才需要重点评估。
+三、事务回滚后自增值为什么不回退 一个常见现象是：
+create table t ( id bigint primary key auto_increment, name varchar(32) ) engine = InnoDB; begin; insert into t(name) values (&#39;a&#39;); -- 分配到 id = 100 rollback; insert into t(name) values (&#39;b&#39;); -- 可能得到 id = 101 表里最后可能只有 101，没有 100。这不是异常，而是自增机制的正常结果。
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/mysql/%E8%87%AA%E5%A2%9E%E4%B8%BB%E9%94%AE%E7%9A%84%E4%BD%BF%E7%94%A8/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/mysql/%E8%87%AA%E5%A2%9E%E4%B8%BB%E9%94%AE%E7%9A%84%E4%BD%BF%E7%94%A8/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="自增主键的使用">
+  <meta property="og:description" content="我实习时做过一个建表功能，第一反应是用自增主键。后来被提醒：生产环境里不一定都适合用自增主键，尤其涉及数据迁移、分库分表和跨系统合并时，自增 ID 会带来额外约束。
+自增主键不是坏设计。它在单库单表里简单、紧凑、写入顺序友好。但它也不是万能答案。更准确的判断应该是：自增主键适合表内标识，不一定适合全局标识和对外暴露。
+一、自增主键的优点 自增主键常见优点有：
+简单：数据库自动生成，业务不用关心 ID 生成。 紧凑：bigint 比 UUID 字符串更省空间。 顺序写入：对 InnoDB 聚簇索引友好，页分裂通常更少。 Join 成本低：短数字主键适合关联表保存和比较。 表内唯一：单表内天然适合作为技术主键。 所以在单库单表、内部系统、数据不出域、并发压力可控的场景，自增主键仍然很好用。
+二、自增主键的问题 生产里不喜欢自增主键，通常不是因为它“慢”，而是因为它会限制架构演进。
+1. 多库多实例容易冲突 一旦出现分库分表、多主写入、离线导入、灾备回放，每个库都从 1 开始生成 ID，就可能撞号。
+可以通过设置不同步长解决一部分问题：
+auto_increment_increment = 2 auto_increment_offset = 1 但这只是特定部署下的规避方案，并没有让自增 ID 变成真正的全局 ID。
+2. 数据迁移和合库成本高 如果两个系统都有 id = 10001 的订单，合并时就必须改 ID，并同步修改所有引用它的外键、日志、缓存、明细表和历史数据。
+主键一旦参与大量关联，迁移时改它就很痛。是的，痛不是什么技术术语，但工程里它通常相当准确。
+3. 对外暴露可预测 自增 ID 连续递增，如果直接出现在接口里：
+/order/detail?id=10001 用户可能枚举 ID，探测其他数据，甚至推断业务量增长。权限校验当然必须做，但对外 ID 仍应尽量避免过于可预测。
+4. 极高并发下可能出现热点 递增主键会让新数据集中写入 B&#43; 树最右侧叶子页。优点是顺序写入，缺点是极高并发时可能出现右端热点、页级并发争用或自增分配相关等待。
+这不是说自增主键普遍性能差。大多数业务系统里，它反而比随机 UUID 更友好。只有在高并发写入、批量插入、特殊复制模式或热点表设计下，才需要重点评估。
+三、事务回滚后自增值为什么不回退 一个常见现象是：
+create table t ( id bigint primary key auto_increment, name varchar(32) ) engine = InnoDB; begin; insert into t(name) values (&#39;a&#39;); -- 分配到 id = 100 rollback; insert into t(name) values (&#39;b&#39;); -- 可能得到 id = 101 表里最后可能只有 101，没有 100。这不是异常，而是自增机制的正常结果。">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="mysql">
+    <meta property="article:published_time" content="2026-02-15T22:20:27+08:00">
+    <meta property="article:modified_time" content="2026-02-15T22:20:27+08:00">
+
+  
+  <meta itemprop="name" content="自增主键的使用">
+  <meta itemprop="description" content="我实习时做过一个建表功能，第一反应是用自增主键。后来被提醒：生产环境里不一定都适合用自增主键，尤其涉及数据迁移、分库分表和跨系统合并时，自增 ID 会带来额外约束。
+自增主键不是坏设计。它在单库单表里简单、紧凑、写入顺序友好。但它也不是万能答案。更准确的判断应该是：自增主键适合表内标识，不一定适合全局标识和对外暴露。
+一、自增主键的优点 自增主键常见优点有：
+简单：数据库自动生成，业务不用关心 ID 生成。 紧凑：bigint 比 UUID 字符串更省空间。 顺序写入：对 InnoDB 聚簇索引友好，页分裂通常更少。 Join 成本低：短数字主键适合关联表保存和比较。 表内唯一：单表内天然适合作为技术主键。 所以在单库单表、内部系统、数据不出域、并发压力可控的场景，自增主键仍然很好用。
+二、自增主键的问题 生产里不喜欢自增主键，通常不是因为它“慢”，而是因为它会限制架构演进。
+1. 多库多实例容易冲突 一旦出现分库分表、多主写入、离线导入、灾备回放，每个库都从 1 开始生成 ID，就可能撞号。
+可以通过设置不同步长解决一部分问题：
+auto_increment_increment = 2 auto_increment_offset = 1 但这只是特定部署下的规避方案，并没有让自增 ID 变成真正的全局 ID。
+2. 数据迁移和合库成本高 如果两个系统都有 id = 10001 的订单，合并时就必须改 ID，并同步修改所有引用它的外键、日志、缓存、明细表和历史数据。
+主键一旦参与大量关联，迁移时改它就很痛。是的，痛不是什么技术术语，但工程里它通常相当准确。
+3. 对外暴露可预测 自增 ID 连续递增，如果直接出现在接口里：
+/order/detail?id=10001 用户可能枚举 ID，探测其他数据，甚至推断业务量增长。权限校验当然必须做，但对外 ID 仍应尽量避免过于可预测。
+4. 极高并发下可能出现热点 递增主键会让新数据集中写入 B&#43; 树最右侧叶子页。优点是顺序写入，缺点是极高并发时可能出现右端热点、页级并发争用或自增分配相关等待。
+这不是说自增主键普遍性能差。大多数业务系统里，它反而比随机 UUID 更友好。只有在高并发写入、批量插入、特殊复制模式或热点表设计下，才需要重点评估。
+三、事务回滚后自增值为什么不回退 一个常见现象是：
+create table t ( id bigint primary key auto_increment, name varchar(32) ) engine = InnoDB; begin; insert into t(name) values (&#39;a&#39;); -- 分配到 id = 100 rollback; insert into t(name) values (&#39;b&#39;); -- 可能得到 id = 101 表里最后可能只有 101，没有 100。这不是异常，而是自增机制的正常结果。">
+  <meta itemprop="datePublished" content="2026-02-15T22:20:27+08:00">
+  <meta itemprop="dateModified" content="2026-02-15T22:20:27+08:00">
+  <meta itemprop="wordCount" content="271">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="自增主键的使用">
+  <meta name="twitter:description" content="我实习时做过一个建表功能，第一反应是用自增主键。后来被提醒：生产环境里不一定都适合用自增主键，尤其涉及数据迁移、分库分表和跨系统合并时，自增 ID 会带来额外约束。
+自增主键不是坏设计。它在单库单表里简单、紧凑、写入顺序友好。但它也不是万能答案。更准确的判断应该是：自增主键适合表内标识，不一定适合全局标识和对外暴露。
+一、自增主键的优点 自增主键常见优点有：
+简单：数据库自动生成，业务不用关心 ID 生成。 紧凑：bigint 比 UUID 字符串更省空间。 顺序写入：对 InnoDB 聚簇索引友好，页分裂通常更少。 Join 成本低：短数字主键适合关联表保存和比较。 表内唯一：单表内天然适合作为技术主键。 所以在单库单表、内部系统、数据不出域、并发压力可控的场景，自增主键仍然很好用。
+二、自增主键的问题 生产里不喜欢自增主键，通常不是因为它“慢”，而是因为它会限制架构演进。
+1. 多库多实例容易冲突 一旦出现分库分表、多主写入、离线导入、灾备回放，每个库都从 1 开始生成 ID，就可能撞号。
+可以通过设置不同步长解决一部分问题：
+auto_increment_increment = 2 auto_increment_offset = 1 但这只是特定部署下的规避方案，并没有让自增 ID 变成真正的全局 ID。
+2. 数据迁移和合库成本高 如果两个系统都有 id = 10001 的订单，合并时就必须改 ID，并同步修改所有引用它的外键、日志、缓存、明细表和历史数据。
+主键一旦参与大量关联，迁移时改它就很痛。是的，痛不是什么技术术语，但工程里它通常相当准确。
+3. 对外暴露可预测 自增 ID 连续递增，如果直接出现在接口里：
+/order/detail?id=10001 用户可能枚举 ID，探测其他数据，甚至推断业务量增长。权限校验当然必须做，但对外 ID 仍应尽量避免过于可预测。
+4. 极高并发下可能出现热点 递增主键会让新数据集中写入 B&#43; 树最右侧叶子页。优点是顺序写入，缺点是极高并发时可能出现右端热点、页级并发争用或自增分配相关等待。
+这不是说自增主键普遍性能差。大多数业务系统里，它反而比随机 UUID 更友好。只有在高并发写入、批量插入、特殊复制模式或热点表设计下，才需要重点评估。
+三、事务回滚后自增值为什么不回退 一个常见现象是：
+create table t ( id bigint primary key auto_increment, name varchar(32) ) engine = InnoDB; begin; insert into t(name) values (&#39;a&#39;); -- 分配到 id = 100 rollback; insert into t(name) values (&#39;b&#39;); -- 可能得到 id = 101 表里最后可能只有 101，没有 100。这不是异常，而是自增机制的正常结果。">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">自增主键的使用</h1>
+
+    
+      <div class="post-date">February 15, 2026</div>
+    
+
+    <div class="post-content">
+      <p>我实习时做过一个建表功能，第一反应是用自增主键。后来被提醒：生产环境里不一定都适合用自增主键，尤其涉及数据迁移、分库分表和跨系统合并时，自增 ID 会带来额外约束。</p>
+<p>自增主键不是坏设计。它在单库单表里简单、紧凑、写入顺序友好。但它也不是万能答案。更准确的判断应该是：<strong>自增主键适合表内标识，不一定适合全局标识和对外暴露。</strong></p>
+<h2 id="一自增主键的优点">一、自增主键的优点</h2>
+<p>自增主键常见优点有：</p>
+<ol>
+<li>简单：数据库自动生成，业务不用关心 ID 生成。</li>
+<li>紧凑：<code>bigint</code> 比 UUID 字符串更省空间。</li>
+<li>顺序写入：对 InnoDB 聚簇索引友好，页分裂通常更少。</li>
+<li>Join 成本低：短数字主键适合关联表保存和比较。</li>
+<li>表内唯一：单表内天然适合作为技术主键。</li>
+</ol>
+<p>所以在单库单表、内部系统、数据不出域、并发压力可控的场景，自增主键仍然很好用。</p>
+<h2 id="二自增主键的问题">二、自增主键的问题</h2>
+<p>生产里不喜欢自增主键，通常不是因为它“慢”，而是因为它会限制架构演进。</p>
+<h3 id="1-多库多实例容易冲突">1. 多库多实例容易冲突</h3>
+<p>一旦出现分库分表、多主写入、离线导入、灾备回放，每个库都从 1 开始生成 ID，就可能撞号。</p>
+<p>可以通过设置不同步长解决一部分问题：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ini" data-lang="ini"><span class="line"><span class="cl"><span class="na">auto_increment_increment</span> <span class="o">=</span> <span class="s">2</span>
+</span></span><span class="line"><span class="cl"><span class="na">auto_increment_offset</span> <span class="o">=</span> <span class="s">1</span>
+</span></span></code></pre></div><p>但这只是特定部署下的规避方案，并没有让自增 ID 变成真正的全局 ID。</p>
+<h3 id="2-数据迁移和合库成本高">2. 数据迁移和合库成本高</h3>
+<p>如果两个系统都有 <code>id = 10001</code> 的订单，合并时就必须改 ID，并同步修改所有引用它的外键、日志、缓存、明细表和历史数据。</p>
+<p>主键一旦参与大量关联，迁移时改它就很痛。是的，痛不是什么技术术语，但工程里它通常相当准确。</p>
+<h3 id="3-对外暴露可预测">3. 对外暴露可预测</h3>
+<p>自增 ID 连续递增，如果直接出现在接口里：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">/order/detail?id=10001
+</span></span></code></pre></div><p>用户可能枚举 ID，探测其他数据，甚至推断业务量增长。权限校验当然必须做，但对外 ID 仍应尽量避免过于可预测。</p>
+<h3 id="4-极高并发下可能出现热点">4. 极高并发下可能出现热点</h3>
+<p>递增主键会让新数据集中写入 B+ 树最右侧叶子页。优点是顺序写入，缺点是极高并发时可能出现右端热点、页级并发争用或自增分配相关等待。</p>
+<p>这不是说自增主键普遍性能差。大多数业务系统里，它反而比随机 UUID 更友好。只有在高并发写入、批量插入、特殊复制模式或热点表设计下，才需要重点评估。</p>
+<h2 id="三事务回滚后自增值为什么不回退">三、事务回滚后自增值为什么不回退</h2>
+<p>一个常见现象是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="k">create</span><span class="w"> </span><span class="k">table</span><span class="w"> </span><span class="n">t</span><span class="w"> </span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="n">id</span><span class="w"> </span><span class="nb">bigint</span><span class="w"> </span><span class="k">primary</span><span class="w"> </span><span class="k">key</span><span class="w"> </span><span class="n">auto_increment</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="n">name</span><span class="w"> </span><span class="nb">varchar</span><span class="p">(</span><span class="mi">32</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">)</span><span class="w"> </span><span class="n">engine</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">InnoDB</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">begin</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">insert</span><span class="w"> </span><span class="k">into</span><span class="w"> </span><span class="n">t</span><span class="p">(</span><span class="n">name</span><span class="p">)</span><span class="w"> </span><span class="k">values</span><span class="w"> </span><span class="p">(</span><span class="s1">&#39;a&#39;</span><span class="p">);</span><span class="w"> </span><span class="c1">-- 分配到 id = 100
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">rollback</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">insert</span><span class="w"> </span><span class="k">into</span><span class="w"> </span><span class="n">t</span><span class="p">(</span><span class="n">name</span><span class="p">)</span><span class="w"> </span><span class="k">values</span><span class="w"> </span><span class="p">(</span><span class="s1">&#39;b&#39;</span><span class="p">);</span><span class="w"> </span><span class="c1">-- 可能得到 id = 101
+</span></span></span></code></pre></div><p>表里最后可能只有 <code>101</code>，没有 <code>100</code>。这不是异常，而是自增机制的正常结果。</p>
+<p>原因是：<strong>自增值的首要目标是唯一、快速、低冲突地发号，不是保证编号连续。</strong></p>
+<p>如果自增值要跟着事务回滚，数据库就要追踪：</p>
+<ol>
+<li>哪些号被哪个事务取走。</li>
+<li>哪些事务提交了。</li>
+<li>哪些事务回滚后可以归还。</li>
+<li>已经被其他事务看见或等待的号码如何处理。</li>
+<li>崩溃恢复后哪些号码还能复用。</li>
+</ol>
+<p>这会让发号机制变慢、变复杂，还可能引入更强的锁竞争。数据库通常选择更务实的策略：<strong>号一旦分配，就视为消耗，不保证复用。</strong></p>
+<p>因此，自增主键只能保证唯一和大体递增，不能用来保证“业务流水号连续”。如果业务必须要连续编号，例如发票号、财务凭证号，应单独设计严格的业务编号机制，并接受它带来的串行化和审计成本。</p>
+<h2 id="四auto_increment-和-sequence-的区别">四、AUTO_INCREMENT 和 sequence 的区别</h2>
+<p>MySQL <code>AUTO_INCREMENT</code> 是表字段属性：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="n">id</span><span class="w"> </span><span class="nb">bigint</span><span class="w"> </span><span class="k">primary</span><span class="w"> </span><span class="k">key</span><span class="w"> </span><span class="n">auto_increment</span><span class="w">
+</span></span></span></code></pre></div><p>它通常在 <code>insert</code> 时由数据库自动分配，和表绑定。</p>
+<p>PostgreSQL、Oracle、Kingbase 等数据库常见的 sequence 是独立发号对象：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="k">select</span><span class="w"> </span><span class="n">nextval</span><span class="p">(</span><span class="s1">&#39;order_seq&#39;</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><p>sequence 可以插入前取号，也可以被多张表共用。二者实现方式不同，但在一个核心点上很像：<strong>已经发出去的号通常不会因为事务回滚而回退。</strong></p>
+<h2 id="五业务主键和技术主键">五、业务主键和技术主键</h2>
+<p>不要把“主键”和“业务唯一字段”混成一件事。</p>
+<p>常见更稳妥的设计是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="k">create</span><span class="w"> </span><span class="k">table</span><span class="w"> </span><span class="n">asset</span><span class="w"> </span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="n">id</span><span class="w"> </span><span class="nb">bigint</span><span class="w"> </span><span class="k">primary</span><span class="w"> </span><span class="k">key</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="n">asset_no</span><span class="w"> </span><span class="nb">varchar</span><span class="p">(</span><span class="mi">64</span><span class="p">)</span><span class="w"> </span><span class="k">not</span><span class="w"> </span><span class="k">null</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="n">name</span><span class="w"> </span><span class="nb">varchar</span><span class="p">(</span><span class="mi">128</span><span class="p">)</span><span class="w"> </span><span class="k">not</span><span class="w"> </span><span class="k">null</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="n">deleted</span><span class="w"> </span><span class="n">tinyint</span><span class="w"> </span><span class="k">not</span><span class="w"> </span><span class="k">null</span><span class="w"> </span><span class="k">default</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="k">unique</span><span class="w"> </span><span class="k">key</span><span class="w"> </span><span class="n">uk_asset_no_deleted</span><span class="w"> </span><span class="p">(</span><span class="n">asset_no</span><span class="p">,</span><span class="w"> </span><span class="n">deleted</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">)</span><span class="w"> </span><span class="n">engine</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">InnoDB</span><span class="p">;</span><span class="w">
+</span></span></span></code></pre></div><p>其中：</p>
+<ol>
+<li><code>id</code> 是技术主键，负责表内关联、索引和稳定引用。</li>
+<li><code>asset_no</code> 是业务编号，负责业务唯一性。</li>
+<li>唯一索引保证业务规则，而不是靠代码先查再插。</li>
+</ol>
+<p>业务字段直接做主键只有在它短、稳定、全局唯一、不敏感、几乎不会变更时才适合。现实项目里，这些条件经常并不同时成立。</p>
+<h2 id="六逻辑删除下的唯一约束">六、逻辑删除下的唯一约束</h2>
+<p>逻辑删除常见字段：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="n">deleted</span><span class="w"> </span><span class="n">tinyint</span><span class="w"> </span><span class="k">not</span><span class="w"> </span><span class="k">null</span><span class="w"> </span><span class="k">default</span><span class="w"> </span><span class="mi">0</span><span class="w">
+</span></span></span></code></pre></div><p>查询时默认加：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="k">where</span><span class="w"> </span><span class="n">deleted</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="w">
+</span></span></span></code></pre></div><p>问题在于：逻辑删除并没有真的删掉数据库行。如果业务字段有唯一约束，删除后再新增同一个业务编号，可能仍然报唯一冲突。</p>
+<p>常见处理方式有：</p>
+<ol>
+<li>唯一索引中加入删除标记或删除版本。</li>
+<li>删除时把业务唯一字段改写为带删除版本的值。</li>
+<li>使用支持条件唯一索引的数据库特性，只约束未删除数据。</li>
+<li>让 <code>id</code> 作为技术主键，业务字段单独建符合业务语义的唯一约束。</li>
+</ol>
+<p>MySQL 没有 PostgreSQL 那样直接的 partial unique index。用 <code>(business_key, deleted)</code> 时要注意：如果 <code>deleted</code> 只有 <code>0/1</code>，同一个业务键最多只能保留一条已删除记录。想保留多条历史，通常要把删除时间、删除批次或版本号纳入唯一约束设计。</p>
+<h2 id="七应用层-id-方案">七、应用层 ID 方案</h2>
+<p>分布式系统常见替代方案包括：</p>
+<table>
+  <thead>
+      <tr>
+          <th>方案</th>
+          <th>优点</th>
+          <th>风险</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>雪花 ID</td>
+          <td>趋势递增、可离线生成、空间较小</td>
+          <td>依赖时钟，时钟回拨要处理</td>
+      </tr>
+      <tr>
+          <td>UUID</td>
+          <td>全局唯一、生成简单</td>
+          <td>随机 UUID 对索引局部性不友好，字符串占空间</td>
+      </tr>
+      <tr>
+          <td>UUID v7 / ULID</td>
+          <td>时间有序，兼顾分散性</td>
+          <td>实现和存储格式要统一</td>
+      </tr>
+      <tr>
+          <td>号段模式</td>
+          <td>数据库发号次数少，吞吐高</td>
+          <td>需要号段服务和容灾设计</td>
+      </tr>
+  </tbody>
+</table>
+<p>MyBatis-Plus 的 <code>IdType.ASSIGN_ID</code> 属于应用层生成 ID，通常会在插入前回填到实体对象。数据库自增 ID 则是在执行 <code>insert</code> 后由数据库生成，再通过 JDBC <code>getGeneratedKeys</code> 或 MyBatis 的主键回填机制写回实体。</p>
+<p>这个差异很重要：插入前就需要 ID，用应用层生成更自然；只需要落库后拿到表内 ID，自增主键也可以。</p>
+<h2 id="八怎么选择">八、怎么选择</h2>
+<p>可以按这个规则判断：</p>
+<ol>
+<li>单库单表、内部系统、数据不迁移：自增主键很合适。</li>
+<li>对外接口暴露：使用不可枚举的业务 ID 或 public id。</li>
+<li>分库分表、多系统合并：优先考虑全局唯一 ID。</li>
+<li>业务编号必须连续：不要依赖自增主键，单独设计业务流水号。</li>
+<li>逻辑删除较多：技术主键和业务唯一约束分开设计。</li>
+</ol>
+<p>最后的结论很简单：<strong>自增主键适合作为表内技术主键，但不要把它当成分布式全局 ID、业务流水号或安全边界。</strong></p>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

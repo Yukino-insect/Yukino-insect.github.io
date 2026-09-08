@@ -1,0 +1,1799 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>组件通信与 props emits：父组件怎样把数据交给子组件 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="前面讲单文件组件时，已经知道一个 .vue 文件可以包含 &lt;script setup&gt;、&lt;template&gt; 和 &lt;style scoped&gt;。但只知道这些还不够，因为真实页面不会永远只有一个组件。
+一旦把页面拆成组件，就会遇到两个问题：
+父组件的数据，怎么传给子组件？ 子组件里的按钮被点击后，怎么通知父组件修改数据？ 这篇可以作为《组件通信、插槽与组合函数：把复杂页面拆得有秩序》 中 props 和 emits 部分的细化补充。那篇更关心组件通信方式如何选择，这篇则专门把父子组件通信的基础语法讲透。
+在 Vue 中，最基础、最重要的答案就是：
+父组件通过 props 向子组件传数据 子组件通过 emits 向父组件发事件 也就是常说的：
+props down, events up 数据从父组件往下传，事件从子组件往上传。这个方向最好一开始就记清楚，否则后面组件一多，状态会乱得很有层次感，当然，是不值得欣赏的那种层次感。
+一、先看父组件使用子组件 在父组件 App.vue 中，可以这样使用文章卡片组件：
+&lt;script setup lang=&#34;ts&#34;&gt; import { ref } from &#39;vue&#39; import PostCard from &#39;./components/PostCard.vue&#39; const post = ref({ title: &#39;单文件组件不是把代码随便塞进一个文件&#39;, summary: &#39;&#39;, author: &#39;Yuki&#39;, likes: 7, liked: false }) function handleLike() { post.value.liked = !post.value.liked post.value.likes &#43;= post.value.liked ? 1 : -1 } &lt;/script&gt; &lt;template&gt; &lt;PostCard :title=&#34;post.title&#34; :summary=&#34;post.summary&#34; :author=&#34;post.author&#34; :likes=&#34;post.likes&#34; :liked=&#34;post.liked&#34; @like=&#34;handleLike&#34; /&gt; &lt;/template&gt; 这段代码的核心是：
+&lt;PostCard :title=&#34;post.title&#34; :summary=&#34;post.summary&#34; :author=&#34;post.author&#34; :likes=&#34;post.likes&#34; :liked=&#34;post.liked&#34; @like=&#34;handleLike&#34; /&gt; 它不是普通 HTML 标签，而是一个组件标签。PostCard 来自这行导入：
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/vue/02-state-data/04-%E7%BB%84%E4%BB%B6%E9%80%9A%E4%BF%A1%E4%B8%8E-props-emits/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/vue/02-state-data/04-%E7%BB%84%E4%BB%B6%E9%80%9A%E4%BF%A1%E4%B8%8E-props-emits/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="组件通信与 props emits：父组件怎样把数据交给子组件">
+  <meta property="og:description" content="前面讲单文件组件时，已经知道一个 .vue 文件可以包含 &lt;script setup&gt;、&lt;template&gt; 和 &lt;style scoped&gt;。但只知道这些还不够，因为真实页面不会永远只有一个组件。
+一旦把页面拆成组件，就会遇到两个问题：
+父组件的数据，怎么传给子组件？ 子组件里的按钮被点击后，怎么通知父组件修改数据？ 这篇可以作为《组件通信、插槽与组合函数：把复杂页面拆得有秩序》 中 props 和 emits 部分的细化补充。那篇更关心组件通信方式如何选择，这篇则专门把父子组件通信的基础语法讲透。
+在 Vue 中，最基础、最重要的答案就是：
+父组件通过 props 向子组件传数据 子组件通过 emits 向父组件发事件 也就是常说的：
+props down, events up 数据从父组件往下传，事件从子组件往上传。这个方向最好一开始就记清楚，否则后面组件一多，状态会乱得很有层次感，当然，是不值得欣赏的那种层次感。
+一、先看父组件使用子组件 在父组件 App.vue 中，可以这样使用文章卡片组件：
+&lt;script setup lang=&#34;ts&#34;&gt; import { ref } from &#39;vue&#39; import PostCard from &#39;./components/PostCard.vue&#39; const post = ref({ title: &#39;单文件组件不是把代码随便塞进一个文件&#39;, summary: &#39;&#39;, author: &#39;Yuki&#39;, likes: 7, liked: false }) function handleLike() { post.value.liked = !post.value.liked post.value.likes &#43;= post.value.liked ? 1 : -1 } &lt;/script&gt; &lt;template&gt; &lt;PostCard :title=&#34;post.title&#34; :summary=&#34;post.summary&#34; :author=&#34;post.author&#34; :likes=&#34;post.likes&#34; :liked=&#34;post.liked&#34; @like=&#34;handleLike&#34; /&gt; &lt;/template&gt; 这段代码的核心是：
+&lt;PostCard :title=&#34;post.title&#34; :summary=&#34;post.summary&#34; :author=&#34;post.author&#34; :likes=&#34;post.likes&#34; :liked=&#34;post.liked&#34; @like=&#34;handleLike&#34; /&gt; 它不是普通 HTML 标签，而是一个组件标签。PostCard 来自这行导入：">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="vue">
+    <meta property="article:published_time" content="2026-08-21T21:30:00+08:00">
+    <meta property="article:modified_time" content="2026-08-21T21:30:00+08:00">
+
+  
+  <meta itemprop="name" content="组件通信与 props emits：父组件怎样把数据交给子组件">
+  <meta itemprop="description" content="前面讲单文件组件时，已经知道一个 .vue 文件可以包含 &lt;script setup&gt;、&lt;template&gt; 和 &lt;style scoped&gt;。但只知道这些还不够，因为真实页面不会永远只有一个组件。
+一旦把页面拆成组件，就会遇到两个问题：
+父组件的数据，怎么传给子组件？ 子组件里的按钮被点击后，怎么通知父组件修改数据？ 这篇可以作为《组件通信、插槽与组合函数：把复杂页面拆得有秩序》 中 props 和 emits 部分的细化补充。那篇更关心组件通信方式如何选择，这篇则专门把父子组件通信的基础语法讲透。
+在 Vue 中，最基础、最重要的答案就是：
+父组件通过 props 向子组件传数据 子组件通过 emits 向父组件发事件 也就是常说的：
+props down, events up 数据从父组件往下传，事件从子组件往上传。这个方向最好一开始就记清楚，否则后面组件一多，状态会乱得很有层次感，当然，是不值得欣赏的那种层次感。
+一、先看父组件使用子组件 在父组件 App.vue 中，可以这样使用文章卡片组件：
+&lt;script setup lang=&#34;ts&#34;&gt; import { ref } from &#39;vue&#39; import PostCard from &#39;./components/PostCard.vue&#39; const post = ref({ title: &#39;单文件组件不是把代码随便塞进一个文件&#39;, summary: &#39;&#39;, author: &#39;Yuki&#39;, likes: 7, liked: false }) function handleLike() { post.value.liked = !post.value.liked post.value.likes &#43;= post.value.liked ? 1 : -1 } &lt;/script&gt; &lt;template&gt; &lt;PostCard :title=&#34;post.title&#34; :summary=&#34;post.summary&#34; :author=&#34;post.author&#34; :likes=&#34;post.likes&#34; :liked=&#34;post.liked&#34; @like=&#34;handleLike&#34; /&gt; &lt;/template&gt; 这段代码的核心是：
+&lt;PostCard :title=&#34;post.title&#34; :summary=&#34;post.summary&#34; :author=&#34;post.author&#34; :likes=&#34;post.likes&#34; :liked=&#34;post.liked&#34; @like=&#34;handleLike&#34; /&gt; 它不是普通 HTML 标签，而是一个组件标签。PostCard 来自这行导入：">
+  <meta itemprop="datePublished" content="2026-08-21T21:30:00+08:00">
+  <meta itemprop="dateModified" content="2026-08-21T21:30:00+08:00">
+  <meta itemprop="wordCount" content="1270">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="组件通信与 props emits：父组件怎样把数据交给子组件">
+  <meta name="twitter:description" content="前面讲单文件组件时，已经知道一个 .vue 文件可以包含 &lt;script setup&gt;、&lt;template&gt; 和 &lt;style scoped&gt;。但只知道这些还不够，因为真实页面不会永远只有一个组件。
+一旦把页面拆成组件，就会遇到两个问题：
+父组件的数据，怎么传给子组件？ 子组件里的按钮被点击后，怎么通知父组件修改数据？ 这篇可以作为《组件通信、插槽与组合函数：把复杂页面拆得有秩序》 中 props 和 emits 部分的细化补充。那篇更关心组件通信方式如何选择，这篇则专门把父子组件通信的基础语法讲透。
+在 Vue 中，最基础、最重要的答案就是：
+父组件通过 props 向子组件传数据 子组件通过 emits 向父组件发事件 也就是常说的：
+props down, events up 数据从父组件往下传，事件从子组件往上传。这个方向最好一开始就记清楚，否则后面组件一多，状态会乱得很有层次感，当然，是不值得欣赏的那种层次感。
+一、先看父组件使用子组件 在父组件 App.vue 中，可以这样使用文章卡片组件：
+&lt;script setup lang=&#34;ts&#34;&gt; import { ref } from &#39;vue&#39; import PostCard from &#39;./components/PostCard.vue&#39; const post = ref({ title: &#39;单文件组件不是把代码随便塞进一个文件&#39;, summary: &#39;&#39;, author: &#39;Yuki&#39;, likes: 7, liked: false }) function handleLike() { post.value.liked = !post.value.liked post.value.likes &#43;= post.value.liked ? 1 : -1 } &lt;/script&gt; &lt;template&gt; &lt;PostCard :title=&#34;post.title&#34; :summary=&#34;post.summary&#34; :author=&#34;post.author&#34; :likes=&#34;post.likes&#34; :liked=&#34;post.liked&#34; @like=&#34;handleLike&#34; /&gt; &lt;/template&gt; 这段代码的核心是：
+&lt;PostCard :title=&#34;post.title&#34; :summary=&#34;post.summary&#34; :author=&#34;post.author&#34; :likes=&#34;post.likes&#34; :liked=&#34;post.liked&#34; @like=&#34;handleLike&#34; /&gt; 它不是普通 HTML 标签，而是一个组件标签。PostCard 来自这行导入：">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">组件通信与 props emits：父组件怎样把数据交给子组件</h1>
+
+    
+      <div class="post-date">August 21, 2026</div>
+    
+
+    <div class="post-content">
+      <p>前面讲单文件组件时，已经知道一个 <code>.vue</code> 文件可以包含 <code>&lt;script setup&gt;</code>、<code>&lt;template&gt;</code> 和 <code>&lt;style scoped&gt;</code>。但只知道这些还不够，因为真实页面不会永远只有一个组件。</p>
+<p>一旦把页面拆成组件，就会遇到两个问题：</p>
+<ul>
+<li>父组件的数据，怎么传给子组件？</li>
+<li>子组件里的按钮被点击后，怎么通知父组件修改数据？</li>
+</ul>
+<p>这篇可以作为<a href="/vue/02-state-data/01-%E7%BB%84%E4%BB%B6%E9%80%9A%E4%BF%A1%E6%8F%92%E6%A7%BD%E4%B8%8E%E7%BB%84%E5%90%88%E5%87%BD%E6%95%B0/">《组件通信、插槽与组合函数：把复杂页面拆得有秩序》</a>
+中 <code>props</code> 和 <code>emits</code> 部分的细化补充。那篇更关心组件通信方式如何选择，这篇则专门把父子组件通信的基础语法讲透。</p>
+<p>在 Vue 中，最基础、最重要的答案就是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">父组件通过 props 向子组件传数据
+</span></span><span class="line"><span class="cl">子组件通过 emits 向父组件发事件
+</span></span></code></pre></div><p>也就是常说的：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">props down, events up
+</span></span></code></pre></div><p>数据从父组件往下传，事件从子组件往上传。这个方向最好一开始就记清楚，否则后面组件一多，状态会乱得很有层次感，当然，是不值得欣赏的那种层次感。</p>
+<h2 id="一先看父组件使用子组件">一、先看父组件使用子组件</h2>
+<p>在父组件 <code>App.vue</code> 中，可以这样使用文章卡片组件：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">script</span> <span class="na">setup</span> <span class="na">lang</span><span class="o">=</span><span class="s">&#34;ts&#34;</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">ref</span> <span class="p">}</span> <span class="nx">from</span> <span class="s1">&#39;vue&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">import</span> <span class="nx">PostCard</span> <span class="nx">from</span> <span class="s1">&#39;./components/PostCard.vue&#39;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">post</span> <span class="o">=</span> <span class="nx">ref</span><span class="p">({</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">title</span><span class="o">:</span> <span class="s1">&#39;单文件组件不是把代码随便塞进一个文件&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">summary</span><span class="o">:</span> <span class="s1">&#39;&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">author</span><span class="o">:</span> <span class="s1">&#39;Yuki&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">likes</span><span class="o">:</span> <span class="mi">7</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">liked</span><span class="o">:</span> <span class="kc">false</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">function</span> <span class="nx">handleLike</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">post</span><span class="p">.</span><span class="nx">value</span><span class="p">.</span><span class="nx">liked</span> <span class="o">=</span> <span class="o">!</span><span class="nx">post</span><span class="p">.</span><span class="nx">value</span><span class="p">.</span><span class="nx">liked</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">post</span><span class="p">.</span><span class="nx">value</span><span class="p">.</span><span class="nx">likes</span> <span class="o">+=</span> <span class="nx">post</span><span class="p">.</span><span class="nx">value</span><span class="p">.</span><span class="nx">liked</span> <span class="o">?</span> <span class="mi">1</span> <span class="o">:</span> <span class="o">-</span><span class="mi">1</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">&lt;/</span><span class="nt">script</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">template</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">&lt;</span><span class="nt">PostCard</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">:title</span><span class="o">=</span><span class="s">&#34;post.title&#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">:summary</span><span class="o">=</span><span class="s">&#34;post.summary&#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">:author</span><span class="o">=</span><span class="s">&#34;post.author&#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">:likes</span><span class="o">=</span><span class="s">&#34;post.likes&#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">:liked</span><span class="o">=</span><span class="s">&#34;post.liked&#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">@like</span><span class="s">=&#34;handleLike&#34;</span><span class="p">
+</span></span></span><span class="line"><span class="cl"><span class="p"></span>  <span class="p">/&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="p">&lt;/</span><span class="nt">template</span><span class="p">&gt;</span>
+</span></span></code></pre></div><p>这段代码的核心是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">PostCard</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">:title</span><span class="o">=</span><span class="s">&#34;post.title&#34;</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">:summary</span><span class="o">=</span><span class="s">&#34;post.summary&#34;</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">:author</span><span class="o">=</span><span class="s">&#34;post.author&#34;</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">:likes</span><span class="o">=</span><span class="s">&#34;post.likes&#34;</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">:liked</span><span class="o">=</span><span class="s">&#34;post.liked&#34;</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">@like</span><span class="s">=&#34;handleLike&#34;</span><span class="p">
+</span></span></span><span class="line"><span class="cl"><span class="p">/&gt;</span>
+</span></span></code></pre></div><p>它不是普通 HTML 标签，而是一个组件标签。<code>PostCard</code> 来自这行导入：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">import</span> <span class="nx">PostCard</span> <span class="kr">from</span> <span class="s1">&#39;./components/PostCard.vue&#39;</span>
+</span></span></code></pre></div><p>在 <code>&lt;script setup&gt;</code> 中，导入的组件可以直接在模板里使用，不需要再写 <code>components: { PostCard }</code>。这是 Vue 3 <code>&lt;script setup&gt;</code> 帮你省掉的样板代码。</p>
+<h2 id="二这些冒号绑定是什么意思">二、这些冒号绑定是什么意思</h2>
+<p>来看这一组：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="o">:</span><span class="nx">title</span><span class="o">=</span><span class="s2">&#34;post.title&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="o">:</span><span class="nx">summary</span><span class="o">=</span><span class="s2">&#34;post.summary&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="o">:</span><span class="nx">author</span><span class="o">=</span><span class="s2">&#34;post.author&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="o">:</span><span class="nx">likes</span><span class="o">=</span><span class="s2">&#34;post.likes&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="o">:</span><span class="nx">liked</span><span class="o">=</span><span class="s2">&#34;post.liked&#34;</span>
+</span></span></code></pre></div><p>冒号 <code>:</code> 是 <code>v-bind</code> 的简写，表示右边是 JavaScript 表达式，不是普通字符串。</p>
+<p>也就是说：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="o">:</span><span class="nx">title</span><span class="o">=</span><span class="s2">&#34;post.title&#34;</span>
+</span></span></code></pre></div><p>含义是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">把父组件中 post.title 的值，作为 title 这个 prop 传给 PostCard
+</span></span></code></pre></div><p>其他几个也是一样：</p>
+<table>
+  <thead>
+      <tr>
+          <th>父组件写法</th>
+          <th>传给子组件的 prop</th>
+          <th>值来自哪里</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>:title=&quot;post.title&quot;</code></td>
+          <td><code>title</code></td>
+          <td><code>post.title</code></td>
+      </tr>
+      <tr>
+          <td><code>:summary=&quot;post.summary&quot;</code></td>
+          <td><code>summary</code></td>
+          <td><code>post.summary</code></td>
+      </tr>
+      <tr>
+          <td><code>:author=&quot;post.author&quot;</code></td>
+          <td><code>author</code></td>
+          <td><code>post.author</code></td>
+      </tr>
+      <tr>
+          <td><code>:likes=&quot;post.likes&quot;</code></td>
+          <td><code>likes</code></td>
+          <td><code>post.likes</code></td>
+      </tr>
+      <tr>
+          <td><code>:liked=&quot;post.liked&quot;</code></td>
+          <td><code>liked</code></td>
+          <td><code>post.liked</code></td>
+      </tr>
+  </tbody>
+</table>
+<p>所以这段代码可以理解成：父组件把一篇文章的数据拆成几个属性，交给 <code>PostCard</code> 展示。</p>
+<p>如果不写冒号：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">PostCard</span> <span class="na">likes</span><span class="o">=</span><span class="s">&#34;7&#34;</span> <span class="p">/&gt;</span>
+</span></span></code></pre></div><p>这里传过去的是字符串 <code>&quot;7&quot;</code>，不是数字 <code>7</code>。</p>
+<p>如果写冒号：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">PostCard</span> <span class="nt">:likes</span><span class="o">=</span><span class="s">&#34;7&#34;</span> <span class="p">/&gt;</span>
+</span></span></code></pre></div><p>这里传过去的才是数字 <code>7</code>。</p>
+<p>同理，布尔值也应该用动态绑定：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">PostCard</span> <span class="nt">:liked</span><span class="o">=</span><span class="s">&#34;false&#34;</span> <span class="p">/&gt;</span>
+</span></span></code></pre></div><p>不要写成：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">PostCard</span> <span class="na">liked</span><span class="o">=</span><span class="s">&#34;false&#34;</span> <span class="p">/&gt;</span>
+</span></span></code></pre></div><p>后者传过去的是字符串 <code>&quot;false&quot;</code>。字符串只要不是空字符串，在很多判断里都会被当成真值。这个问题不难，但足够让人浪费一个下午，实在朴素得令人不快。</p>
+<h2 id="三like-是什么意思">三、@like 是什么意思</h2>
+<p>这一行：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="err">@</span><span class="nx">like</span><span class="o">=</span><span class="s2">&#34;handleLike&#34;</span>
+</span></span></code></pre></div><p>表示父组件监听子组件发出的 <code>like</code> 事件。</p>
+<p>它的含义是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">当 PostCard 触发 like 事件时，父组件执行 handleLike
+</span></span></code></pre></div><p>注意，这里的 <code>like</code> 不是浏览器原生事件。浏览器原生事件有 <code>click</code>、<code>input</code>、<code>submit</code> 这些。<code>like</code> 是我们给组件自定义的事件名。</p>
+<p>父组件这样写：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="err">@</span><span class="nx">like</span><span class="o">=</span><span class="s2">&#34;handleLike&#34;</span>
+</span></span></code></pre></div><p>子组件内部就需要这样触发：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="err">@</span><span class="nx">click</span><span class="o">=</span><span class="s2">&#34;emit(&#39;like&#39;)&#34;</span>
+</span></span></code></pre></div><p>完整关系是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">用户点击子组件按钮
+</span></span><span class="line"><span class="cl"> -&gt; 子组件 emit(&#39;like&#39;)
+</span></span><span class="line"><span class="cl"> -&gt; 父组件监听到 @like
+</span></span><span class="line"><span class="cl"> -&gt; 父组件执行 handleLike
+</span></span><span class="line"><span class="cl"> -&gt; 父组件修改 post
+</span></span><span class="line"><span class="cl"> -&gt; 新的 props 再传给子组件
+</span></span><span class="line"><span class="cl"> -&gt; 子组件重新渲染
+</span></span></code></pre></div><p>这就是父子组件通信的基本闭环。</p>
+<h2 id="四子组件声明-props">四、子组件声明 props</h2>
+<p>在 <code>PostCard.vue</code> 中，子组件需要声明自己要接收哪些数据：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">script</span> <span class="na">setup</span> <span class="na">lang</span><span class="o">=</span><span class="s">&#34;ts&#34;</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="nx">type</span> <span class="nx">Props</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">title</span><span class="o">:</span> <span class="nx">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">summary</span><span class="o">?:</span> <span class="nx">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">author</span><span class="o">:</span> <span class="nx">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">likes</span><span class="o">:</span> <span class="nx">number</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">liked</span><span class="o">:</span> <span class="kr">boolean</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">withDefaults</span><span class="p">(</span><span class="nx">defineProps</span><span class="p">&lt;</span><span class="nt">Props</span><span class="p">&gt;(),</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">summary</span><span class="o">:</span> <span class="s1">&#39;&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span><span class="line"><span class="cl"><span class="p">&lt;/</span><span class="nt">script</span><span class="p">&gt;</span>
+</span></span></code></pre></div><p>这里先定义了一个 TypeScript 类型：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">Props</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">title</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">summary?</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">author</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">likes</span>: <span class="kt">number</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">liked</span>: <span class="kt">boolean</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>它表示这个组件允许接收这些 props：</p>
+<table>
+  <thead>
+      <tr>
+          <th>prop</th>
+          <th>类型</th>
+          <th>是否必传</th>
+          <th>含义</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>title</code></td>
+          <td><code>string</code></td>
+          <td>是</td>
+          <td>文章标题</td>
+      </tr>
+      <tr>
+          <td><code>summary</code></td>
+          <td><code>string</code></td>
+          <td>否</td>
+          <td>文章摘要</td>
+      </tr>
+      <tr>
+          <td><code>author</code></td>
+          <td><code>string</code></td>
+          <td>是</td>
+          <td>作者</td>
+      </tr>
+      <tr>
+          <td><code>likes</code></td>
+          <td><code>number</code></td>
+          <td>是</td>
+          <td>点赞数</td>
+      </tr>
+      <tr>
+          <td><code>liked</code></td>
+          <td><code>boolean</code></td>
+          <td>是</td>
+          <td>当前用户是否已点赞</td>
+      </tr>
+  </tbody>
+</table>
+<p>其中：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="nx">summary?</span>: <span class="kt">string</span>
+</span></span></code></pre></div><p>问号 <code>?</code> 表示这个 prop 可选。也就是说，父组件可以传 <code>summary</code>，也可以不传。</p>
+<h2 id="五defineprops-是什么">五、defineProps 是什么</h2>
+<p>这一段：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="nx">defineProps</span><span class="p">&lt;</span><span class="nt">Props</span><span class="p">&gt;()</span>
+</span></span></code></pre></div><p>表示声明当前组件接收的 props，并且使用 <code>Props</code> 这个 TypeScript 类型进行约束。</p>
+<p>也就是说：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="nx">defineProps</span><span class="p">&lt;</span><span class="nt">Props</span><span class="p">&gt;()</span>
+</span></span></code></pre></div><p>告诉 Vue 和 TypeScript：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">这个组件接收 title、summary、author、likes、liked 这些 props
+</span></span><span class="line"><span class="cl">它们的类型必须符合 Props 的定义
+</span></span></code></pre></div><p>如果父组件传错类型，比如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">PostCard</span> <span class="nt">:likes</span><span class="o">=</span><span class="s">&#34;&#39;7&#39;&#34;</span> <span class="p">/&gt;</span>
+</span></span></code></pre></div><p>TypeScript 就有机会提示你：<code>likes</code> 应该是 <code>number</code>，不是 <code>string</code>。</p>
+<p>这里要注意：<code>defineProps</code> 是 Vue 在 <code>&lt;script setup&gt;</code> 中提供的<strong>编译宏</strong>。它看起来像普通函数，但不需要从 <code>vue</code> 中导入。</p>
+<p>不需要这样写：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">defineProps</span> <span class="p">}</span> <span class="kr">from</span> <span class="s1">&#39;vue&#39;</span>
+</span></span></code></pre></div><p>在 <code>&lt;script setup&gt;</code> 中直接用就可以。</p>
+<h2 id="六withdefaults-是什么">六、withDefaults 是什么</h2>
+<p>这一段是很多初学者会卡住的地方：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="nx">withDefaults</span><span class="p">(</span><span class="nx">defineProps</span><span class="p">&lt;</span><span class="nt">Props</span><span class="p">&gt;(),</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">summary</span><span class="o">:</span> <span class="s1">&#39;&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span></code></pre></div><p>可以拆成两层看。</p>
+<p>第一层：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="nx">defineProps</span><span class="p">&lt;</span><span class="nt">Props</span><span class="p">&gt;()</span>
+</span></span></code></pre></div><p>声明组件接收哪些 props。</p>
+<p>第二层：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="nx">withDefaults</span><span class="p">(...,</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">summary</span><span class="o">:</span> <span class="s1">&#39;&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span></code></pre></div><p>给可选 prop 设置默认值。</p>
+<p>合起来就是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">PostCard 接收 Props 中声明的那些 props
+</span></span><span class="line"><span class="cl">如果父组件没有传 summary，就让 summary 默认等于空字符串
+</span></span></code></pre></div><p>所以父组件这样写也可以：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">PostCard</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">:title</span><span class="o">=</span><span class="s">&#34;post.title&#34;</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">:author</span><span class="o">=</span><span class="s">&#34;post.author&#34;</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">:likes</span><span class="o">=</span><span class="s">&#34;post.likes&#34;</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">:liked</span><span class="o">=</span><span class="s">&#34;post.liked&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">/&gt;</span>
+</span></span></code></pre></div><p>即使没有传 <code>summary</code>，子组件里拿到的 <code>summary</code> 也会是 <code>''</code>。</p>
+<p>这就是下面这段代码的作用：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="nx">withDefaults</span><span class="p">(</span><span class="nx">defineProps</span><span class="p">&lt;</span><span class="nt">Props</span><span class="p">&gt;(),</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">summary</span><span class="o">:</span> <span class="s1">&#39;&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span></code></pre></div><p>更直白地说，它做了两件事：</p>
+<ul>
+<li>用 <code>defineProps&lt;Props&gt;()</code> 声明组件入参。</li>
+<li>用 <code>withDefaults</code> 给可选入参设置默认值。</li>
+</ul>
+<h2 id="七为什么明明定义了-props模板里却直接写-title">七、为什么明明定义了 props，模板里却直接写 title</h2>
+<p>子组件模板里是这样写的：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">h2</span><span class="p">&gt;{{</span> <span class="nx">title</span> <span class="p">}}&lt;/</span><span class="nt">h2</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">p</span><span class="p">&gt;{{</span> <span class="nx">summary</span> <span class="o">||</span> <span class="s1">&#39;这篇文章还没有摘要。作者很可能以为标题已经足够说明一切。&#39;</span> <span class="p">}}&lt;/</span><span class="nt">p</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">span</span><span class="p">&gt;</span><span class="nx">作者</span><span class="err">：</span><span class="p">{{</span> <span class="nx">author</span> <span class="p">}}&lt;/</span><span class="nt">span</span><span class="p">&gt;</span>
+</span></span></code></pre></div><p>你可能会问：不是写了 <code>const props = ...</code> 吗？为什么这里不是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">h2</span><span class="p">&gt;{{</span> <span class="nx">props</span><span class="p">.</span><span class="nx">title</span> <span class="p">}}&lt;/</span><span class="nt">h2</span><span class="p">&gt;</span>
+</span></span></code></pre></div><p>原因是：在 Vue 的 <code>&lt;script setup&gt;</code> 中，<code>defineProps</code> 声明的 props 会暴露给模板，模板里可以直接使用 prop 名称。</p>
+<p>所以在模板中：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="p">{{</span> <span class="nx">title</span> <span class="p">}}</span>
+</span></span></code></pre></div><p>等价于在使用当前组件接收到的 <code>title</code> prop。</p>
+<p>这些写法都来自父组件传进来的值：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">h2</span><span class="p">&gt;{{</span> <span class="nx">title</span> <span class="p">}}&lt;/</span><span class="nt">h2</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">p</span><span class="p">&gt;{{</span> <span class="nx">summary</span> <span class="p">}}&lt;/</span><span class="nt">p</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">span</span><span class="p">&gt;{{</span> <span class="nx">author</span> <span class="p">}}&lt;/</span><span class="nt">span</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">button</span><span class="p">&gt;{{</span> <span class="nx">likes</span> <span class="p">}}&lt;/</span><span class="nt">button</span><span class="p">&gt;</span>
+</span></span></code></pre></div><p>对应关系是：</p>
+<table>
+  <thead>
+      <tr>
+          <th>子组件模板使用</th>
+          <th>来自父组件</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>title</code></td>
+          <td><code>:title=&quot;post.title&quot;</code></td>
+      </tr>
+      <tr>
+          <td><code>summary</code></td>
+          <td><code>:summary=&quot;post.summary&quot;</code></td>
+      </tr>
+      <tr>
+          <td><code>author</code></td>
+          <td><code>:author=&quot;post.author&quot;</code></td>
+      </tr>
+      <tr>
+          <td><code>likes</code></td>
+          <td><code>:likes=&quot;post.likes&quot;</code></td>
+      </tr>
+      <tr>
+          <td><code>liked</code></td>
+          <td><code>:liked=&quot;post.liked&quot;</code></td>
+      </tr>
+  </tbody>
+</table>
+<p>不过，在 <code>&lt;script setup&gt;</code> 的 JavaScript 代码里，如果你要读取 prop，通常要通过 <code>props</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">props</span><span class="p">.</span><span class="nx">title</span><span class="p">)</span>
+</span></span></code></pre></div><p>模板里可以直接写 <code>title</code>，脚本里更常见的是写 <code>props.title</code>。这不是玄学，只是 <code>&lt;script setup&gt;</code> 的编译规则。</p>
+<h2 id="八props-变量没有用可以不写吗">八、props 变量没有用，可以不写吗</h2>
+<p>上面的代码写了：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">props</span> <span class="o">=</span> <span class="nx">withDefaults</span><span class="p">(</span><span class="nx">defineProps</span><span class="p">&lt;</span><span class="nt">Props</span><span class="p">&gt;(),</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">summary</span><span class="o">:</span> <span class="s1">&#39;&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span></code></pre></div><p>但模板里没有写 <code>props.title</code>，脚本里也没有读取 <code>props</code>。这时很多编辑器可能会提示：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">props is assigned a value but never used
+</span></span></code></pre></div><p>如果你确实不需要在 <code>&lt;script setup&gt;</code> 的 JavaScript 部分访问 props，可以写成：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="nx">withDefaults</span><span class="p">(</span><span class="nx">defineProps</span><span class="p">&lt;</span><span class="nt">Props</span><span class="p">&gt;(),</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">summary</span><span class="o">:</span> <span class="s1">&#39;&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span></code></pre></div><p>这样仍然会声明 props，也仍然会设置默认值。</p>
+<p>但如果脚本里需要使用 props，比如根据标题计算一个值：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">script</span> <span class="na">setup</span> <span class="na">lang</span><span class="o">=</span><span class="s">&#34;ts&#34;</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">computed</span> <span class="p">}</span> <span class="nx">from</span> <span class="s1">&#39;vue&#39;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">type</span> <span class="nx">Props</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">title</span><span class="o">:</span> <span class="nx">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">summary</span><span class="o">?:</span> <span class="nx">string</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">props</span> <span class="o">=</span> <span class="nx">withDefaults</span><span class="p">(</span><span class="nx">defineProps</span><span class="p">&lt;</span><span class="nt">Props</span><span class="p">&gt;(),</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">summary</span><span class="o">:</span> <span class="s1">&#39;&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">titleLength</span> <span class="o">=</span> <span class="nx">computed</span><span class="p">(()</span> <span class="p">=&gt;</span> <span class="nx">props</span><span class="p">.</span><span class="nx">title</span><span class="p">.</span><span class="nx">length</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">&lt;/</span><span class="nt">script</span><span class="p">&gt;</span>
+</span></span></code></pre></div><p>这时就应该保留 <code>const props = ...</code>。</p>
+<h2 id="九defineemits-是什么">九、defineEmits 是什么</h2>
+<p>子组件里还有这一段：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">emit</span> <span class="o">=</span> <span class="nx">defineEmits</span><span class="o">&lt;</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">like</span><span class="o">:</span> <span class="p">[]</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span><span class="o">&gt;</span><span class="p">()</span>
+</span></span></code></pre></div><p>它表示当前组件会向外触发一个名为 <code>like</code> 的事件，并且这个事件不携带参数。</p>
+<p>也就是说，子组件允许这样写：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="nx">emit</span><span class="p">(</span><span class="s1">&#39;like&#39;</span><span class="p">)</span>
+</span></span></code></pre></div><p>如果你写错事件名：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="nx">emit</span><span class="p">(</span><span class="s1">&#39;liked&#39;</span><span class="p">)</span>
+</span></span></code></pre></div><p>TypeScript 就会提示：没有声明过 <code>liked</code> 这个事件。</p>
+<p>这里的类型：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">like</span><span class="o">:</span> <span class="p">[]</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>可以理解成：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">事件名是 like
+</span></span><span class="line"><span class="cl">参数列表是空数组
+</span></span></code></pre></div><p>所以 <code>like: []</code> 表示：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">触发 like 事件时，不需要传任何参数
+</span></span></code></pre></div><p>如果事件要传参数，可以这样写：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">emit</span> <span class="o">=</span> <span class="nx">defineEmits</span><span class="o">&lt;</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">remove</span><span class="o">:</span> <span class="p">[</span><span class="nx">id</span>: <span class="kt">number</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span><span class="o">&gt;</span><span class="p">()</span>
+</span></span></code></pre></div><p>触发时：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="nx">emit</span><span class="p">(</span><span class="s1">&#39;remove&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+</span></span></code></pre></div><p>父组件监听：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">PostCard</span> <span class="nt">@remove</span><span class="s">=&#34;handleRemove&#34;</span><span class="p"> /&gt;</span>
+</span></span></code></pre></div><p>父组件方法：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kd">function</span> <span class="nx">handleRemove</span><span class="p">(</span><span class="nx">id</span>: <span class="kt">number</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">id</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>这就是带参数的自定义事件。</p>
+<h2 id="十为什么子组件不直接修改-liked-和-likes">十、为什么子组件不直接修改 liked 和 likes</h2>
+<p>你可能会想：<code>PostCard</code> 里已经拿到了 <code>liked</code> 和 <code>likes</code>，为什么不直接在子组件里修改？</p>
+<p>比如这样：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="nx">liked</span> <span class="o">=</span> <span class="o">!</span><span class="nx">liked</span>
+</span></span><span class="line"><span class="cl"><span class="nx">likes</span> <span class="o">+=</span> <span class="nx">liked</span> <span class="o">?</span> <span class="mi">1</span> <span class="o">:</span> <span class="o">-</span><span class="mi">1</span>
+</span></span></code></pre></div><p>这不是推荐做法。原因是：<code>liked</code> 和 <code>likes</code> 是父组件传下来的 props。Vue 中 props 应该被看作只读数据。</p>
+<p>父组件拥有这份状态：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">post</span> <span class="o">=</span> <span class="nx">ref</span><span class="p">({</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">likes</span>: <span class="kt">7</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">liked</span>: <span class="kt">false</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span></code></pre></div><p>子组件只是负责展示它：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">button</span> <span class="o">:</span><span class="na">class</span><span class="o">=</span><span class="s">&#34;{ active: liked }&#34;</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">{{</span> <span class="nx">liked</span> <span class="o">?</span> <span class="s1">&#39;已点赞&#39;</span> <span class="o">:</span> <span class="s1">&#39;点赞&#39;</span> <span class="p">}}</span> <span class="err">·</span> <span class="p">{{</span> <span class="nx">likes</span> <span class="p">}}</span>
+</span></span><span class="line"><span class="cl"><span class="p">&lt;/</span><span class="nt">button</span><span class="p">&gt;</span>
+</span></span></code></pre></div><p>当用户点击按钮时，子组件不直接修改 props，而是通知父组件：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="err">@</span><span class="nx">click</span><span class="o">=</span><span class="s2">&#34;emit(&#39;like&#39;)&#34;</span>
+</span></span></code></pre></div><p>父组件收到事件后再修改自己的数据：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kd">function</span> <span class="nx">handleLike() {</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">post</span><span class="p">.</span><span class="nx">value</span><span class="p">.</span><span class="nx">liked</span> <span class="o">=</span> <span class="o">!</span><span class="nx">post</span><span class="p">.</span><span class="nx">value</span><span class="p">.</span><span class="nx">liked</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">post</span><span class="p">.</span><span class="nx">value</span><span class="p">.</span><span class="nx">likes</span> <span class="o">+=</span> <span class="nx">post</span><span class="p">.</span><span class="nx">value</span><span class="p">.</span><span class="nx">liked</span> <span class="o">?</span> <span class="mi">1</span> <span class="o">:</span> <span class="o">-</span><span class="mi">1</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>这样数据来源非常清楚：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">post 数据属于父组件
+</span></span><span class="line"><span class="cl">PostCard 只负责展示和发出用户意图
+</span></span></code></pre></div><p>如果子组件随便修改父组件传下来的数据，数据流就会变成：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">父组件能改
+</span></span><span class="line"><span class="cl">子组件也能改
+</span></span><span class="line"><span class="cl">其他子组件可能也能改
+</span></span></code></pre></div><p>到那时你看到页面状态不对，就很难判断到底是谁改的。程序当然不会替你感到愧疚，它只会照常运行。</p>
+<h2 id="十一完整拆解-postcardvue">十一、完整拆解 PostCard.vue</h2>
+<p>下面重新看子组件代码：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">script</span> <span class="na">setup</span> <span class="na">lang</span><span class="o">=</span><span class="s">&#34;ts&#34;</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="nx">type</span> <span class="nx">Props</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">title</span><span class="o">:</span> <span class="nx">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">summary</span><span class="o">?:</span> <span class="nx">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">author</span><span class="o">:</span> <span class="nx">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">likes</span><span class="o">:</span> <span class="nx">number</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">liked</span><span class="o">:</span> <span class="kr">boolean</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">withDefaults</span><span class="p">(</span><span class="nx">defineProps</span><span class="p">&lt;</span><span class="nt">Props</span><span class="p">&gt;(),</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">summary</span><span class="o">:</span> <span class="s1">&#39;&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">emit</span> <span class="o">=</span> <span class="nx">defineEmits</span><span class="o">&lt;</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">like</span><span class="o">:</span> <span class="p">[]</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span><span class="o">&gt;</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="p">&lt;/</span><span class="nt">script</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">template</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">&lt;</span><span class="nt">article</span> <span class="na">class</span><span class="o">=</span><span class="s">&#34;post-card&#34;</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">&lt;</span><span class="nt">div</span> <span class="na">class</span><span class="o">=</span><span class="s">&#34;content&#34;</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">      <span class="p">&lt;</span><span class="nt">h2</span><span class="p">&gt;{{</span> <span class="nx">title</span> <span class="p">}}&lt;/</span><span class="nt">h2</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">      <span class="p">&lt;</span><span class="nt">p</span><span class="p">&gt;{{</span> <span class="nx">summary</span> <span class="o">||</span> <span class="s1">&#39;这篇文章还没有摘要。作者很可能以为标题已经足够说明一切。&#39;</span> <span class="p">}}&lt;/</span><span class="nt">p</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">      <span class="p">&lt;</span><span class="nt">span</span><span class="p">&gt;</span><span class="nx">作者</span><span class="err">：</span><span class="p">{{</span> <span class="nx">author</span> <span class="p">}}&lt;/</span><span class="nt">span</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">&lt;/</span><span class="nt">div</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="p">&lt;</span><span class="nt">button</span>
+</span></span><span class="line"><span class="cl">      <span class="na">class</span><span class="o">=</span><span class="s">&#34;like-button&#34;</span>
+</span></span><span class="line"><span class="cl">      <span class="o">:</span><span class="na">class</span><span class="o">=</span><span class="s">&#34;{ active: liked }&#34;</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">:aria-pressed</span><span class="o">=</span><span class="s">&#34;liked&#34;</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">@click</span><span class="s">=&#34;emit(&#39;like&#39;)&#34;</span><span class="p">
+</span></span></span><span class="line"><span class="cl"><span class="p"></span>    <span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">      <span class="p">{{</span> <span class="nx">liked</span> <span class="o">?</span> <span class="s1">&#39;已点赞&#39;</span> <span class="o">:</span> <span class="s1">&#39;点赞&#39;</span> <span class="p">}}</span> <span class="err">·</span> <span class="p">{{</span> <span class="nx">likes</span> <span class="p">}}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">&lt;/</span><span class="nt">button</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">&lt;/</span><span class="nt">article</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="p">&lt;/</span><span class="nt">template</span><span class="p">&gt;</span>
+</span></span></code></pre></div><p>逐段解释：</p>
+<ul>
+<li><code>type Props = ...</code>：定义这个组件需要哪些外部数据。</li>
+<li><code>defineProps&lt;Props&gt;()</code>：声明组件接收这些 props。</li>
+<li><code>withDefaults(..., { summary: '' })</code>：给可选的 <code>summary</code> 设置默认值。</li>
+<li><code>defineEmits&lt;{ like: [] }&gt;()</code>：声明这个组件会发出 <code>like</code> 事件。</li>
+<li><code>{{ title }}</code>：显示父组件传入的标题。</li>
+<li><code>{{ summary || 默认文案 }}</code>：如果摘要为空，就显示默认文案。</li>
+<li><code>{{ author }}</code>：显示父组件传入的作者。</li>
+<li><code>:class=&quot;{ active: liked }&quot;</code>：如果已经点赞，就给按钮加上 <code>active</code> 类。</li>
+<li><code>:aria-pressed=&quot;liked&quot;</code>：告诉辅助技术这个按钮是否处于按下状态。</li>
+<li><code>@click=&quot;emit('like')&quot;</code>：点击按钮时，向父组件发出 <code>like</code> 事件。</li>
+<li><code>{{ likes }}</code>：显示父组件传入的点赞数。</li>
+</ul>
+<p>这段代码的本质是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">PostCard 不拥有文章数据
+</span></span><span class="line"><span class="cl">PostCard 接收文章数据
+</span></span><span class="line"><span class="cl">PostCard 展示文章数据
+</span></span><span class="line"><span class="cl">PostCard 把用户点击事件通知父组件
+</span></span></code></pre></div><h2 id="十二父组件和子组件的职责">十二、父组件和子组件的职责</h2>
+<p>在这个例子中，父组件 <code>App.vue</code> 的职责是：</p>
+<ul>
+<li>保存文章状态。</li>
+<li>决定传哪些数据给 <code>PostCard</code>。</li>
+<li>监听 <code>PostCard</code> 发出的事件。</li>
+<li>修改点赞状态和点赞数。</li>
+</ul>
+<p>子组件 <code>PostCard.vue</code> 的职责是：</p>
+<ul>
+<li>声明自己需要哪些 props。</li>
+<li>根据 props 渲染卡片内容。</li>
+<li>根据 props 切换按钮样式。</li>
+<li>在按钮点击时发出事件。</li>
+</ul>
+<p>可以这样理解：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">父组件负责数据和决策
+</span></span><span class="line"><span class="cl">子组件负责展示和通知
+</span></span></code></pre></div><p>这不是绝对规则，但对初学组件通信非常有用。</p>
+<h2 id="十三为什么要把文章卡片拆成组件">十三、为什么要把文章卡片拆成组件</h2>
+<p>如果页面只有一张卡片，拆不拆都可以。但如果有文章列表：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">PostCard</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">v-for</span><span class="o">=</span><span class="s">&#34;post in posts&#34;</span><span class="p">
+</span></span></span><span class="line"><span class="cl"><span class="p"></span>  <span class="nt">:key</span><span class="o">=</span><span class="s">&#34;post.id&#34;</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">:title</span><span class="o">=</span><span class="s">&#34;post.title&#34;</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">:summary</span><span class="o">=</span><span class="s">&#34;post.summary&#34;</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">:author</span><span class="o">=</span><span class="s">&#34;post.author&#34;</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">:likes</span><span class="o">=</span><span class="s">&#34;post.likes&#34;</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">:liked</span><span class="o">=</span><span class="s">&#34;post.liked&#34;</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">@like</span><span class="s">=&#34;handleLike(post)&#34;</span><span class="p">
+</span></span></span><span class="line"><span class="cl"><span class="p">/&gt;</span>
+</span></span></code></pre></div><p>拆成组件的价值就很明显：</p>
+<ul>
+<li>卡片结构只写一次。</li>
+<li>样式只维护一份。</li>
+<li>父组件更关注列表数据。</li>
+<li>子组件更关注单张卡片如何展示。</li>
+</ul>
+<p>对于列表场景，父组件负责循环：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="nx">v</span><span class="o">-</span><span class="k">for</span><span class="o">=</span><span class="s2">&#34;post in posts&#34;</span>
+</span></span></code></pre></div><p>子组件负责单项展示：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">PostCard</span> <span class="na">...</span> <span class="p">/&gt;</span>
+</span></span></code></pre></div><p>这就是组件拆分最常见的用法之一。</p>
+<h2 id="十四一个更完整的列表例子">十四、一个更完整的列表例子</h2>
+<p>父组件可以这样管理多篇文章：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">script</span> <span class="na">setup</span> <span class="na">lang</span><span class="o">=</span><span class="s">&#34;ts&#34;</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">ref</span> <span class="p">}</span> <span class="nx">from</span> <span class="s1">&#39;vue&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">import</span> <span class="nx">PostCard</span> <span class="nx">from</span> <span class="s1">&#39;./components/PostCard.vue&#39;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">type</span> <span class="nx">Post</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">id</span><span class="o">:</span> <span class="nx">number</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">title</span><span class="o">:</span> <span class="nx">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">summary</span><span class="o">:</span> <span class="nx">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">author</span><span class="o">:</span> <span class="nx">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">likes</span><span class="o">:</span> <span class="nx">number</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">liked</span><span class="o">:</span> <span class="kr">boolean</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">posts</span> <span class="o">=</span> <span class="nx">ref</span><span class="p">&lt;</span><span class="nt">Post</span><span class="err">[]</span><span class="p">&gt;([</span>
+</span></span><span class="line"><span class="cl">  <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">id</span><span class="o">:</span> <span class="mi">1</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">title</span><span class="o">:</span> <span class="s1">&#39;单文件组件与模板语法&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">summary</span><span class="o">:</span> <span class="s1">&#39;理解 Vue 页面由哪些部分组成。&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">author</span><span class="o">:</span> <span class="s1">&#39;Yuki&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">likes</span><span class="o">:</span> <span class="mi">7</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">liked</span><span class="o">:</span> <span class="kc">false</span>
+</span></span><span class="line"><span class="cl">  <span class="p">},</span>
+</span></span><span class="line"><span class="cl">  <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">id</span><span class="o">:</span> <span class="mi">2</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">title</span><span class="o">:</span> <span class="s1">&#39;响应式原理与组合式 API&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">summary</span><span class="o">:</span> <span class="s1">&#39;&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">author</span><span class="o">:</span> <span class="s1">&#39;Haruno&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">likes</span><span class="o">:</span> <span class="mi">12</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">liked</span><span class="o">:</span> <span class="kc">true</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">])</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">function</span> <span class="nx">handleLike</span><span class="p">(</span><span class="nx">post</span><span class="o">:</span> <span class="nx">Post</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">post</span><span class="p">.</span><span class="nx">liked</span> <span class="o">=</span> <span class="o">!</span><span class="nx">post</span><span class="p">.</span><span class="nx">liked</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">post</span><span class="p">.</span><span class="nx">likes</span> <span class="o">+=</span> <span class="nx">post</span><span class="p">.</span><span class="nx">liked</span> <span class="o">?</span> <span class="mi">1</span> <span class="o">:</span> <span class="o">-</span><span class="mi">1</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">&lt;/</span><span class="nt">script</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">template</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">&lt;</span><span class="nt">main</span> <span class="na">class</span><span class="o">=</span><span class="s">&#34;page&#34;</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">&lt;</span><span class="nt">PostCard</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">v-for</span><span class="o">=</span><span class="s">&#34;post in posts&#34;</span><span class="p">
+</span></span></span><span class="line"><span class="cl"><span class="p"></span>      <span class="nt">:key</span><span class="o">=</span><span class="s">&#34;post.id&#34;</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">:title</span><span class="o">=</span><span class="s">&#34;post.title&#34;</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">:summary</span><span class="o">=</span><span class="s">&#34;post.summary&#34;</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">:author</span><span class="o">=</span><span class="s">&#34;post.author&#34;</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">:likes</span><span class="o">=</span><span class="s">&#34;post.likes&#34;</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">:liked</span><span class="o">=</span><span class="s">&#34;post.liked&#34;</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">@like</span><span class="s">=&#34;handleLike(post)&#34;</span><span class="p">
+</span></span></span><span class="line"><span class="cl"><span class="p"></span>    <span class="p">/&gt;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">&lt;/</span><span class="nt">main</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="p">&lt;/</span><span class="nt">template</span><span class="p">&gt;</span>
+</span></span></code></pre></div><p>这里有一个细节：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="err">@</span><span class="nx">like</span><span class="o">=</span><span class="s2">&#34;handleLike(post)&#34;</span>
+</span></span></code></pre></div><p>它表示每一张卡片触发 <code>like</code> 事件时，父组件都知道是哪一篇文章被点了赞。</p>
+<p>也可以让子组件把 <code>id</code> 发上来：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">emit</span> <span class="o">=</span> <span class="nx">defineEmits</span><span class="o">&lt;</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">like</span><span class="o">:</span> <span class="p">[</span><span class="nx">id</span>: <span class="kt">number</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span><span class="o">&gt;</span><span class="p">()</span>
+</span></span></code></pre></div><p>子组件触发：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">script</span> <span class="na">setup</span> <span class="na">lang</span><span class="o">=</span><span class="s">&#34;ts&#34;</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="nx">type</span> <span class="nx">Props</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">id</span><span class="o">:</span> <span class="nx">number</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">title</span><span class="o">:</span> <span class="nx">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">summary</span><span class="o">?:</span> <span class="nx">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">author</span><span class="o">:</span> <span class="nx">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">likes</span><span class="o">:</span> <span class="nx">number</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">liked</span><span class="o">:</span> <span class="kr">boolean</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">defineProps</span><span class="p">&lt;</span><span class="nt">Props</span><span class="p">&gt;()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">emit</span> <span class="o">=</span> <span class="nx">defineEmits</span><span class="o">&lt;</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">like</span><span class="o">:</span> <span class="p">[</span><span class="nx">id</span><span class="o">:</span> <span class="nx">number</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span><span class="o">&gt;</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="p">&lt;/</span><span class="nt">script</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">template</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">&lt;</span><span class="nt">button</span> <span class="nt">@click</span><span class="s">=&#34;emit(&#39;like&#39;, id)&#34;</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">    <span class="na">点赞</span>
+</span></span><span class="line"><span class="cl">  <span class="p">&lt;/</span><span class="nt">button</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="p">&lt;/</span><span class="nt">template</span><span class="p">&gt;</span>
+</span></span></code></pre></div><p>父组件监听：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">PostCard</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">:id</span><span class="o">=</span><span class="s">&#34;post.id&#34;</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">@like</span><span class="s">=&#34;handleLike&#34;</span><span class="p">
+</span></span></span><span class="line"><span class="cl"><span class="p">/&gt;</span>
+</span></span></code></pre></div><p>父组件处理：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kd">function</span> <span class="nx">handleLike</span><span class="p">(</span><span class="nx">id</span>: <span class="kt">number</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">const</span> <span class="nx">post</span> <span class="o">=</span> <span class="nx">posts</span><span class="p">.</span><span class="nx">value</span><span class="p">.</span><span class="nx">find</span><span class="p">((</span><span class="nx">item</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="nx">item</span><span class="p">.</span><span class="nx">id</span> <span class="o">===</span> <span class="nx">id</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nx">post</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="nx">post</span><span class="p">.</span><span class="nx">liked</span> <span class="o">=</span> <span class="o">!</span><span class="nx">post</span><span class="p">.</span><span class="nx">liked</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">post</span><span class="p">.</span><span class="nx">likes</span> <span class="o">+=</span> <span class="nx">post</span><span class="p">.</span><span class="nx">liked</span> <span class="o">?</span> <span class="mi">1</span> <span class="o">:</span> <span class="o">-</span><span class="mi">1</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>两种写法都可以。初学时，用 <code>@like=&quot;handleLike(post)&quot;</code> 更直观；业务更复杂时，让事件带上 <code>id</code> 会更清晰。</p>
+<h2 id="十五props-命名模板里可以用短横线">十五、props 命名：模板里可以用短横线</h2>
+<p>如果 prop 名是驼峰：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">Props</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">likedByMe</span>: <span class="kt">boolean</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>父组件模板中推荐写成短横线：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">PostCard</span> <span class="nt">:liked-by-me</span><span class="o">=</span><span class="s">&#34;post.likedByMe&#34;</span> <span class="p">/&gt;</span>
+</span></span></code></pre></div><p>子组件中仍然用驼峰访问：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">button</span> <span class="o">:</span><span class="na">class</span><span class="o">=</span><span class="s">&#34;{ active: likedByMe }&#34;</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">点赞</span>
+</span></span><span class="line"><span class="cl"><span class="p">&lt;/</span><span class="nt">button</span><span class="p">&gt;</span>
+</span></span></code></pre></div><p>原因是 HTML 属性不区分大小写，模板里使用短横线更符合 HTML 习惯。对于 <code>title</code>、<code>summary</code>、<code>author</code> 这种单词 prop，就没有这个问题。</p>
+<h2 id="十六常见错误">十六、常见错误</h2>
+<h3 id="1-把动态值写成静态字符串">1. 把动态值写成静态字符串</h3>
+<p>不推荐：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">PostCard</span> <span class="na">likes</span><span class="o">=</span><span class="s">&#34;post.likes&#34;</span> <span class="na">liked</span><span class="o">=</span><span class="s">&#34;post.liked&#34;</span> <span class="p">/&gt;</span>
+</span></span></code></pre></div><p>这样传过去的是字符串 <code>&quot;post.likes&quot;</code> 和 <code>&quot;post.liked&quot;</code>。</p>
+<p>推荐：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">PostCard</span> <span class="nt">:likes</span><span class="o">=</span><span class="s">&#34;post.likes&#34;</span> <span class="nt">:liked</span><span class="o">=</span><span class="s">&#34;post.liked&#34;</span> <span class="p">/&gt;</span>
+</span></span></code></pre></div><h3 id="2-在子组件里直接修改-props">2. 在子组件里直接修改 props</h3>
+<p>不推荐：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="nx">props</span><span class="p">.</span><span class="nx">likes</span><span class="o">++</span>
+</span></span></code></pre></div><p>推荐：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="nx">emit</span><span class="p">(</span><span class="s1">&#39;like&#39;</span><span class="p">)</span>
+</span></span></code></pre></div><p>让父组件去修改真正的数据。</p>
+<h3 id="3-子组件触发的事件名和父组件监听的不一致">3. 子组件触发的事件名和父组件监听的不一致</h3>
+<p>子组件：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="nx">emit</span><span class="p">(</span><span class="s1">&#39;like&#39;</span><span class="p">)</span>
+</span></span></code></pre></div><p>父组件必须监听：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="err">@</span><span class="nx">like</span><span class="o">=</span><span class="s2">&#34;handleLike&#34;</span>
+</span></span></code></pre></div><p>如果父组件写成：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="err">@</span><span class="nx">liked</span><span class="o">=</span><span class="s2">&#34;handleLike&#34;</span>
+</span></span></code></pre></div><p>那就监听不到。名字都对不上，程序当然也不会凭爱意理解你。</p>
+<h3 id="4-可选-prop-没有默认值">4. 可选 prop 没有默认值</h3>
+<p>如果 <code>summary</code> 可选：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="nx">summary?</span>: <span class="kt">string</span>
+</span></span></code></pre></div><p>模板里直接使用时，要么给默认值：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="nx">withDefaults</span><span class="p">(</span><span class="nx">defineProps</span><span class="p">&lt;</span><span class="nt">Props</span><span class="p">&gt;(),</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">summary</span><span class="o">:</span> <span class="s1">&#39;&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span></code></pre></div><p>要么在模板里处理空值：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="p">{{</span> <span class="nx">summary</span> <span class="o">||</span> <span class="s1">&#39;暂无摘要&#39;</span> <span class="p">}}</span>
+</span></span></code></pre></div><p>两者可以同时存在。<code>withDefaults</code> 保证 <code>summary</code> 至少是字符串，模板里的 <code>||</code> 则处理空字符串时的展示文案。</p>
+<h2 id="十七总结">十七、总结</h2>
+<p>把这套组件知识压缩成几句话：</p>
+<ul>
+<li><code>PostCard</code> 是子组件，父组件导入后可以像标签一样使用。</li>
+<li><code>:title=&quot;post.title&quot;</code> 表示把父组件的 <code>post.title</code> 动态传给子组件的 <code>title</code> prop。</li>
+<li><code>@like=&quot;handleLike&quot;</code> 表示监听子组件发出的 <code>like</code> 事件，并执行父组件方法。</li>
+<li><code>defineProps&lt;Props&gt;()</code> 用来声明子组件接收哪些 props。</li>
+<li><code>withDefaults</code> 用来给可选 props 设置默认值。</li>
+<li><code>defineEmits</code> 用来声明子组件可以向外发出哪些事件。</li>
+<li>模板中可以直接使用 <code>title</code>、<code>summary</code>、<code>author</code>、<code>likes</code>、<code>liked</code>，因为它们是当前组件接收到的 props。</li>
+<li>props 是父组件传下来的数据，子组件应当把它当作只读数据。</li>
+<li>子组件想改变父组件的数据时，不直接改 props，而是 <code>emit</code> 一个事件通知父组件。</li>
+</ul>
+<p>所以这段父组件代码：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">PostCard</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">:title</span><span class="o">=</span><span class="s">&#34;post.title&#34;</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">:summary</span><span class="o">=</span><span class="s">&#34;post.summary&#34;</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">:author</span><span class="o">=</span><span class="s">&#34;post.author&#34;</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">:likes</span><span class="o">=</span><span class="s">&#34;post.likes&#34;</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">:liked</span><span class="o">=</span><span class="s">&#34;post.liked&#34;</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">@like</span><span class="s">=&#34;handleLike&#34;</span><span class="p">
+</span></span></span><span class="line"><span class="cl"><span class="p">/&gt;</span>
+</span></span></code></pre></div><p>表达的是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">把 post 的数据交给 PostCard 展示
+</span></span><span class="line"><span class="cl">当 PostCard 说“用户点了赞”时，由父组件 handleLike 修改 post
+</span></span></code></pre></div><p>而这段子组件代码：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="nx">withDefaults</span><span class="p">(</span><span class="nx">defineProps</span><span class="p">&lt;</span><span class="nt">Props</span><span class="p">&gt;(),</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">summary</span><span class="o">:</span> <span class="s1">&#39;&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">emit</span> <span class="o">=</span> <span class="nx">defineEmits</span><span class="o">&lt;</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">like</span><span class="o">:</span> <span class="p">[]</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span><span class="o">&gt;</span><span class="p">()</span>
+</span></span></code></pre></div><p>表达的是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">我这个组件需要接收哪些外部数据
+</span></span><span class="line"><span class="cl">哪些数据有默认值
+</span></span><span class="line"><span class="cl">我这个组件会向外通知哪些事件
+</span></span></code></pre></div><p>组件通信并不神秘。它只是把页面拆开以后，给“数据从哪里来”和“操作通知谁”定了一条清楚的路线。路线清楚，组件就不会互相扯袖子；路线不清楚，代码就会开始用一种很安静的方式报复你。</p>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

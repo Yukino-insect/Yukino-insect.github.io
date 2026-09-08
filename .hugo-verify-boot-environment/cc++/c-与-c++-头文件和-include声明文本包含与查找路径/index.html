@@ -1,0 +1,1707 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>C 与 C&#43;&#43; 头文件和 include：声明、文本包含与查找路径 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="刚开始学 C/C&#43;&#43; 时，很容易把头文件理解成一种“模块导入”：
+#include &lt;stdio.h&gt; #include &#34;student.h&#34; 看起来确实像是在引用某个模块。可惜，C/C&#43;&#43; 的 #include 没有那么优雅。它本质上是预处理器做的一种 文本包含：把被包含文件的内容拿过来，放到当前文件的对应位置。
+也就是说，#include 更接近“复制粘贴”，而不是 Java、Python、Go 那种语言级模块导入。它粗糙、直接、历史悠久，也因此有不少需要理解的细节。
+这篇文章先讲头文件和 #include 本身，后面再专门讲编译和链接。毕竟把所有东西搅成一锅汤，只会让人以为自己理解了，其实只是被热气糊住了眼睛。
+一、头文件是什么 头文件通常是以 .h、.hpp、.hh、.hxx 等后缀结尾的文件。它最常见的作用是放 声明。
+例如：
+// student.h #ifndef STUDENT_H #define STUDENT_H typedef struct Student { int id; int age; } Student; void print_student(const Student *student); #endif 这里包含了：
+结构体类型声明。 函数声明。 头文件保护宏。 真正的函数实现一般放在 .c 或 .cpp 文件中：
+// student.c #include &#34;student.h&#34; #include &lt;stdio.h&gt; void print_student(const Student *student) { printf(&#34;id=%d, age=%d\n&#34;, student-&gt;id, student-&gt;age); } 然后其他源文件如果想使用 Student 和 print_student，只需要包含头文件：
+// main.c #include &#34;student.h&#34; int main(void) { Student student = {1, 18}; print_student(&amp;student); return 0; } 这就是头文件最核心的价值：把对外可见的接口集中放起来，让多个源文件共享同一份声明。
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/cc&#43;&#43;/c-%E4%B8%8E-c&#43;&#43;-%E5%A4%B4%E6%96%87%E4%BB%B6%E5%92%8C-include%E5%A3%B0%E6%98%8E%E6%96%87%E6%9C%AC%E5%8C%85%E5%90%AB%E4%B8%8E%E6%9F%A5%E6%89%BE%E8%B7%AF%E5%BE%84/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/cc&#43;&#43;/c-%E4%B8%8E-c&#43;&#43;-%E5%A4%B4%E6%96%87%E4%BB%B6%E5%92%8C-include%E5%A3%B0%E6%98%8E%E6%96%87%E6%9C%AC%E5%8C%85%E5%90%AB%E4%B8%8E%E6%9F%A5%E6%89%BE%E8%B7%AF%E5%BE%84/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="C 与 C&#43;&#43; 头文件和 include：声明、文本包含与查找路径">
+  <meta property="og:description" content="刚开始学 C/C&#43;&#43; 时，很容易把头文件理解成一种“模块导入”：
+#include &lt;stdio.h&gt; #include &#34;student.h&#34; 看起来确实像是在引用某个模块。可惜，C/C&#43;&#43; 的 #include 没有那么优雅。它本质上是预处理器做的一种 文本包含：把被包含文件的内容拿过来，放到当前文件的对应位置。
+也就是说，#include 更接近“复制粘贴”，而不是 Java、Python、Go 那种语言级模块导入。它粗糙、直接、历史悠久，也因此有不少需要理解的细节。
+这篇文章先讲头文件和 #include 本身，后面再专门讲编译和链接。毕竟把所有东西搅成一锅汤，只会让人以为自己理解了，其实只是被热气糊住了眼睛。
+一、头文件是什么 头文件通常是以 .h、.hpp、.hh、.hxx 等后缀结尾的文件。它最常见的作用是放 声明。
+例如：
+// student.h #ifndef STUDENT_H #define STUDENT_H typedef struct Student { int id; int age; } Student; void print_student(const Student *student); #endif 这里包含了：
+结构体类型声明。 函数声明。 头文件保护宏。 真正的函数实现一般放在 .c 或 .cpp 文件中：
+// student.c #include &#34;student.h&#34; #include &lt;stdio.h&gt; void print_student(const Student *student) { printf(&#34;id=%d, age=%d\n&#34;, student-&gt;id, student-&gt;age); } 然后其他源文件如果想使用 Student 和 print_student，只需要包含头文件：
+// main.c #include &#34;student.h&#34; int main(void) { Student student = {1, 18}; print_student(&amp;student); return 0; } 这就是头文件最核心的价值：把对外可见的接口集中放起来，让多个源文件共享同一份声明。">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="c&amp;c&#43;&#43;">
+    <meta property="article:published_time" content="2026-08-22T21:49:56+08:00">
+    <meta property="article:modified_time" content="2026-08-22T21:49:56+08:00">
+
+  
+  <meta itemprop="name" content="C 与 C&#43;&#43; 头文件和 include：声明、文本包含与查找路径">
+  <meta itemprop="description" content="刚开始学 C/C&#43;&#43; 时，很容易把头文件理解成一种“模块导入”：
+#include &lt;stdio.h&gt; #include &#34;student.h&#34; 看起来确实像是在引用某个模块。可惜，C/C&#43;&#43; 的 #include 没有那么优雅。它本质上是预处理器做的一种 文本包含：把被包含文件的内容拿过来，放到当前文件的对应位置。
+也就是说，#include 更接近“复制粘贴”，而不是 Java、Python、Go 那种语言级模块导入。它粗糙、直接、历史悠久，也因此有不少需要理解的细节。
+这篇文章先讲头文件和 #include 本身，后面再专门讲编译和链接。毕竟把所有东西搅成一锅汤，只会让人以为自己理解了，其实只是被热气糊住了眼睛。
+一、头文件是什么 头文件通常是以 .h、.hpp、.hh、.hxx 等后缀结尾的文件。它最常见的作用是放 声明。
+例如：
+// student.h #ifndef STUDENT_H #define STUDENT_H typedef struct Student { int id; int age; } Student; void print_student(const Student *student); #endif 这里包含了：
+结构体类型声明。 函数声明。 头文件保护宏。 真正的函数实现一般放在 .c 或 .cpp 文件中：
+// student.c #include &#34;student.h&#34; #include &lt;stdio.h&gt; void print_student(const Student *student) { printf(&#34;id=%d, age=%d\n&#34;, student-&gt;id, student-&gt;age); } 然后其他源文件如果想使用 Student 和 print_student，只需要包含头文件：
+// main.c #include &#34;student.h&#34; int main(void) { Student student = {1, 18}; print_student(&amp;student); return 0; } 这就是头文件最核心的价值：把对外可见的接口集中放起来，让多个源文件共享同一份声明。">
+  <meta itemprop="datePublished" content="2026-08-22T21:49:56+08:00">
+  <meta itemprop="dateModified" content="2026-08-22T21:49:56+08:00">
+  <meta itemprop="wordCount" content="1043">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="C 与 C&#43;&#43; 头文件和 include：声明、文本包含与查找路径">
+  <meta name="twitter:description" content="刚开始学 C/C&#43;&#43; 时，很容易把头文件理解成一种“模块导入”：
+#include &lt;stdio.h&gt; #include &#34;student.h&#34; 看起来确实像是在引用某个模块。可惜，C/C&#43;&#43; 的 #include 没有那么优雅。它本质上是预处理器做的一种 文本包含：把被包含文件的内容拿过来，放到当前文件的对应位置。
+也就是说，#include 更接近“复制粘贴”，而不是 Java、Python、Go 那种语言级模块导入。它粗糙、直接、历史悠久，也因此有不少需要理解的细节。
+这篇文章先讲头文件和 #include 本身，后面再专门讲编译和链接。毕竟把所有东西搅成一锅汤，只会让人以为自己理解了，其实只是被热气糊住了眼睛。
+一、头文件是什么 头文件通常是以 .h、.hpp、.hh、.hxx 等后缀结尾的文件。它最常见的作用是放 声明。
+例如：
+// student.h #ifndef STUDENT_H #define STUDENT_H typedef struct Student { int id; int age; } Student; void print_student(const Student *student); #endif 这里包含了：
+结构体类型声明。 函数声明。 头文件保护宏。 真正的函数实现一般放在 .c 或 .cpp 文件中：
+// student.c #include &#34;student.h&#34; #include &lt;stdio.h&gt; void print_student(const Student *student) { printf(&#34;id=%d, age=%d\n&#34;, student-&gt;id, student-&gt;age); } 然后其他源文件如果想使用 Student 和 print_student，只需要包含头文件：
+// main.c #include &#34;student.h&#34; int main(void) { Student student = {1, 18}; print_student(&amp;student); return 0; } 这就是头文件最核心的价值：把对外可见的接口集中放起来，让多个源文件共享同一份声明。">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">C 与 C&#43;&#43; 头文件和 include：声明、文本包含与查找路径</h1>
+
+    
+      <div class="post-date">August 22, 2026</div>
+    
+
+    <div class="post-content">
+      <p>刚开始学 C/C++ 时，很容易把头文件理解成一种“模块导入”：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;stdio.h&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&#34;student.h&#34;</span><span class="cp">
+</span></span></span></code></pre></div><p>看起来确实像是在引用某个模块。可惜，C/C++ 的 <code>#include</code> 没有那么优雅。它本质上是预处理器做的一种 <strong>文本包含</strong>：把被包含文件的内容拿过来，放到当前文件的对应位置。</p>
+<p>也就是说，<code>#include</code> 更接近“复制粘贴”，而不是 Java、Python、Go 那种语言级模块导入。它粗糙、直接、历史悠久，也因此有不少需要理解的细节。</p>
+<p>这篇文章先讲头文件和 <code>#include</code> 本身，后面再专门讲编译和链接。毕竟把所有东西搅成一锅汤，只会让人以为自己理解了，其实只是被热气糊住了眼睛。</p>
+<h2 id="一头文件是什么">一、头文件是什么</h2>
+<p>头文件通常是以 <code>.h</code>、<code>.hpp</code>、<code>.hh</code>、<code>.hxx</code> 等后缀结尾的文件。它最常见的作用是放 <strong>声明</strong>。</p>
+<p>例如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="c1">// student.h
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="cp">#ifndef STUDENT_H
+</span></span></span><span class="line"><span class="cl"><span class="cp">#define STUDENT_H
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">Student</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">id</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">age</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">Student</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">print_student</span><span class="p">(</span><span class="k">const</span> <span class="n">Student</span> <span class="o">*</span><span class="n">student</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="cp">#endif
+</span></span></span></code></pre></div><p>这里包含了：</p>
+<ul>
+<li>结构体类型声明。</li>
+<li>函数声明。</li>
+<li>头文件保护宏。</li>
+</ul>
+<p>真正的函数实现一般放在 <code>.c</code> 或 <code>.cpp</code> 文件中：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="c1">// student.c
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&#34;student.h&#34;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;stdio.h&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">print_student</span><span class="p">(</span><span class="k">const</span> <span class="n">Student</span> <span class="o">*</span><span class="n">student</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">printf</span><span class="p">(</span><span class="s">&#34;id=%d, age=%d</span><span class="se">\n</span><span class="s">&#34;</span><span class="p">,</span> <span class="n">student</span><span class="o">-&gt;</span><span class="n">id</span><span class="p">,</span> <span class="n">student</span><span class="o">-&gt;</span><span class="n">age</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>然后其他源文件如果想使用 <code>Student</code> 和 <code>print_student</code>，只需要包含头文件：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="c1">// main.c
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&#34;student.h&#34;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">main</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">Student</span> <span class="n">student</span> <span class="o">=</span> <span class="p">{</span><span class="mi">1</span><span class="p">,</span> <span class="mi">18</span><span class="p">};</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">print_student</span><span class="p">(</span><span class="o">&amp;</span><span class="n">student</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>这就是头文件最核心的价值：<strong>把对外可见的接口集中放起来，让多个源文件共享同一份声明。</strong></p>
+<h2 id="二声明和定义">二、声明和定义</h2>
+<p>理解头文件之前，必须先区分 <strong>声明（declaration）</strong> 和 <strong>定义（definition）</strong>。</p>
+<h3 id="1-声明是什么">1. 声明是什么</h3>
+<p>声明告诉编译器：某个名字存在，它大概长什么样。</p>
+<p>例如函数声明：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">add</span><span class="p">(</span><span class="kt">int</span> <span class="n">a</span><span class="p">,</span> <span class="kt">int</span> <span class="n">b</span><span class="p">);</span>
+</span></span></code></pre></div><p>这句话告诉编译器：</p>
+<ul>
+<li>有一个函数叫 <code>add</code>。</li>
+<li>它接收两个 <code>int</code> 参数。</li>
+<li>它返回一个 <code>int</code>。</li>
+</ul>
+<p>但是这句话没有提供函数体，所以它不是函数定义。</p>
+<p>变量也可以声明：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">extern</span> <span class="kt">int</span> <span class="n">global_count</span><span class="p">;</span>
+</span></span></code></pre></div><p>这句话告诉编译器：有一个叫 <code>global_count</code> 的全局变量，它的类型是 <code>int</code>，但它的存储空间在别的地方。</p>
+<h3 id="2-定义是什么">2. 定义是什么</h3>
+<p>定义不仅告诉编译器名字存在，还真正分配实体或提供实现。</p>
+<p>函数定义：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">add</span><span class="p">(</span><span class="kt">int</span> <span class="n">a</span><span class="p">,</span> <span class="kt">int</span> <span class="n">b</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="n">a</span> <span class="o">+</span> <span class="n">b</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>变量定义：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">global_count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span></code></pre></div><p>结构体类型定义：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">struct</span> <span class="n">Point</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">x</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">y</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><p>注意，“结构体类型定义”定义的是一个类型布局，而不是创建了一个结构体变量。</p>
+<h3 id="3-头文件里通常放声明">3. 头文件里通常放声明</h3>
+<p>头文件里通常放：</p>
+<ul>
+<li>函数声明。</li>
+<li>类型定义。</li>
+<li>宏定义。</li>
+<li>常量声明。</li>
+<li><code>inline</code> 函数。</li>
+<li>模板定义。</li>
+<li>C++ 类或结构体声明与成员函数声明。</li>
+</ul>
+<p>头文件里通常不应该随便放普通函数定义和全局变量定义。</p>
+<p>例如下面这种写法很危险：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="c1">// bad.h
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">global_count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">hello</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>如果多个 <code>.c</code> 文件都包含了 <code>bad.h</code>，预处理之后每个源文件里都会有一份 <code>global_count</code> 定义和一份 <code>hello</code> 定义。链接时就可能出现重复定义错误。</p>
+<p>正确做法通常是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="c1">// counter.h
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="cp">#ifndef COUNTER_H
+</span></span></span><span class="line"><span class="cl"><span class="cp">#define COUNTER_H
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="k">extern</span> <span class="kt">int</span> <span class="n">global_count</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">hello</span><span class="p">(</span><span class="kt">void</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="cp">#endif
+</span></span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="c1">// counter.c
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&#34;counter.h&#34;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">global_count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">hello</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>头文件负责声明，源文件负责定义。规矩虽然朴素，但不遵守时，链接器会用一种很冷静的方式提醒你。</p>
+<h2 id="三include-是不是简单拷贝">三、include 是不是简单拷贝</h2>
+<p>从机制上说，<code>#include</code> 基本可以理解为：<strong>预处理器把被包含文件的内容插入到当前文件中。</strong></p>
+<p>假设有两个文件：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="c1">// config.h
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="cp">#define PORT 8080
+</span></span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="c1">// main.c
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&#34;config.h&#34;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">port</span> <span class="o">=</span> <span class="n">PORT</span><span class="p">;</span>
+</span></span></code></pre></div><p>预处理之后，效果大致类似：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#define PORT 8080
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">port</span> <span class="o">=</span> <span class="n">PORT</span><span class="p">;</span>
+</span></span></code></pre></div><p>宏继续被替换后，又类似：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">port</span> <span class="o">=</span> <span class="mi">8080</span><span class="p">;</span>
+</span></span></code></pre></div><p>所以说，<code>#include</code> 不是“运行时加载模块”，也不是“链接阶段找模块”。它发生在更早的 <strong>预处理阶段</strong>。</p>
+<p>可以用编译器查看预处理结果：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">gcc -E main.c
+</span></span></code></pre></div><p>或者 C++：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">g++ -E main.cpp
+</span></span></code></pre></div><p><code>-E</code> 表示只做预处理，不继续编译。</p>
+<h2 id="四include-发生在什么时候">四、include 发生在什么时候</h2>
+<p>C/C++ 从源代码到可执行文件，大致经过这些阶段：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">源文件
+</span></span><span class="line"><span class="cl">  -&gt; 预处理
+</span></span><span class="line"><span class="cl">  -&gt; 编译
+</span></span><span class="line"><span class="cl">  -&gt; 汇编
+</span></span><span class="line"><span class="cl">  -&gt; 链接
+</span></span><span class="line"><span class="cl">  -&gt; 可执行文件
+</span></span></code></pre></div><p><code>#include</code> 发生在第一步：预处理。</p>
+<p>预处理器会处理：</p>
+<ul>
+<li><code>#include</code></li>
+<li><code>#define</code></li>
+<li><code>#if</code></li>
+<li><code>#ifdef</code></li>
+<li><code>#ifndef</code></li>
+<li><code>#pragma</code></li>
+<li>注释删除</li>
+</ul>
+<p>例如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;stdio.h&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="cp">#define DEBUG 1
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="cp">#if DEBUG
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span><span class="kt">void</span> <span class="nf">log_message</span><span class="p">(</span><span class="kt">void</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="cp">#endif
+</span></span></span></code></pre></div><p>预处理器不会检查函数到底有没有实现，也不会去链接库。它只是把源代码转换成更完整的翻译单元。</p>
+<h2 id="五翻译单元是什么">五、翻译单元是什么</h2>
+<p>一个 <code>.c</code> 或 <code>.cpp</code> 文件经过预处理之后，得到的完整代码叫 <strong>翻译单元（translation unit）</strong>。</p>
+<p>例如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="c1">// main.c
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&#34;student.h&#34;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;stdio.h&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">main</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>预处理后，会把 <code>student.h</code> 和 <code>stdio.h</code> 中需要包含的内容都展开到 <code>main.c</code> 中。这个展开后的结果，就是编译器真正拿去编译的东西。</p>
+<p>关键点是：<strong>编译器通常一次只编译一个翻译单元。</strong></p>
+<p>如果项目有：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">main.c
+</span></span><span class="line"><span class="cl">student.c
+</span></span><span class="line"><span class="cl">course.c
+</span></span></code></pre></div><p>它们通常会分别编译成：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">main.o
+</span></span><span class="line"><span class="cl">student.o
+</span></span><span class="line"><span class="cl">course.o
+</span></span></code></pre></div><p>每个 <code>.c</code> 文件都经过预处理后形成自己的翻译单元。头文件不是单独编译的对象，它是被包含进某个源文件之后，作为那个翻译单元的一部分被编译。</p>
+<p>这就是为什么头文件里写错东西，可能会导致很多源文件一起报错。不是编译器脾气差，是你把错误复制给了每一个包含它的文件。</p>
+<h2 id="六双引号和尖括号有什么区别">六、双引号和尖括号有什么区别</h2>
+<p><code>#include</code> 有两种常见写法：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&#34;student.h&#34;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;stdio.h&gt;</span><span class="cp">
+</span></span></span></code></pre></div><p>它们的主要区别是 <strong>头文件查找路径</strong>。</p>
+<h3 id="1-双引号">1. 双引号</h3>
+<p>双引号通常用于项目自己的头文件：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&#34;student.h&#34;</span><span class="cp">
+</span></span></span></code></pre></div><p>编译器一般会优先在当前源文件所在目录或指定的项目 include 路径中查找，然后再去系统 include 路径中查找。</p>
+<p>例如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">src/main.c
+</span></span><span class="line"><span class="cl">include/student.h
+</span></span></code></pre></div><p>可以编译时指定 include 路径：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">gcc -Iinclude src/main.c
+</span></span></code></pre></div><p>这样 <code>#include &quot;student.h&quot;</code> 就能找到 <code>include/student.h</code>。</p>
+<h3 id="2-尖括号">2. 尖括号</h3>
+<p>尖括号通常用于系统库或第三方库头文件：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;stdio.h&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;stdlib.h&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;vector&gt;</span><span class="cp">
+</span></span></span></code></pre></div><p>编译器会在系统 include 路径和通过 <code>-I</code> 等选项指定的路径中查找，一般不会优先从当前源文件目录查找。</p>
+<p>不过不同编译器的细节可能略有差异。工程实践上可以这样理解：</p>
+<ul>
+<li><code>&quot;xxx.h&quot;</code>：优先表示这是项目内头文件。</li>
+<li><code>&lt;xxx.h&gt;</code>：优先表示这是系统库或第三方库头文件。</li>
+</ul>
+<h3 id="3-它们不是内容类型的区别">3. 它们不是内容类型的区别</h3>
+<p>不要误解为：</p>
+<ul>
+<li>双引号只能包含自己写的文件。</li>
+<li>尖括号只能包含系统文件。</li>
+</ul>
+<p>这不是语言层面的硬性语义。它们真正影响的是查找路径和查找顺序。</p>
+<p>如果你配置了 include 路径，也可能这样写：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;student.h&gt;</span><span class="cp">
+</span></span></span></code></pre></div><p>只是这种写法会让读代码的人误以为 <code>student.h</code> 是外部库头文件。代码是写给编译器的，也是写给人看的。后半句有时更麻烦，所以更需要认真。</p>
+<h2 id="七include-路径从哪里来">七、include 路径从哪里来</h2>
+<p>编译器寻找头文件的路径一般来自几部分：</p>
+<ul>
+<li>当前源文件目录。</li>
+<li>编译器内置的系统 include 目录。</li>
+<li>命令行通过 <code>-I</code> 指定的目录。</li>
+<li>构建系统配置的 include 目录。</li>
+<li>某些环境变量或工具链配置。</li>
+</ul>
+<p>例如 GCC / Clang 常见写法：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">gcc -Iinclude -Ithird_party/libfoo/include src/main.c
+</span></span></code></pre></div><p>CMake 中常见写法：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cmake" data-lang="cmake"><span class="line"><span class="cl"><span class="nb">target_include_directories</span><span class="p">(</span><span class="s">app</span> <span class="s">PRIVATE</span> <span class="s">include</span><span class="p">)</span><span class="err">
+</span></span></span></code></pre></div><p>这表示编译 <code>app</code> 目标时，把 <code>include</code> 目录加入头文件搜索路径。</p>
+<p>如果头文件找不到，常见报错类似：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">fatal error: student.h: No such file or directory
+</span></span></code></pre></div><p>这不是链接错误，而是预处理阶段找不到头文件。它连编译都还没走到。</p>
+<h2 id="八头文件保护">八、头文件保护</h2>
+<p>因为 <code>#include</code> 是文本包含，所以同一个头文件可能被重复包含。</p>
+<p>例如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="c1">// a.h
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="cp">#include</span> <span class="cpf">&#34;common.h&#34;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="c1">// b.h
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="cp">#include</span> <span class="cpf">&#34;common.h&#34;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="c1">// main.c
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="cp">#include</span> <span class="cpf">&#34;a.h&#34;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&#34;b.h&#34;</span><span class="cp">
+</span></span></span></code></pre></div><p><code>main.c</code> 间接包含了两次 <code>common.h</code>。如果 <code>common.h</code> 里有结构体定义：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">struct</span> <span class="n">Config</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">port</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><p>重复展开后可能变成：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">struct</span> <span class="n">Config</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">port</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">struct</span> <span class="n">Config</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">port</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><p>这会导致重复定义类型。</p>
+<p>因此头文件通常要写 <strong>include guard</strong>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#ifndef COMMON_H
+</span></span></span><span class="line"><span class="cl"><span class="cp">#define COMMON_H
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="k">struct</span> <span class="n">Config</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">port</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="cp">#endif
+</span></span></span></code></pre></div><p>第一次包含时，<code>COMMON_H</code> 没有定义，于是进入文件内容，并定义 <code>COMMON_H</code>。第二次包含时，<code>COMMON_H</code> 已经定义，文件内容就会被跳过。</p>
+<p>也可以使用：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#pragma once
+</span></span></span></code></pre></div><p>它表示这个头文件在同一个编译过程中只包含一次。</p>
+<h3 id="include-guard-和-pragma-once-怎么选">include guard 和 pragma once 怎么选</h3>
+<p><code>#ifndef/#define/#endif</code> 是传统、标准、可移植的写法：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#ifndef PROJECT_STUDENT_H
+</span></span></span><span class="line"><span class="cl"><span class="cp">#define PROJECT_STUDENT_H
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="c1">// ...
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="cp">#endif
+</span></span></span></code></pre></div><p><code>#pragma once</code> 更简洁：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#pragma once
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="c1">// ...
+</span></span></span></code></pre></div><p>现代主流编译器基本都支持 <code>#pragma once</code>，但它不是传统 C/C++ 标准的一部分。一般项目里两种都常见。</p>
+<p>如果你在写跨平台、跨编译器、长期维护的基础库，include guard 更稳。如果是普通现代工程，<code>#pragma once</code> 也很常用。</p>
+<h2 id="九头文件里应该放什么">九、头文件里应该放什么</h2>
+<p>比较推荐放在头文件里的内容：</p>
+<ul>
+<li>类型声明和类型定义。</li>
+<li>函数声明。</li>
+<li>宏定义。</li>
+<li>常量声明。</li>
+<li><code>static inline</code> 小函数。</li>
+<li>C++ 类声明。</li>
+<li>C++ 模板定义。</li>
+<li>C++ <code>inline</code> 函数定义。</li>
+</ul>
+<p>例如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// math_utils.hpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="cp">#pragma once
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">add</span><span class="p">(</span><span class="kt">int</span> <span class="n">a</span><span class="p">,</span> <span class="kt">int</span> <span class="n">b</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">inline</span> <span class="kt">int</span> <span class="nf">square</span><span class="p">(</span><span class="kt">int</span> <span class="n">x</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="n">x</span> <span class="o">*</span> <span class="n">x</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">template</span> <span class="o">&lt;</span><span class="k">typename</span> <span class="n">T</span><span class="o">&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="n">T</span> <span class="n">max_value</span><span class="p">(</span><span class="n">T</span> <span class="n">a</span><span class="p">,</span> <span class="n">T</span> <span class="n">b</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="n">a</span> <span class="o">&gt;</span> <span class="n">b</span> <span class="o">?</span> <span class="nl">a</span> <span class="p">:</span> <span class="n">b</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>模板通常必须放在头文件里，因为编译器需要看到完整定义才能在使用处实例化模板。</p>
+<p>不推荐随便放在头文件里的内容：</p>
+<ul>
+<li>普通全局变量定义。</li>
+<li>普通非 <code>inline</code> 函数定义。</li>
+<li>大量会污染命名空间的宏。</li>
+<li><code>using namespace std;</code></li>
+<li>过多不必要的 include。</li>
+</ul>
+<p>尤其是 <code>using namespace std;</code>，不要放在头文件里：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// bad.hpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;string&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span><span class="k">using</span> <span class="k">namespace</span> <span class="n">std</span><span class="p">;</span>
+</span></span></code></pre></div><p>因为任何包含这个头文件的源文件都会被迫把 <code>std</code> 里的名字引入当前命名空间。你以为自己省了几个字符，别人可能要替你处理名字冲突。很慷慨，慷慨得让人困扰。</p>
+<h2 id="十头文件包含的是接口不是库本身">十、头文件包含的是接口，不是库本身</h2>
+<p>这是一个非常重要的点：<strong>包含头文件不等于链接库。</strong></p>
+<p>例如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;math.h&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">main</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">double</span> <span class="n">x</span> <span class="o">=</span> <span class="nf">sqrt</span><span class="p">(</span><span class="mf">2.0</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p><code>math.h</code> 里提供了 <code>sqrt</code> 的声明，让编译器知道 <code>sqrt</code> 怎么调用。</p>
+<p>但在某些 Unix-like 环境下，真正的 <code>sqrt</code> 实现位于数学库 <code>libm</code> 中，编译时可能还需要：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">gcc main.c -lm
+</span></span></code></pre></div><p>如果只包含头文件，但没有链接对应库，可能出现链接错误：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">undefined reference to `sqrt&#39;
+</span></span></code></pre></div><p>这个错误不是说找不到头文件，而是链接器找不到函数实现。</p>
+<p>可以粗略区分：</p>
+<table>
+  <thead>
+      <tr>
+          <th>阶段</th>
+          <th>需要什么</th>
+          <th>常见错误</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>预处理</td>
+          <td>找到头文件</td>
+          <td><code>No such file or directory</code></td>
+      </tr>
+      <tr>
+          <td>编译</td>
+          <td>看懂声明和语法</td>
+          <td><code>implicit declaration</code>、类型不匹配、语法错误</td>
+      </tr>
+      <tr>
+          <td>链接</td>
+          <td>找到函数和变量定义</td>
+          <td><code>undefined reference</code>、<code>unresolved external symbol</code></td>
+      </tr>
+  </tbody>
+</table>
+<p>也就是说：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&#34;student.h&#34;</span><span class="cp">
+</span></span></span></code></pre></div><p>只解决“编译器知道 <code>print_student</code> 存在”的问题。</p>
+<p>还需要把 <code>student.c</code> 编译并链接进最终程序：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">gcc main.c student.c -o app
+</span></span></code></pre></div><p>如果只编译：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">gcc main.c -o app
+</span></span></code></pre></div><p>即使 <code>main.c</code> 包含了 <code>student.h</code>，链接器也找不到 <code>print_student</code> 的实现。</p>
+<h2 id="十一c-头文件和声明的特殊性">十一、C++ 头文件和声明的特殊性</h2>
+<p>C++ 的头文件通常比 C 更复杂，因为 C++ 语言特性更多。</p>
+<p>例如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// user.hpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="cp">#pragma once
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;string&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">User</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="k">public</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">User</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="n">name</span><span class="p">,</span> <span class="kt">int</span> <span class="n">age</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">const</span> <span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="o">&amp;</span><span class="n">name</span><span class="p">()</span> <span class="k">const</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="nf">age</span><span class="p">()</span> <span class="k">const</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">private</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="n">name_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">age_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><p>实现放在 <code>.cpp</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// user.cpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&#34;user.hpp&#34;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="n">User</span><span class="o">::</span><span class="n">User</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="n">name</span><span class="p">,</span> <span class="kt">int</span> <span class="n">age</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="o">:</span> <span class="n">name_</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">name</span><span class="p">)),</span> <span class="n">age_</span><span class="p">(</span><span class="n">age</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">const</span> <span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="o">&amp;</span><span class="n">User</span><span class="o">::</span><span class="n">name</span><span class="p">()</span> <span class="k">const</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="n">name_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">User</span><span class="o">::</span><span class="n">age</span><span class="p">()</span> <span class="k">const</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="n">age_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>这里头文件暴露了类的成员布局，包括私有字段。也就是说，C++ 头文件经常不仅是“接口声明”，还会暴露一部分实现细节。</p>
+<p>这是 C++ 编译模型的历史负担之一。</p>
+<h3 id="前向声明">前向声明</h3>
+<p>如果只需要指针或引用，可以用前向声明减少头文件依赖：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// order.hpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="cp">#pragma once
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">User</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">Order</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="k">public</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">void</span> <span class="n">set_user</span><span class="p">(</span><span class="n">User</span> <span class="o">*</span><span class="n">user</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">private</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">User</span> <span class="o">*</span><span class="n">user_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><p>这里不需要 <code>#include &quot;user.hpp&quot;</code>，因为编译器只需要知道 <code>User</code> 是一个类型，至于它里面有什么字段，不重要。</p>
+<p>但如果按值保存 <code>User</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">User</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">Order</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="k">private</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">User</span> <span class="n">user_</span><span class="p">;</span> <span class="c1">// 不合法，User 类型不完整
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">};</span>
+</span></span></code></pre></div><p>这就不行。因为按值保存时，编译器必须知道 <code>User</code> 的大小和布局。</p>
+<p>前向声明可以减少编译依赖，提高编译速度，也能降低头文件互相包含导致的复杂度。</p>
+<h2 id="十二循环包含问题">十二、循环包含问题</h2>
+<p>循环包含是 C/C++ 新手和老手都会遇到的问题。只是老手遇到时，表情更平静一点。</p>
+<p>例如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// a.hpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="cp">#pragma once
+</span></span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&#34;b.hpp&#34;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="k">struct</span> <span class="nc">A</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">B</span> <span class="n">b</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// b.hpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="cp">#pragma once
+</span></span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&#34;a.hpp&#34;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="k">struct</span> <span class="nc">B</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">A</span> <span class="n">a</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><p>这不仅是循环包含的问题，更是对象无限嵌套的问题：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">A 包含 B
+</span></span><span class="line"><span class="cl">B 又包含 A
+</span></span><span class="line"><span class="cl">A 又包含 B
+</span></span><span class="line"><span class="cl">...
+</span></span></code></pre></div><p>这种结构在内存上无法成立。</p>
+<p>如果只是互相引用，应该用指针或引用配合前向声明：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// a.hpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="cp">#pragma once
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="k">struct</span> <span class="nc">B</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">struct</span> <span class="nc">A</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">B</span> <span class="o">*</span><span class="n">b</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// b.hpp
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="cp">#pragma once
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="k">struct</span> <span class="nc">A</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">struct</span> <span class="nc">B</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">A</span> <span class="o">*</span><span class="n">a</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><p>这样 <code>A</code> 和 <code>B</code> 只是保存对方地址，不需要知道对方完整大小。</p>
+<h2 id="十三头文件是不是模块化">十三、头文件是不是模块化</h2>
+<p>现在可以回答最开始的问题：C/C++ 头文件是不是“模块化引用”？</p>
+<p>答案要分层看。</p>
+<p>从工程组织角度说，头文件确实承担了一部分模块接口的作用：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">student.h      对外接口
+</span></span><span class="line"><span class="cl">student.c      具体实现
+</span></span><span class="line"><span class="cl">main.c         使用接口
+</span></span></code></pre></div><p>这种模式让代码可以拆成多个文件，让调用者只依赖声明，而不直接关心实现。</p>
+<p>但从语言机制角度说，<code>#include</code> 不是现代意义上的模块导入。它只是预处理阶段的文本包含。</p>
+<p>所以更准确的说法是：</p>
+<p><strong>头文件是一种基于文本包含机制实现出来的接口组织方式，而不是严格的语言级模块系统。</strong></p>
+<p>这也是为什么 C/C++ 项目会有：</p>
+<ul>
+<li>include guard。</li>
+<li>重复包含问题。</li>
+<li>宏污染问题。</li>
+<li>头文件依赖膨胀。</li>
+<li>修改一个头文件导致大量源文件重新编译。</li>
+</ul>
+<p>现代 C++20 引入了 modules，试图解决传统头文件模型的一部分问题。但现实工程中，头文件仍然大量存在。它们不会因为新标准出现就立刻消失。历史包袱这种东西，通常比我们想象得更有耐心。</p>
+<h2 id="十四一个小型工程示例">十四、一个小型工程示例</h2>
+<p>假设有这样的项目：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">project/
+</span></span><span class="line"><span class="cl">  include/
+</span></span><span class="line"><span class="cl">    student.h
+</span></span><span class="line"><span class="cl">  src/
+</span></span><span class="line"><span class="cl">    student.c
+</span></span><span class="line"><span class="cl">    main.c
+</span></span></code></pre></div><p>头文件：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="c1">// include/student.h
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="cp">#ifndef STUDENT_H
+</span></span></span><span class="line"><span class="cl"><span class="cp">#define STUDENT_H
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">Student</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">id</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">age</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">Student</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">print_student</span><span class="p">(</span><span class="k">const</span> <span class="n">Student</span> <span class="o">*</span><span class="n">student</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="cp">#endif
+</span></span></span></code></pre></div><p>实现文件：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="c1">// src/student.c
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&#34;student.h&#34;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;stdio.h&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">print_student</span><span class="p">(</span><span class="k">const</span> <span class="n">Student</span> <span class="o">*</span><span class="n">student</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">printf</span><span class="p">(</span><span class="s">&#34;id=%d, age=%d</span><span class="se">\n</span><span class="s">&#34;</span><span class="p">,</span> <span class="n">student</span><span class="o">-&gt;</span><span class="n">id</span><span class="p">,</span> <span class="n">student</span><span class="o">-&gt;</span><span class="n">age</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>入口文件：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="c1">// src/main.c
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&#34;student.h&#34;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">main</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">Student</span> <span class="n">student</span> <span class="o">=</span> <span class="p">{</span><span class="mi">1</span><span class="p">,</span> <span class="mi">18</span><span class="p">};</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">print_student</span><span class="p">(</span><span class="o">&amp;</span><span class="n">student</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>编译：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">gcc -Iinclude src/main.c src/student.c -o app
+</span></span></code></pre></div><p>这里发生了几件事：</p>
+<ul>
+<li><code>-Iinclude</code> 告诉编译器去 <code>include</code> 目录找头文件。</li>
+<li><code>main.c</code> 包含 <code>student.h</code>，所以编译器知道 <code>Student</code> 和 <code>print_student</code>。</li>
+<li><code>student.c</code> 包含 <code>student.h</code>，确保实现和声明一致。</li>
+<li><code>student.c</code> 提供 <code>print_student</code> 的真正定义。</li>
+<li>链接阶段把 <code>main.c</code> 和 <code>student.c</code> 编译出来的目标文件合在一起。</li>
+</ul>
+<p>如果漏掉 <code>-Iinclude</code>，可能找不到头文件。</p>
+<p>如果漏掉 <code>src/student.c</code>，可能链接失败，因为找不到 <code>print_student</code> 的实现。</p>
+<h2 id="十五总结">十五、总结</h2>
+<p>头文件和 <code>#include</code> 可以这样理解：</p>
+<ul>
+<li><code>#include</code> 发生在预处理阶段。</li>
+<li><code>#include</code> 本质上是文本包含，可以粗略理解为复制粘贴。</li>
+<li>头文件通常放声明，源文件通常放定义。</li>
+<li>双引号和尖括号的主要区别是头文件查找路径和查找顺序。</li>
+<li>包含头文件只表示编译器能看到声明，不等于链接了函数实现或库。</li>
+<li>头文件需要 include guard 或 <code>#pragma once</code> 防止重复包含。</li>
+<li>C++ 头文件因为类、模板、<code>inline</code> 等机制，会比 C 头文件更复杂。</li>
+<li>前向声明可以减少头文件依赖，但只能在不需要完整类型大小时使用。</li>
+</ul>
+<p>一句话概括：<strong>C/C++ 头文件像模块接口，但 <code>#include</code> 本身不是模块系统；它只是把文本拿过来，让编译器在当前翻译单元里看见需要的声明。</strong></p>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

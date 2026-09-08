@@ -1,0 +1,1506 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Spring 事务完整执行链路 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="一、注解阶段：@Transactional 是如何被发现的 @Transactional 本身并不做任何事 @Transactional public void save() { ... } 本质只是一个 元数据（Metadata）：
+不开事务 不回滚 不拦截方法 它只是告诉 Spring：这里可能需要事务
+谁去扫描这个注解？ 在启动时：
+@EnableTransactionManagement 或 Spring Boot 自动配置 会注册一个核心组件：
+AnnotationTransactionAttributeSource 它的职责只有一个：
+读取方法 / 类上的 @Transactional，并转成 TransactionAttribute
+二、方法拦截阶段：AOP 是如何介入的 Spring 为 Bean 创建代理 当 Spring 容器启动时：
+如果一个 Bean 的方法上有 @Transactional Spring 会为它创建 代理对象 代理类型：
+JDK 动态代理（接口） CGLIB（类） 方法调用真正发生了什么？ 当我们调用
+service.save(); 实际执行的是：
+Proxy.save() 执行顺序：
+代理方法 ↓ TransactionInterceptor.invoke() ↓ 真实方法 三、注解解析阶段：是否需要事务、用什么规则 进入 TransactionInterceptor public Object invoke(MethodInvocation invocation) 内部立刻调用：
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/spring/spring-%E4%BA%8B%E5%8A%A1%E5%AE%8C%E6%95%B4%E6%89%A7%E8%A1%8C%E9%93%BE%E8%B7%AF/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/spring/spring-%E4%BA%8B%E5%8A%A1%E5%AE%8C%E6%95%B4%E6%89%A7%E8%A1%8C%E9%93%BE%E8%B7%AF/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="Spring 事务完整执行链路">
+  <meta property="og:description" content="一、注解阶段：@Transactional 是如何被发现的 @Transactional 本身并不做任何事 @Transactional public void save() { ... } 本质只是一个 元数据（Metadata）：
+不开事务 不回滚 不拦截方法 它只是告诉 Spring：这里可能需要事务
+谁去扫描这个注解？ 在启动时：
+@EnableTransactionManagement 或 Spring Boot 自动配置 会注册一个核心组件：
+AnnotationTransactionAttributeSource 它的职责只有一个：
+读取方法 / 类上的 @Transactional，并转成 TransactionAttribute
+二、方法拦截阶段：AOP 是如何介入的 Spring 为 Bean 创建代理 当 Spring 容器启动时：
+如果一个 Bean 的方法上有 @Transactional Spring 会为它创建 代理对象 代理类型：
+JDK 动态代理（接口） CGLIB（类） 方法调用真正发生了什么？ 当我们调用
+service.save(); 实际执行的是：
+Proxy.save() 执行顺序：
+代理方法 ↓ TransactionInterceptor.invoke() ↓ 真实方法 三、注解解析阶段：是否需要事务、用什么规则 进入 TransactionInterceptor public Object invoke(MethodInvocation invocation) 内部立刻调用：">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="spring">
+    <meta property="article:published_time" content="2026-02-19T16:44:15+08:00">
+    <meta property="article:modified_time" content="2026-02-19T16:44:15+08:00">
+
+  
+  <meta itemprop="name" content="Spring 事务完整执行链路">
+  <meta itemprop="description" content="一、注解阶段：@Transactional 是如何被发现的 @Transactional 本身并不做任何事 @Transactional public void save() { ... } 本质只是一个 元数据（Metadata）：
+不开事务 不回滚 不拦截方法 它只是告诉 Spring：这里可能需要事务
+谁去扫描这个注解？ 在启动时：
+@EnableTransactionManagement 或 Spring Boot 自动配置 会注册一个核心组件：
+AnnotationTransactionAttributeSource 它的职责只有一个：
+读取方法 / 类上的 @Transactional，并转成 TransactionAttribute
+二、方法拦截阶段：AOP 是如何介入的 Spring 为 Bean 创建代理 当 Spring 容器启动时：
+如果一个 Bean 的方法上有 @Transactional Spring 会为它创建 代理对象 代理类型：
+JDK 动态代理（接口） CGLIB（类） 方法调用真正发生了什么？ 当我们调用
+service.save(); 实际执行的是：
+Proxy.save() 执行顺序：
+代理方法 ↓ TransactionInterceptor.invoke() ↓ 真实方法 三、注解解析阶段：是否需要事务、用什么规则 进入 TransactionInterceptor public Object invoke(MethodInvocation invocation) 内部立刻调用：">
+  <meta itemprop="datePublished" content="2026-02-19T16:44:15+08:00">
+  <meta itemprop="dateModified" content="2026-02-19T16:44:15+08:00">
+  <meta itemprop="wordCount" content="463">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Spring 事务完整执行链路">
+  <meta name="twitter:description" content="一、注解阶段：@Transactional 是如何被发现的 @Transactional 本身并不做任何事 @Transactional public void save() { ... } 本质只是一个 元数据（Metadata）：
+不开事务 不回滚 不拦截方法 它只是告诉 Spring：这里可能需要事务
+谁去扫描这个注解？ 在启动时：
+@EnableTransactionManagement 或 Spring Boot 自动配置 会注册一个核心组件：
+AnnotationTransactionAttributeSource 它的职责只有一个：
+读取方法 / 类上的 @Transactional，并转成 TransactionAttribute
+二、方法拦截阶段：AOP 是如何介入的 Spring 为 Bean 创建代理 当 Spring 容器启动时：
+如果一个 Bean 的方法上有 @Transactional Spring 会为它创建 代理对象 代理类型：
+JDK 动态代理（接口） CGLIB（类） 方法调用真正发生了什么？ 当我们调用
+service.save(); 实际执行的是：
+Proxy.save() 执行顺序：
+代理方法 ↓ TransactionInterceptor.invoke() ↓ 真实方法 三、注解解析阶段：是否需要事务、用什么规则 进入 TransactionInterceptor public Object invoke(MethodInvocation invocation) 内部立刻调用：">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">Spring 事务完整执行链路</h1>
+
+    
+      <div class="post-date">February 19, 2026</div>
+    
+
+    <div class="post-content">
+      <h2 id="一注解阶段transactional-是如何被发现的">一、注解阶段：<code>@Transactional</code> 是如何被发现的</h2>
+<h3 id="transactional-本身并不做任何事"><code>@Transactional</code> 本身并不做任何事</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="nd">@Transactional</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">public</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">save</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="p">...</span><span class="w"> </span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>本质只是一个 <strong>元数据（Metadata）</strong>：</p>
+<ul>
+<li>不开事务</li>
+<li>不回滚</li>
+<li>不拦截方法</li>
+</ul>
+<p><strong>它只是告诉 Spring：这里可能需要事务</strong></p>
+<h3 id="谁去扫描这个注解">谁去扫描这个注解？</h3>
+<p>在启动时：</p>
+<ul>
+<li><code>@EnableTransactionManagement</code></li>
+<li>或 Spring Boot 自动配置</li>
+</ul>
+<p>会注册一个核心组件：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">AnnotationTransactionAttributeSource</span><span class="w">
+</span></span></span></code></pre></div><p>它的职责只有一个：</p>
+<blockquote>
+<p><strong>读取方法 / 类上的 <code>@Transactional</code>，并转成 TransactionAttribute</strong></p></blockquote>
+<h2 id="二方法拦截阶段aop-是如何介入的">二、方法拦截阶段：AOP 是如何介入的</h2>
+<h3 id="spring-为-bean-创建代理">Spring 为 Bean 创建代理</h3>
+<p>当 Spring 容器启动时：</p>
+<ul>
+<li>如果一个 Bean 的方法上有 <code>@Transactional</code></li>
+<li>Spring 会为它创建 <strong>代理对象</strong></li>
+</ul>
+<p>代理类型：</p>
+<ul>
+<li>JDK 动态代理（接口）</li>
+<li>CGLIB（类）</li>
+</ul>
+<h3 id="方法调用真正发生了什么">方法调用真正发生了什么？</h3>
+<p>当我们调用</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">service</span><span class="p">.</span><span class="na">save</span><span class="p">();</span><span class="w">
+</span></span></span></code></pre></div><p>实际执行的是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">Proxy</span><span class="p">.</span><span class="na">save</span><span class="p">()</span><span class="w">
+</span></span></span></code></pre></div><p>执行顺序：</p>
+<pre tabindex="0"><code>代理方法
+ ↓
+TransactionInterceptor.invoke()
+ ↓
+真实方法
+</code></pre><h2 id="三注解解析阶段是否需要事务用什么规则">三、注解解析阶段：是否需要事务、用什么规则</h2>
+<h3 id="进入-transactioninterceptor">进入 <code>TransactionInterceptor</code></h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="kd">public</span><span class="w"> </span><span class="n">Object</span><span class="w"> </span><span class="nf">invoke</span><span class="p">(</span><span class="n">MethodInvocation</span><span class="w"> </span><span class="n">invocation</span><span class="p">)</span><span class="w">
+</span></span></span></code></pre></div><p>内部立刻调用：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">invokeWithinTransaction</span><span class="p">(...)</span><span class="w">
+</span></span></span></code></pre></div><h3 id="解析事务属性">解析事务属性</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">TransactionAttribute</span><span class="w"> </span><span class="n">txAttr</span><span class="w"> </span><span class="o">=</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">transactionAttributeSource</span><span class="p">.</span><span class="na">getTransactionAttribute</span><span class="p">(</span><span class="n">method</span><span class="p">,</span><span class="w"> </span><span class="n">targetClass</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><p>这里完成：</p>
+<ul>
+<li>查方法上的 <code>@Transactional</code></li>
+<li>查类上的 <code>@Transactional</code></li>
+<li>合并成一个 <code>TransactionAttribute</code></li>
+</ul>
+<p>包含：</p>
+<ul>
+<li>传播行为</li>
+<li>隔离级别</li>
+<li>超时</li>
+<li>只读</li>
+<li>回滚规则</li>
+</ul>
+<p><strong>如果 <code>txAttr == null</code>：直接执行方法，不走事务</strong></p>
+<h2 id="四事务管理器选择阶段谁来真正管事务">四、事务管理器选择阶段：谁来真正管事务？</h2>
+<h3 id="选择-platformtransactionmanager">选择 <code>PlatformTransactionManager</code></h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">PlatformTransactionManager</span><span class="w"> </span><span class="n">tm</span><span class="w"> </span><span class="o">=</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">determineTransactionManager</span><span class="p">(</span><span class="n">txAttr</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><p>选择逻辑：</p>
+<ol>
+<li><code>@Transactional(transactionManager=&quot;xxx&quot;)</code></li>
+<li>Bean 名称匹配</li>
+<li>容器中唯一的 TransactionManager</li>
+<li>默认事务管理器</li>
+</ol>
+<p>常见实现：</p>
+<ul>
+<li><code>DataSourceTransactionManager</code>（JDBC / MyBatis）</li>
+<li><code>JpaTransactionManager</code></li>
+<li><code>JtaTransactionManager</code></li>
+</ul>
+<p><strong>这一层决定事务由谁执行</strong></p>
+<h2 id="五事务执行阶段真正的事务生命周期">五、事务执行阶段：真正的事务生命周期</h2>
+<h3 id="创建或加入事务">创建或加入事务</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">TransactionStatus</span><span class="w"> </span><span class="n">status</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">tm</span><span class="p">.</span><span class="na">getTransaction</span><span class="p">(</span><span class="n">txAttr</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><p>这里会根据 <strong>传播行为</strong>：</p>
+<ul>
+<li>REQUIRED：
+<ul>
+<li>有事务 -&gt; 加入</li>
+<li>无事务 -&gt; 新建</li>
+</ul>
+</li>
+<li>REQUIRES_NEW：
+<ul>
+<li>挂起旧事务</li>
+<li>新建事务</li>
+</ul>
+</li>
+<li>SUPPORTS / NOT_SUPPORTED：
+<ul>
+<li>可能不创建事务</li>
+</ul>
+</li>
+</ul>
+<p>并且：</p>
+<ul>
+<li>获取数据库连接</li>
+<li><code>setAutoCommit(false)</code></li>
+<li>绑定到 <code>ThreadLocal</code></li>
+</ul>
+<h3 id="执行业务方法">执行业务方法</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">Object</span><span class="w"> </span><span class="n">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">invocation</span><span class="p">.</span><span class="na">proceed</span><span class="p">();</span><span class="w">
+</span></span></span></code></pre></div><p>此时：</p>
+<ul>
+<li>所有 SQL</li>
+<li>都使用同一个 Connection</li>
+<li>都处于同一个事务上下文</li>
+</ul>
+<h3 id="异常发生时的处理">异常发生时的处理</h3>
+<p>如果业务方法抛异常：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="k">catch</span><span class="w"> </span><span class="p">(</span><span class="n">Throwable</span><span class="w"> </span><span class="n">ex</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">completeTransactionAfterThrowing</span><span class="p">(</span><span class="n">txInfo</span><span class="p">,</span><span class="w"> </span><span class="n">ex</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>内部逻辑：</p>
+<ul>
+<li>判断 <code>rollbackFor / noRollbackFor</code></li>
+<li>决定：
+<ul>
+<li><code>rollback()</code></li>
+<li>或 <code>commit()</code></li>
+</ul>
+</li>
+</ul>
+<h3 id="正常返回时提交事务">正常返回时提交事务</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">commitTransactionAfterReturning</span><span class="p">(</span><span class="n">txInfo</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><p>最终执行：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">tm</span><span class="p">.</span><span class="na">commit</span><span class="p">(</span><span class="n">status</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><h2 id="六资源清理阶段事务结束后的善后工作">六、资源清理阶段：事务结束后的善后工作</h2>
+<h3 id="清理事务上下文">清理事务上下文</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">cleanupTransactionInfo</span><span class="p">(</span><span class="n">txInfo</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><p>做了什么？</p>
+<ul>
+<li>清除 ThreadLocal 里的事务状态</li>
+<li>解绑 Connection</li>
+<li>恢复被挂起的事务</li>
+<li>防止线程复用污染</li>
+</ul>
+<h3 id="释放数据库资源">释放数据库资源</h3>
+<p>由事务管理器完成：</p>
+<ul>
+<li><code>ConnectionHolder.unbind()</code></li>
+<li><code>Connection.close()</code>（或归还连接池）</li>
+</ul>
+<h2 id="七完整流程文字版时序图">七、完整流程文字版时序图</h2>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">调用</span><span class="w"> </span><span class="nd">@Transactional</span><span class="w"> </span><span class="n">方法</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"> </span><span class="err">↓</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">AOP</span><span class="w"> </span><span class="n">代理拦截</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"> </span><span class="err">↓</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">TransactionInterceptor</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"> </span><span class="err">↓</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">解析</span><span class="w"> </span><span class="nd">@Transactional</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="n">TransactionAttribute</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"> </span><span class="err">↓</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">选择</span><span class="w"> </span><span class="n">PlatformTransactionManager</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"> </span><span class="err">↓</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">getTransaction</span><span class="p">()</span><span class="err">（</span><span class="n">新建</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">加入</span><span class="err">）</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"> </span><span class="err">↓</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">执行业务方法</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"> </span><span class="err">↓</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">异常</span><span class="err">？</span><span class="o">-&gt;</span><span class="w"> </span><span class="n">rollback</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">正常</span><span class="err">？</span><span class="o">-&gt;</span><span class="w"> </span><span class="n">commit</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"> </span><span class="err">↓</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">清理</span><span class="w"> </span><span class="n">ThreadLocal</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="n">连接</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"> </span><span class="err">↓</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">方法返回</span><span class="w">
+</span></span></span></code></pre></div><h2 id="八事务管理器的作用是什么">八、事务管理器的作用是什么？</h2>
+<p><strong>事务管理器 = 事务的执行者。它只负责：开、提交、回滚事务，不负责：什么时候开、为什么回滚、用什么规则。</strong></p>
+<h3 id="1-事务管理器解决的核心问题">1. 事务管理器解决的核心问题</h3>
+<h4 id="把抽象事务翻译成具体技术动作">把抽象事务翻译成具体技术动作</h4>
+<p>Spring 定义了统一接口：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">PlatformTransactionManager</span><span class="w">
+</span></span></span></code></pre></div><p>但真正的事务操作依赖具体技术：</p>
+<table>
+  <thead>
+      <tr>
+          <th>技术</th>
+          <th>实际事务操作</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>JDBC</td>
+          <td><code>Connection.setAutoCommit(false)</code></td>
+      </tr>
+      <tr>
+          <td>JPA</td>
+          <td><code>EntityManager.getTransaction()</code></td>
+      </tr>
+      <tr>
+          <td>JTA</td>
+          <td><code>UserTransaction.begin()</code></td>
+      </tr>
+  </tbody>
+</table>
+<p><strong>事务管理器就是适配器</strong></p>
+<h4 id="负责事务的三个原子操作">负责事务的三个原子操作</h4>
+<p>所有事务管理器，只关心这三件事：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">getTransaction</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">commit</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">rollback</span><span class="p">()</span><span class="w">
+</span></span></span></code></pre></div><ul>
+<li><code>getTransaction()</code>：
+<ul>
+<li>新建事务 / 加入事务</li>
+<li>挂起 / 恢复事务</li>
+</ul>
+</li>
+<li><code>commit()</code>：提交</li>
+<li><code>rollback()</code>：回滚</li>
+</ul>
+<p><strong>没有任何业务语义判断</strong></p>
+<h4 id="维护事务状态transactionstatus">维护事务状态（TransactionStatus）</h4>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">TransactionStatus</span><span class="w">
+</span></span></span></code></pre></div><ul>
+<li>是否新事务</li>
+<li>是否已完成</li>
+<li>保存点（嵌套事务）</li>
+</ul>
+<p><strong>它只是状态，不是策略</strong></p>
+<h3 id="2-事务管理器不知道这些事情">2. 事务管理器不知道这些事情</h3>
+<p>事务管理器 <strong>完全不知道</strong>：</p>
+<ul>
+<li>方法上有没有 <code>@Transactional</code></li>
+<li>rollbackFor 是什么</li>
+<li>propagation 是 REQUIRED 还是 REQUIRES_NEW</li>
+<li>当前是不是 AOP 调用</li>
+</ul>
+<p><strong>这些都不是它的职责</strong></p>
+<h2 id="九transactionaspectsupport-的作用是什么">九、TransactionAspectSupport 的作用是什么？</h2>
+<p>TransactionAspectSupport = Spring 声明式事务的总指挥
+它决定：</p>
+<ul>
+<li>什么时候用事务</li>
+<li>用哪个事务管理器</li>
+<li>如何处理传播行为</li>
+<li>异常时回滚还是提交</li>
+<li>事务结束后如何清理</li>
+</ul>
+<h3 id="1-它在体系中的位置">1. 它在体系中的位置</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="nd">@Transaction</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">   </span><span class="err">↓</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">AOP</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">   </span><span class="err">↓</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">TransactionInterceptor</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">   </span><span class="err">↓</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">TransactionAspectSupport</span><span class="w">   </span><span class="err">←</span><span class="w"> </span><span class="n">核心调度层</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">   </span><span class="err">↓</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">PlatformTransactionManager</span><span class="w"> </span><span class="err">←</span><span class="w"> </span><span class="n">执行层</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">   </span><span class="err">↓</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">Database</span><span class="w">
+</span></span></span></code></pre></div><p><strong>它站在策略层，而不是执行层</strong></p>
+<h3 id="2-transactionaspectsupport-干的-6-件关键事情">2. TransactionAspectSupport 干的 6 件关键事情</h3>
+<h4 id="解析事务元数据">解析事务元数据</h4>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">TransactionAttribute</span><span class="w"> </span><span class="n">txAttr</span><span class="w"> </span><span class="o">=</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">transactionAttributeSource</span><span class="p">.</span><span class="na">getTransactionAttribute</span><span class="p">(</span><span class="n">method</span><span class="p">,</span><span class="w"> </span><span class="n">targetClass</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><ul>
+<li>把 <code>@Transactional</code> 转成 <code>TransactionAttribute</code></li>
+<li>决定：要不要事务、用什么规则</li>
+</ul>
+<h4 id="选择事务管理器">选择事务管理器</h4>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">PlatformTransactionManager</span><span class="w"> </span><span class="n">tm</span><span class="w"> </span><span class="o">=</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">determineTransactionManager</span><span class="p">(</span><span class="n">txAttr</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><ul>
+<li>支持多数据源</li>
+<li>支持指定事务管理器</li>
+</ul>
+<h4 id="创建--加入事务">创建 / 加入事务</h4>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">TransactionInfo</span><span class="w"> </span><span class="n">txInfo</span><span class="w"> </span><span class="o">=</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">createTransactionIfNecessary</span><span class="p">(</span><span class="n">tm</span><span class="p">,</span><span class="w"> </span><span class="n">txAttr</span><span class="p">,</span><span class="w"> </span><span class="n">joinpointId</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><ul>
+<li>REQUIRED / REQUIRES_NEW</li>
+<li>挂起 / 恢复事务</li>
+</ul>
+<p><strong>传播行为不在事务管理器，而在这里</strong></p>
+<h4 id="执行业务方法-1">执行业务方法</h4>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">Object</span><span class="w"> </span><span class="n">ret</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">invocation</span><span class="p">.</span><span class="na">proceed</span><span class="p">();</span><span class="w">
+</span></span></span></code></pre></div><h4 id="决定提交还是回滚">决定提交还是回滚</h4>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">txAttr</span><span class="p">.</span><span class="na">rollbackOn</span><span class="p">(</span><span class="n">ex</span><span class="p">))</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">tm</span><span class="p">.</span><span class="na">rollback</span><span class="p">(</span><span class="n">status</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">tm</span><span class="p">.</span><span class="na">commit</span><span class="p">(</span><span class="n">status</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><ul>
+<li>rollbackFor</li>
+<li>noRollbackFor</li>
+<li>RuntimeException 默认回滚</li>
+</ul>
+<p><strong>这是事务语义的核心判断</strong></p>
+<h4 id="清理事务上下文-1">清理事务上下文</h4>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">cleanupTransactionInfo</span><span class="p">(</span><span class="n">txInfo</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><ul>
+<li>清理 ThreadLocal</li>
+<li>恢复挂起事务</li>
+<li>防止事务污染</li>
+</ul>
+<h2 id="十transactionaspectsupport-能做什么--不能做什么">十、TransactionAspectSupport 能做什么 / 不能做什么</h2>
+<h3 id="1-它能做的">1. 它能做的</h3>
+<ol>
+<li><strong>手动标记事务回滚</strong></li>
+<li><strong>获取当前事务状态</strong></li>
+<li><strong>在复杂分支中决定是否回滚</strong></li>
+<li><strong>在不抛异常的情况下回滚事务</strong></li>
+</ol>
+<h3 id="2-它不能做的">2. 它不能做的</h3>
+<ul>
+<li>不能 <code>begin()</code> 新事务</li>
+<li>不能 <code>commit()</code> 事务</li>
+<li>不能脱离 Spring AOP 使用</li>
+<li>不能跨线程使用</li>
+</ul>
+<h3 id="3-手动回滚事务">3. 手动回滚事务</h3>
+<p>业务失败，但你 <strong>不想抛异常</strong>，仍然希望事务回滚。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="nd">@Service</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">OrderService</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nd">@Transactional</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">createOrder</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">orderMapper</span><span class="p">.</span><span class="na">insert</span><span class="p">(...);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kt">boolean</span><span class="w"> </span><span class="n">success</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">callRemoteService</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">success</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="c1">// 手动标记事务回滚</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">TransactionAspectSupport</span><span class="p">.</span><span class="na">currentTransactionStatus</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                    </span><span class="p">.</span><span class="na">setRollbackOnly</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="k">return</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">stockMapper</span><span class="p">.</span><span class="na">deduct</span><span class="p">(...);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><h4 id="发生了什么">发生了什么？</h4>
+<ul>
+<li>
+<p>Spring 已经开启事务（AOP）</p>
+</li>
+<li>
+<p><code>TransactionAspectSupport</code> 只是：</p>
+<ul>
+<li><strong>拿到当前 TransactionStatus</strong></li>
+<li><strong>标记 rollbackOnly</strong></li>
+</ul>
+</li>
+<li>
+<p>方法正常返回</p>
+</li>
+<li>
+<p>Spring 在提交阶段发现：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">status</span><span class="p">.</span><span class="na">isRollbackOnly</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="kc">true</span><span class="w">
+</span></span></span></code></pre></div><p><strong>最终执行 rollback</strong></p>
+</li>
+</ul>
+<p>必须配合 @Transactional 使用才可以使用 <code>TransactionAspectSupport</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="nd">@Transactional</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">public</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">method</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">TransactionAspectSupport</span><span class="p">.</span><span class="na">currentTransactionStatus</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="p">.</span><span class="na">setRollbackOnly</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div>
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

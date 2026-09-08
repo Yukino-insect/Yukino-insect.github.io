@@ -1,0 +1,1531 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sentinel 流控规则 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="流控规则解决的问题是：某个资源当前流量太大时，应该允许多少请求通过，超出的请求怎么处理。
+Sentinel 的流控不是简单的“加一个限流器”。它至少包含三个维度：
+限什么：QPS 还是并发线程数。 按什么策略限：直接、关联、链路。 超过阈值后怎么处理：快速失败、Warm Up、匀速排队。 对应的规则模型是 FlowRule。
+一、FlowRule 核心字段 简化后的 FlowRule 可以理解为：
+public class FlowRule extends AbstractRule { private int grade; private double count; private int strategy; private String refResource; private int controlBehavior; private int warmUpPeriodSec; private int maxQueueingTimeMs; private boolean clusterMode; } 字段含义：
+字段 含义 resource 规则作用的资源名，继承自 AbstractRule grade 限流指标，QPS 或并发线程数 count 阈值 strategy 流控模式，直接、关联、链路 refResource 关联资源或入口资源 controlBehavior 流控效果 warmUpPeriodSec Warm Up 预热时长 maxQueueingTimeMs 匀速排队最大等待时间 clusterMode 是否启用集群限流 FlowRule 只是规则数据模型，真正执行判断的是 Sentinel Slot 链中的 FlowSlot。
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/sentinel/sentinel-flow-rule/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/sentinel/sentinel-flow-rule/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="Sentinel 流控规则">
+  <meta property="og:description" content="流控规则解决的问题是：某个资源当前流量太大时，应该允许多少请求通过，超出的请求怎么处理。
+Sentinel 的流控不是简单的“加一个限流器”。它至少包含三个维度：
+限什么：QPS 还是并发线程数。 按什么策略限：直接、关联、链路。 超过阈值后怎么处理：快速失败、Warm Up、匀速排队。 对应的规则模型是 FlowRule。
+一、FlowRule 核心字段 简化后的 FlowRule 可以理解为：
+public class FlowRule extends AbstractRule { private int grade; private double count; private int strategy; private String refResource; private int controlBehavior; private int warmUpPeriodSec; private int maxQueueingTimeMs; private boolean clusterMode; } 字段含义：
+字段 含义 resource 规则作用的资源名，继承自 AbstractRule grade 限流指标，QPS 或并发线程数 count 阈值 strategy 流控模式，直接、关联、链路 refResource 关联资源或入口资源 controlBehavior 流控效果 warmUpPeriodSec Warm Up 预热时长 maxQueueingTimeMs 匀速排队最大等待时间 clusterMode 是否启用集群限流 FlowRule 只是规则数据模型，真正执行判断的是 Sentinel Slot 链中的 FlowSlot。">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="sentinel">
+    <meta property="article:published_time" content="2026-08-22T00:30:00+08:00">
+    <meta property="article:modified_time" content="2026-08-22T00:30:00+08:00">
+
+  
+  <meta itemprop="name" content="Sentinel 流控规则">
+  <meta itemprop="description" content="流控规则解决的问题是：某个资源当前流量太大时，应该允许多少请求通过，超出的请求怎么处理。
+Sentinel 的流控不是简单的“加一个限流器”。它至少包含三个维度：
+限什么：QPS 还是并发线程数。 按什么策略限：直接、关联、链路。 超过阈值后怎么处理：快速失败、Warm Up、匀速排队。 对应的规则模型是 FlowRule。
+一、FlowRule 核心字段 简化后的 FlowRule 可以理解为：
+public class FlowRule extends AbstractRule { private int grade; private double count; private int strategy; private String refResource; private int controlBehavior; private int warmUpPeriodSec; private int maxQueueingTimeMs; private boolean clusterMode; } 字段含义：
+字段 含义 resource 规则作用的资源名，继承自 AbstractRule grade 限流指标，QPS 或并发线程数 count 阈值 strategy 流控模式，直接、关联、链路 refResource 关联资源或入口资源 controlBehavior 流控效果 warmUpPeriodSec Warm Up 预热时长 maxQueueingTimeMs 匀速排队最大等待时间 clusterMode 是否启用集群限流 FlowRule 只是规则数据模型，真正执行判断的是 Sentinel Slot 链中的 FlowSlot。">
+  <meta itemprop="datePublished" content="2026-08-22T00:30:00+08:00">
+  <meta itemprop="dateModified" content="2026-08-22T00:30:00+08:00">
+  <meta itemprop="wordCount" content="515">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Sentinel 流控规则">
+  <meta name="twitter:description" content="流控规则解决的问题是：某个资源当前流量太大时，应该允许多少请求通过，超出的请求怎么处理。
+Sentinel 的流控不是简单的“加一个限流器”。它至少包含三个维度：
+限什么：QPS 还是并发线程数。 按什么策略限：直接、关联、链路。 超过阈值后怎么处理：快速失败、Warm Up、匀速排队。 对应的规则模型是 FlowRule。
+一、FlowRule 核心字段 简化后的 FlowRule 可以理解为：
+public class FlowRule extends AbstractRule { private int grade; private double count; private int strategy; private String refResource; private int controlBehavior; private int warmUpPeriodSec; private int maxQueueingTimeMs; private boolean clusterMode; } 字段含义：
+字段 含义 resource 规则作用的资源名，继承自 AbstractRule grade 限流指标，QPS 或并发线程数 count 阈值 strategy 流控模式，直接、关联、链路 refResource 关联资源或入口资源 controlBehavior 流控效果 warmUpPeriodSec Warm Up 预热时长 maxQueueingTimeMs 匀速排队最大等待时间 clusterMode 是否启用集群限流 FlowRule 只是规则数据模型，真正执行判断的是 Sentinel Slot 链中的 FlowSlot。">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">Sentinel 流控规则</h1>
+
+    
+      <div class="post-date">August 22, 2026</div>
+    
+
+    <div class="post-content">
+      <p>流控规则解决的问题是：<strong>某个资源当前流量太大时，应该允许多少请求通过，超出的请求怎么处理</strong>。</p>
+<p>Sentinel 的流控不是简单的“加一个限流器”。它至少包含三个维度：</p>
+<ul>
+<li>限什么：QPS 还是并发线程数。</li>
+<li>按什么策略限：直接、关联、链路。</li>
+<li>超过阈值后怎么处理：快速失败、Warm Up、匀速排队。</li>
+</ul>
+<p>对应的规则模型是 <code>FlowRule</code>。</p>
+<h2 id="一flowrule-核心字段">一、FlowRule 核心字段</h2>
+<p>简化后的 <code>FlowRule</code> 可以理解为：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">FlowRule</span><span class="w"> </span><span class="kd">extends</span><span class="w"> </span><span class="n">AbstractRule</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">grade</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="kt">double</span><span class="w"> </span><span class="n">count</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">strategy</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="n">String</span><span class="w"> </span><span class="n">refResource</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">controlBehavior</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">warmUpPeriodSec</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">maxQueueingTimeMs</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="kt">boolean</span><span class="w"> </span><span class="n">clusterMode</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>字段含义：</p>
+<table>
+  <thead>
+      <tr>
+          <th>字段</th>
+          <th>含义</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>resource</code></td>
+          <td>规则作用的资源名，继承自 <code>AbstractRule</code></td>
+      </tr>
+      <tr>
+          <td><code>grade</code></td>
+          <td>限流指标，QPS 或并发线程数</td>
+      </tr>
+      <tr>
+          <td><code>count</code></td>
+          <td>阈值</td>
+      </tr>
+      <tr>
+          <td><code>strategy</code></td>
+          <td>流控模式，直接、关联、链路</td>
+      </tr>
+      <tr>
+          <td><code>refResource</code></td>
+          <td>关联资源或入口资源</td>
+      </tr>
+      <tr>
+          <td><code>controlBehavior</code></td>
+          <td>流控效果</td>
+      </tr>
+      <tr>
+          <td><code>warmUpPeriodSec</code></td>
+          <td>Warm Up 预热时长</td>
+      </tr>
+      <tr>
+          <td><code>maxQueueingTimeMs</code></td>
+          <td>匀速排队最大等待时间</td>
+      </tr>
+      <tr>
+          <td><code>clusterMode</code></td>
+          <td>是否启用集群限流</td>
+      </tr>
+  </tbody>
+</table>
+<p><code>FlowRule</code> 只是规则数据模型，真正执行判断的是 Sentinel Slot 链中的 <code>FlowSlot</code>。</p>
+<p>执行过程：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">请求进入资源
+</span></span><span class="line"><span class="cl">  ↓
+</span></span><span class="line"><span class="cl">StatisticSlot 统计实时指标
+</span></span><span class="line"><span class="cl">  ↓
+</span></span><span class="line"><span class="cl">FlowSlot 读取 FlowRule
+</span></span><span class="line"><span class="cl">  ↓
+</span></span><span class="line"><span class="cl">判断是否超过阈值
+</span></span><span class="line"><span class="cl">  ↓
+</span></span><span class="line"><span class="cl">通过：继续执行
+</span></span><span class="line"><span class="cl">拒绝：抛出 FlowException
+</span></span></code></pre></div><h2 id="二grade限流指标">二、grade：限流指标</h2>
+<p><code>grade</code> 决定 Sentinel 用什么指标限流。</p>
+<table>
+  <thead>
+      <tr>
+          <th>值</th>
+          <th>常量</th>
+          <th>含义</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>0</code></td>
+          <td><code>RuleConstant.FLOW_GRADE_THREAD</code></td>
+          <td>并发线程数</td>
+      </tr>
+      <tr>
+          <td><code>1</code></td>
+          <td><code>RuleConstant.FLOW_GRADE_QPS</code></td>
+          <td>每秒请求数</td>
+      </tr>
+  </tbody>
+</table>
+<h3 id="1-qps-限流">1. QPS 限流</h3>
+<p>QPS 是最常用的限流方式。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">FlowRule</span><span class="w"> </span><span class="n">rule</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">FlowRule</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">rule</span><span class="p">.</span><span class="na">setResource</span><span class="p">(</span><span class="s">&#34;order.query&#34;</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">rule</span><span class="p">.</span><span class="na">setGrade</span><span class="p">(</span><span class="n">RuleConstant</span><span class="p">.</span><span class="na">FLOW_GRADE_QPS</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">rule</span><span class="p">.</span><span class="na">setCount</span><span class="p">(</span><span class="n">100</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><p>语义：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">order.query 每秒最多允许 100 个请求通过
+</span></span></code></pre></div><p>适合：</p>
+<ul>
+<li>查询接口。</li>
+<li>秒杀入口。</li>
+<li>第三方接口调用。</li>
+<li>数据库重查询。</li>
+</ul>
+<h3 id="2-并发线程数限流">2. 并发线程数限流</h3>
+<p>并发线程数限流控制的是当前同时执行该资源的线程数量。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">FlowRule</span><span class="w"> </span><span class="n">rule</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">FlowRule</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">rule</span><span class="p">.</span><span class="na">setResource</span><span class="p">(</span><span class="s">&#34;report.export&#34;</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">rule</span><span class="p">.</span><span class="na">setGrade</span><span class="p">(</span><span class="n">RuleConstant</span><span class="p">.</span><span class="na">FLOW_GRADE_THREAD</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">rule</span><span class="p">.</span><span class="na">setCount</span><span class="p">(</span><span class="n">10</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><p>语义：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">report.export 同时最多 10 个线程执行
+</span></span></code></pre></div><p>适合：</p>
+<ul>
+<li>慢接口。</li>
+<li>导出任务。</li>
+<li>需要占用连接或线程较久的资源。</li>
+<li>下游并发承载能力有限的调用。</li>
+</ul>
+<p>QPS 控制入口速度，并发线程数控制占用规模。一个接口如果响应时间很长，即使 QPS 不高，也可能占满线程池；这时并发线程数限流更有效。</p>
+<h2 id="三strategy流控模式">三、strategy：流控模式</h2>
+<p><code>strategy</code> 决定按什么关系限流。</p>
+<table>
+  <thead>
+      <tr>
+          <th>值</th>
+          <th>常量</th>
+          <th>含义</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>0</code></td>
+          <td><code>RuleConstant.STRATEGY_DIRECT</code></td>
+          <td>直接流控</td>
+      </tr>
+      <tr>
+          <td><code>1</code></td>
+          <td><code>RuleConstant.STRATEGY_RELATE</code></td>
+          <td>关联流控</td>
+      </tr>
+      <tr>
+          <td><code>2</code></td>
+          <td><code>RuleConstant.STRATEGY_CHAIN</code></td>
+          <td>链路流控</td>
+      </tr>
+  </tbody>
+</table>
+<h3 id="1-直接流控">1. 直接流控</h3>
+<p>直接流控最常用：当前资源超过阈值，就限制当前资源。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">FlowRule</span><span class="w"> </span><span class="n">rule</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">FlowRule</span><span class="p">(</span><span class="s">&#34;order.query&#34;</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">rule</span><span class="p">.</span><span class="na">setGrade</span><span class="p">(</span><span class="n">RuleConstant</span><span class="p">.</span><span class="na">FLOW_GRADE_QPS</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">rule</span><span class="p">.</span><span class="na">setCount</span><span class="p">(</span><span class="n">100</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">rule</span><span class="p">.</span><span class="na">setStrategy</span><span class="p">(</span><span class="n">RuleConstant</span><span class="p">.</span><span class="na">STRATEGY_DIRECT</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><p>语义：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">order.query 自己超过 100 QPS，就限制 order.query
+</span></span></code></pre></div><p>适合绝大多数接口级限流。</p>
+<h3 id="2-关联流控">2. 关联流控</h3>
+<p>关联流控的语义是：<strong>当关联资源压力过高时，限制当前资源</strong>。</p>
+<p>例如写操作优先级高，读操作可以牺牲：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">FlowRule</span><span class="w"> </span><span class="n">rule</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">FlowRule</span><span class="p">(</span><span class="s">&#34;order.query&#34;</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">rule</span><span class="p">.</span><span class="na">setGrade</span><span class="p">(</span><span class="n">RuleConstant</span><span class="p">.</span><span class="na">FLOW_GRADE_QPS</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">rule</span><span class="p">.</span><span class="na">setCount</span><span class="p">(</span><span class="n">50</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">rule</span><span class="p">.</span><span class="na">setStrategy</span><span class="p">(</span><span class="n">RuleConstant</span><span class="p">.</span><span class="na">STRATEGY_RELATE</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">rule</span><span class="p">.</span><span class="na">setRefResource</span><span class="p">(</span><span class="s">&#34;order.create&#34;</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><p>语义：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">当 order.create 超过 50 QPS 时，限制 order.query
+</span></span></code></pre></div><p>注意被限制的是 <code>resource</code>，被观察的是 <code>refResource</code>。</p>
+<p>典型场景：</p>
+<ul>
+<li>写库压力高时限制读接口。</li>
+<li>支付链路压力高时限制非核心查询。</li>
+<li>核心业务资源繁忙时限制辅助资源。</li>
+</ul>
+<h3 id="3-链路流控">3. 链路流控</h3>
+<p>链路流控按调用入口限制资源。</p>
+<p>例如同一个 Service 方法被两个入口调用：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">/api/order/detail
+</span></span><span class="line"><span class="cl">  ↓
+</span></span><span class="line"><span class="cl">order.load
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">/api/admin/order/detail
+</span></span><span class="line"><span class="cl">  ↓
+</span></span><span class="line"><span class="cl">order.load
+</span></span></code></pre></div><p>如果只想限制来自 <code>/api/admin/order/detail</code> 的 <code>order.load</code>，就需要链路流控。</p>
+<p>示意规则：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">FlowRule</span><span class="w"> </span><span class="n">rule</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">FlowRule</span><span class="p">(</span><span class="s">&#34;order.load&#34;</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">rule</span><span class="p">.</span><span class="na">setGrade</span><span class="p">(</span><span class="n">RuleConstant</span><span class="p">.</span><span class="na">FLOW_GRADE_QPS</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">rule</span><span class="p">.</span><span class="na">setCount</span><span class="p">(</span><span class="n">20</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">rule</span><span class="p">.</span><span class="na">setStrategy</span><span class="p">(</span><span class="n">RuleConstant</span><span class="p">.</span><span class="na">STRATEGY_CHAIN</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">rule</span><span class="p">.</span><span class="na">setRefResource</span><span class="p">(</span><span class="s">&#34;/api/admin/order/detail&#34;</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><p>链路流控依赖清晰的入口上下文。入口资源通常是 <code>EntryType.IN</code>，内部资源通常是 <code>EntryType.OUT</code>。如果入口和内部资源混乱，链路流控就很容易看起来“配置了但没生效”。</p>
+<h2 id="四controlbehavior流控效果">四、controlBehavior：流控效果</h2>
+<p><code>controlBehavior</code> 决定超过阈值后怎么处理。</p>
+<table>
+  <thead>
+      <tr>
+          <th>值</th>
+          <th>常量</th>
+          <th>含义</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>0</code></td>
+          <td><code>RuleConstant.CONTROL_BEHAVIOR_DEFAULT</code></td>
+          <td>快速失败</td>
+      </tr>
+      <tr>
+          <td><code>1</code></td>
+          <td><code>RuleConstant.CONTROL_BEHAVIOR_WARM_UP</code></td>
+          <td>Warm Up</td>
+      </tr>
+      <tr>
+          <td><code>2</code></td>
+          <td><code>RuleConstant.CONTROL_BEHAVIOR_RATE_LIMITER</code></td>
+          <td>匀速排队</td>
+      </tr>
+      <tr>
+          <td><code>3</code></td>
+          <td><code>RuleConstant.CONTROL_BEHAVIOR_WARM_UP_RATE_LIMITER</code></td>
+          <td>Warm Up + 匀速排队</td>
+      </tr>
+  </tbody>
+</table>
+<h3 id="1-快速失败">1. 快速失败</h3>
+<p>快速失败是默认策略。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">FlowRule</span><span class="w"> </span><span class="n">rule</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">FlowRule</span><span class="p">(</span><span class="s">&#34;order.query&#34;</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">rule</span><span class="p">.</span><span class="na">setGrade</span><span class="p">(</span><span class="n">RuleConstant</span><span class="p">.</span><span class="na">FLOW_GRADE_QPS</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">rule</span><span class="p">.</span><span class="na">setCount</span><span class="p">(</span><span class="n">100</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">rule</span><span class="p">.</span><span class="na">setControlBehavior</span><span class="p">(</span><span class="n">RuleConstant</span><span class="p">.</span><span class="na">CONTROL_BEHAVIOR_DEFAULT</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><p>超过阈值直接抛出 <code>FlowException</code>。</p>
+<p>适合：</p>
+<ul>
+<li>在线接口。</li>
+<li>用户请求。</li>
+<li>对延迟敏感的业务。</li>
+<li>宁可失败也不能排队拖慢的场景。</li>
+</ul>
+<p>快速失败的优点是保护边界清楚。缺点是突发流量会直接被拒绝，需要业务返回友好的限流响应。</p>
+<h3 id="2-warm-up">2. Warm Up</h3>
+<p>Warm Up 用于冷启动保护，让系统从较低阈值逐步升到目标阈值。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">FlowRule</span><span class="w"> </span><span class="n">rule</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">FlowRule</span><span class="p">(</span><span class="s">&#34;product.detail&#34;</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">rule</span><span class="p">.</span><span class="na">setGrade</span><span class="p">(</span><span class="n">RuleConstant</span><span class="p">.</span><span class="na">FLOW_GRADE_QPS</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">rule</span><span class="p">.</span><span class="na">setCount</span><span class="p">(</span><span class="n">1000</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">rule</span><span class="p">.</span><span class="na">setControlBehavior</span><span class="p">(</span><span class="n">RuleConstant</span><span class="p">.</span><span class="na">CONTROL_BEHAVIOR_WARM_UP</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">rule</span><span class="p">.</span><span class="na">setWarmUpPeriodSec</span><span class="p">(</span><span class="n">30</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><p>语义：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">系统在 30 秒内逐步放量，最终达到 1000 QPS
+</span></span></code></pre></div><p>适合：</p>
+<ul>
+<li>应用刚启动。</li>
+<li>缓存刚预热。</li>
+<li>JIT、连接池、线程池尚未进入稳定状态。</li>
+<li>下游服务刚恢复。</li>
+</ul>
+<p>Warm Up 的意义是避免流量突然打满一个还没准备好的系统。</p>
+<h3 id="3-匀速排队">3. 匀速排队</h3>
+<p>匀速排队会让请求按固定速率通过，超过最大等待时间才失败。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">FlowRule</span><span class="w"> </span><span class="n">rule</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">FlowRule</span><span class="p">(</span><span class="s">&#34;mq.consume&#34;</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">rule</span><span class="p">.</span><span class="na">setGrade</span><span class="p">(</span><span class="n">RuleConstant</span><span class="p">.</span><span class="na">FLOW_GRADE_QPS</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">rule</span><span class="p">.</span><span class="na">setCount</span><span class="p">(</span><span class="n">50</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">rule</span><span class="p">.</span><span class="na">setControlBehavior</span><span class="p">(</span><span class="n">RuleConstant</span><span class="p">.</span><span class="na">CONTROL_BEHAVIOR_RATE_LIMITER</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">rule</span><span class="p">.</span><span class="na">setMaxQueueingTimeMs</span><span class="p">(</span><span class="n">500</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><p>语义：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">mq.consume 以每秒 50 个请求的速度匀速通过
+</span></span><span class="line"><span class="cl">等待超过 500ms 的请求会被拒绝
+</span></span></code></pre></div><p>适合：</p>
+<ul>
+<li>MQ 消费。</li>
+<li>后台任务。</li>
+<li>批处理。</li>
+<li>对瞬时延迟不敏感，但希望平滑流量的场景。</li>
+</ul>
+<p>不适合：</p>
+<ul>
+<li>用户实时请求。</li>
+<li>已经有严格超时要求的接口。</li>
+<li>上游线程资源有限的场景。</li>
+</ul>
+<p>排队不是免费午餐。请求只要还在等，就会占用线程、内存和上下文。把在线接口大量改成排队，最后可能不是保护系统，而是换一种姿势把系统拖住。</p>
+<h2 id="五硬编码加载规则">五、硬编码加载规则</h2>
+<p>学习或单测时可以硬编码规则：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="nd">@PostConstruct</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">public</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">initFlowRules</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">FlowRule</span><span class="w"> </span><span class="n">rule</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">FlowRule</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">rule</span><span class="p">.</span><span class="na">setResource</span><span class="p">(</span><span class="s">&#34;order.query&#34;</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">rule</span><span class="p">.</span><span class="na">setGrade</span><span class="p">(</span><span class="n">RuleConstant</span><span class="p">.</span><span class="na">FLOW_GRADE_QPS</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">rule</span><span class="p">.</span><span class="na">setCount</span><span class="p">(</span><span class="n">100</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">rule</span><span class="p">.</span><span class="na">setStrategy</span><span class="p">(</span><span class="n">RuleConstant</span><span class="p">.</span><span class="na">STRATEGY_DIRECT</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">rule</span><span class="p">.</span><span class="na">setControlBehavior</span><span class="p">(</span><span class="n">RuleConstant</span><span class="p">.</span><span class="na">CONTROL_BEHAVIOR_DEFAULT</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">FlowRuleManager</span><span class="p">.</span><span class="na">loadRules</span><span class="p">(</span><span class="n">Collections</span><span class="p">.</span><span class="na">singletonList</span><span class="p">(</span><span class="n">rule</span><span class="p">));</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p><code>FlowRuleManager.loadRules()</code> 会把规则加载到本地内存，随后请求立即按新规则判断。</p>
+<p>但生产环境不建议靠硬编码维护规则，原因很简单：</p>
+<ul>
+<li>修改规则需要发版。</li>
+<li>无法按环境灵活调整。</li>
+<li>多实例规则容易不一致。</li>
+<li>缺少审计和回滚。</li>
+</ul>
+<p>硬编码适合演示，不适合治理体系。</p>
+<h2 id="六json-规则示例">六、JSON 规则示例</h2>
+<p>动态数据源里常用 JSON 表达规则。</p>
+<p>直接 QPS 限流：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">[</span>
+</span></span><span class="line"><span class="cl">  <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;resource&#34;</span><span class="p">:</span> <span class="s2">&#34;order.query&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;grade&#34;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;count&#34;</span><span class="p">:</span> <span class="mi">100</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;strategy&#34;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;controlBehavior&#34;</span><span class="p">:</span> <span class="mi">0</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">]</span>
+</span></span></code></pre></div><p>关联流控：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">[</span>
+</span></span><span class="line"><span class="cl">  <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;resource&#34;</span><span class="p">:</span> <span class="s2">&#34;order.query&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;grade&#34;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;count&#34;</span><span class="p">:</span> <span class="mi">50</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;strategy&#34;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;refResource&#34;</span><span class="p">:</span> <span class="s2">&#34;order.create&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;controlBehavior&#34;</span><span class="p">:</span> <span class="mi">0</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">]</span>
+</span></span></code></pre></div><p>匀速排队：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">[</span>
+</span></span><span class="line"><span class="cl">  <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;resource&#34;</span><span class="p">:</span> <span class="s2">&#34;mq.consume&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;grade&#34;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;count&#34;</span><span class="p">:</span> <span class="mi">50</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;strategy&#34;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;controlBehavior&#34;</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;maxQueueingTimeMs&#34;</span><span class="p">:</span> <span class="mi">500</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">]</span>
+</span></span></code></pre></div><p>JSON 字段和 Java 规则模型基本对应。真正容易错的不是 JSON 格式，而是资源名、阈值单位和规则语义。</p>
+<h2 id="七规则设计建议">七、规则设计建议</h2>
+<h3 id="1-先按资源容量定阈值">1. 先按资源容量定阈值</h3>
+<p>不要凭感觉写：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">这个接口看起来重要，给 1000 QPS 吧。
+</span></span></code></pre></div><p>更合理的方式是先知道：</p>
+<ul>
+<li>单实例最大稳定 QPS。</li>
+<li>P95 / P99 响应时间。</li>
+<li>下游数据库或 RPC 的承载能力。</li>
+<li>线程池和连接池大小。</li>
+<li>高峰流量和突发流量。</li>
+</ul>
+<p>限流阈值应该来自容量评估，而不是来自心情。</p>
+<h3 id="2-在线请求优先快速失败">2. 在线请求优先快速失败</h3>
+<p>在线接口通常更适合快速失败：</p>
+<ul>
+<li>用户能尽快收到响应。</li>
+<li>上游线程不会长期阻塞。</li>
+<li>故障边界清楚。</li>
+<li>告警和指标更明显。</li>
+</ul>
+<p>排队只适合少数可等待场景。</p>
+<h3 id="3-写接口要谨慎限流">3. 写接口要谨慎限流</h3>
+<p>写接口被限流后，前端或上游可能重试。重试如果没有幂等设计，会制造重复提交、重复扣减、重复发券等问题。</p>
+<p>写接口限流要同时考虑：</p>
+<ul>
+<li>幂等键。</li>
+<li>去重。</li>
+<li>业务事务。</li>
+<li>用户提示。</li>
+<li>重试策略。</li>
+</ul>
+<h3 id="4-关联流控用于保护核心资源">4. 关联流控用于保护核心资源</h3>
+<p>关联流控不是为了炫技。它适合表达优先级：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">核心写链路忙时，牺牲非核心读链路
+</span></span></code></pre></div><p>如果两个资源没有明确优先级关系，就不要硬关联。</p>
+<h3 id="5-链路流控要先理清入口">5. 链路流控要先理清入口</h3>
+<p>链路流控依赖调用链。使用前先确认：</p>
+<ul>
+<li>入口资源名是什么。</li>
+<li>内部资源名是什么。</li>
+<li>是否被 Web 适配层自动埋点。</li>
+<li>是否手动创建了新的上下文。</li>
+<li>控制台簇点链路是否符合预期。</li>
+</ul>
+<p>链路乱了，规则再漂亮也只是摆设。</p>
+<h2 id="八常见误区">八、常见误区</h2>
+<ol>
+<li>把 QPS 限流当成所有问题的答案。</li>
+<li>慢接口只限 QPS，不限制并发线程数。</li>
+<li>在线接口使用长时间排队，导致线程堆积。</li>
+<li>控制台资源名和代码资源名不一致。</li>
+<li>不压测就直接设置生产阈值。</li>
+<li>忽略下游容量，只保护当前服务。</li>
+<li>规则写在代码里，生产变更只能重新发版。</li>
+</ol>
+<h2 id="九总结">九、总结</h2>
+<p><code>FlowRule</code> 由三个关键问题组成：</p>
+<ul>
+<li><code>grade</code>：按 QPS 还是并发线程数限。</li>
+<li><code>strategy</code>：直接限、关联限，还是按链路限。</li>
+<li><code>controlBehavior</code>：快速失败、Warm Up，还是匀速排队。</li>
+</ul>
+<p>流控规则的目标不是把请求挡在门外这么简单，而是在容量有限时保住核心资源、控制排队成本、让系统退化得可理解。限流本身不难，难的是知道该限谁、限多少、失败后怎么交代。</p>
+<h2 id="参考资料">参考资料</h2>
+<ul>
+<li><a href="https://github.com/alibaba/Sentinel/wiki/%e6%b5%81%e9%87%8f%e6%8e%a7%e5%88%b6">Sentinel 流量控制文档</a>
+</li>
+<li><a href="https://github.com/alibaba/Sentinel">Sentinel GitHub 仓库</a>
+</li>
+</ul>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

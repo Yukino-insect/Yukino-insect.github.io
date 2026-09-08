@@ -1,0 +1,1496 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RocketMQ 高级特性 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="RocketMQ 的高级特性通常不是为了“写出更炫的代码”，而是为了处理真实业务里的麻烦：本地事务和消息发送的一致性、重复消费、失败重试、死信消息、顺序消费、延迟触发。
+这些能力用得好，可以让系统更稳；用得随意，则只是把问题延后，并且换个更难排查的形态出现。技术很少凭空仁慈，这点还请记住。
+一、事务消息解决什么问题 先看一个常见场景：订单创建成功后，需要发送一条 order-created 消息，让库存、优惠券、积分等系统异步处理。
+如果直接这样写：
+orderService.createOrder(order); rocketMQTemplate.syncSend(&#34;order-topic:created&#34;, event); 会有两个不一致问题：
+本地订单创建成功，但消息发送失败，下游永远不知道订单创建。 消息发送成功，但本地订单事务回滚，下游却收到了不存在的订单。 事务消息要解决的正是“本地事务与消息发送”之间的一致性问题。
+二、事务消息二阶段 RocketMQ 事务消息采用类似二阶段提交的机制，但它不是 XA。它的目标是让消息发送和本地事务达到最终一致。
+流程如下：
+1. Producer -&gt; Broker: 发送半消息 2. Broker -&gt; Producer: 半消息写入成功，返回 ACK 3. Producer: 执行本地事务 4. Producer -&gt; Broker: 提交 Commit 或 Rollback 5. Broker: - Commit: 消息对 Consumer 可见 - Rollback: 删除或丢弃半消息 - Unknown/超时: 发起事务回查 所谓半消息，就是 Broker 已经收到但暂时不投递给消费者的消息。只有第二阶段提交后，消费者才看得到它。
+三、事务回查 事务回查用于处理不确定状态。
+比如下面几种情况：
+Producer 执行完本地事务后宕机，没来得及提交 Commit。 Producer 提交 Commit 时网络抖动，Broker 没收到结果。 本地事务执行时间过长，Producer 暂时返回 Unknown。 这时 Broker 会回查生产者集群中的某个实例，询问这条半消息对应的本地事务到底成功还是失败。
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/mq/rocketmq-%E9%AB%98%E7%BA%A7%E7%89%B9%E6%80%A7/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/mq/rocketmq-%E9%AB%98%E7%BA%A7%E7%89%B9%E6%80%A7/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="RocketMQ 高级特性">
+  <meta property="og:description" content="RocketMQ 的高级特性通常不是为了“写出更炫的代码”，而是为了处理真实业务里的麻烦：本地事务和消息发送的一致性、重复消费、失败重试、死信消息、顺序消费、延迟触发。
+这些能力用得好，可以让系统更稳；用得随意，则只是把问题延后，并且换个更难排查的形态出现。技术很少凭空仁慈，这点还请记住。
+一、事务消息解决什么问题 先看一个常见场景：订单创建成功后，需要发送一条 order-created 消息，让库存、优惠券、积分等系统异步处理。
+如果直接这样写：
+orderService.createOrder(order); rocketMQTemplate.syncSend(&#34;order-topic:created&#34;, event); 会有两个不一致问题：
+本地订单创建成功，但消息发送失败，下游永远不知道订单创建。 消息发送成功，但本地订单事务回滚，下游却收到了不存在的订单。 事务消息要解决的正是“本地事务与消息发送”之间的一致性问题。
+二、事务消息二阶段 RocketMQ 事务消息采用类似二阶段提交的机制，但它不是 XA。它的目标是让消息发送和本地事务达到最终一致。
+流程如下：
+1. Producer -&gt; Broker: 发送半消息 2. Broker -&gt; Producer: 半消息写入成功，返回 ACK 3. Producer: 执行本地事务 4. Producer -&gt; Broker: 提交 Commit 或 Rollback 5. Broker: - Commit: 消息对 Consumer 可见 - Rollback: 删除或丢弃半消息 - Unknown/超时: 发起事务回查 所谓半消息，就是 Broker 已经收到但暂时不投递给消费者的消息。只有第二阶段提交后，消费者才看得到它。
+三、事务回查 事务回查用于处理不确定状态。
+比如下面几种情况：
+Producer 执行完本地事务后宕机，没来得及提交 Commit。 Producer 提交 Commit 时网络抖动，Broker 没收到结果。 本地事务执行时间过长，Producer 暂时返回 Unknown。 这时 Broker 会回查生产者集群中的某个实例，询问这条半消息对应的本地事务到底成功还是失败。">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="mq">
+    <meta property="article:published_time" content="2026-08-22T15:50:00+08:00">
+    <meta property="article:modified_time" content="2026-08-22T15:50:00+08:00">
+
+  
+  <meta itemprop="name" content="RocketMQ 高级特性">
+  <meta itemprop="description" content="RocketMQ 的高级特性通常不是为了“写出更炫的代码”，而是为了处理真实业务里的麻烦：本地事务和消息发送的一致性、重复消费、失败重试、死信消息、顺序消费、延迟触发。
+这些能力用得好，可以让系统更稳；用得随意，则只是把问题延后，并且换个更难排查的形态出现。技术很少凭空仁慈，这点还请记住。
+一、事务消息解决什么问题 先看一个常见场景：订单创建成功后，需要发送一条 order-created 消息，让库存、优惠券、积分等系统异步处理。
+如果直接这样写：
+orderService.createOrder(order); rocketMQTemplate.syncSend(&#34;order-topic:created&#34;, event); 会有两个不一致问题：
+本地订单创建成功，但消息发送失败，下游永远不知道订单创建。 消息发送成功，但本地订单事务回滚，下游却收到了不存在的订单。 事务消息要解决的正是“本地事务与消息发送”之间的一致性问题。
+二、事务消息二阶段 RocketMQ 事务消息采用类似二阶段提交的机制，但它不是 XA。它的目标是让消息发送和本地事务达到最终一致。
+流程如下：
+1. Producer -&gt; Broker: 发送半消息 2. Broker -&gt; Producer: 半消息写入成功，返回 ACK 3. Producer: 执行本地事务 4. Producer -&gt; Broker: 提交 Commit 或 Rollback 5. Broker: - Commit: 消息对 Consumer 可见 - Rollback: 删除或丢弃半消息 - Unknown/超时: 发起事务回查 所谓半消息，就是 Broker 已经收到但暂时不投递给消费者的消息。只有第二阶段提交后，消费者才看得到它。
+三、事务回查 事务回查用于处理不确定状态。
+比如下面几种情况：
+Producer 执行完本地事务后宕机，没来得及提交 Commit。 Producer 提交 Commit 时网络抖动，Broker 没收到结果。 本地事务执行时间过长，Producer 暂时返回 Unknown。 这时 Broker 会回查生产者集群中的某个实例，询问这条半消息对应的本地事务到底成功还是失败。">
+  <meta itemprop="datePublished" content="2026-08-22T15:50:00+08:00">
+  <meta itemprop="dateModified" content="2026-08-22T15:50:00+08:00">
+  <meta itemprop="wordCount" content="583">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="RocketMQ 高级特性">
+  <meta name="twitter:description" content="RocketMQ 的高级特性通常不是为了“写出更炫的代码”，而是为了处理真实业务里的麻烦：本地事务和消息发送的一致性、重复消费、失败重试、死信消息、顺序消费、延迟触发。
+这些能力用得好，可以让系统更稳；用得随意，则只是把问题延后，并且换个更难排查的形态出现。技术很少凭空仁慈，这点还请记住。
+一、事务消息解决什么问题 先看一个常见场景：订单创建成功后，需要发送一条 order-created 消息，让库存、优惠券、积分等系统异步处理。
+如果直接这样写：
+orderService.createOrder(order); rocketMQTemplate.syncSend(&#34;order-topic:created&#34;, event); 会有两个不一致问题：
+本地订单创建成功，但消息发送失败，下游永远不知道订单创建。 消息发送成功，但本地订单事务回滚，下游却收到了不存在的订单。 事务消息要解决的正是“本地事务与消息发送”之间的一致性问题。
+二、事务消息二阶段 RocketMQ 事务消息采用类似二阶段提交的机制，但它不是 XA。它的目标是让消息发送和本地事务达到最终一致。
+流程如下：
+1. Producer -&gt; Broker: 发送半消息 2. Broker -&gt; Producer: 半消息写入成功，返回 ACK 3. Producer: 执行本地事务 4. Producer -&gt; Broker: 提交 Commit 或 Rollback 5. Broker: - Commit: 消息对 Consumer 可见 - Rollback: 删除或丢弃半消息 - Unknown/超时: 发起事务回查 所谓半消息，就是 Broker 已经收到但暂时不投递给消费者的消息。只有第二阶段提交后，消费者才看得到它。
+三、事务回查 事务回查用于处理不确定状态。
+比如下面几种情况：
+Producer 执行完本地事务后宕机，没来得及提交 Commit。 Producer 提交 Commit 时网络抖动，Broker 没收到结果。 本地事务执行时间过长，Producer 暂时返回 Unknown。 这时 Broker 会回查生产者集群中的某个实例，询问这条半消息对应的本地事务到底成功还是失败。">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">RocketMQ 高级特性</h1>
+
+    
+      <div class="post-date">August 22, 2026</div>
+    
+
+    <div class="post-content">
+      <p>RocketMQ 的高级特性通常不是为了“写出更炫的代码”，而是为了处理真实业务里的麻烦：本地事务和消息发送的一致性、重复消费、失败重试、死信消息、顺序消费、延迟触发。</p>
+<p>这些能力用得好，可以让系统更稳；用得随意，则只是把问题延后，并且换个更难排查的形态出现。技术很少凭空仁慈，这点还请记住。</p>
+<h2 id="一事务消息解决什么问题">一、事务消息解决什么问题</h2>
+<p>先看一个常见场景：订单创建成功后，需要发送一条 <code>order-created</code> 消息，让库存、优惠券、积分等系统异步处理。</p>
+<p>如果直接这样写：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">orderService</span><span class="p">.</span><span class="na">createOrder</span><span class="p">(</span><span class="n">order</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">rocketMQTemplate</span><span class="p">.</span><span class="na">syncSend</span><span class="p">(</span><span class="s">&#34;order-topic:created&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">event</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><p>会有两个不一致问题：</p>
+<ul>
+<li>本地订单创建成功，但消息发送失败，下游永远不知道订单创建。</li>
+<li>消息发送成功，但本地订单事务回滚，下游却收到了不存在的订单。</li>
+</ul>
+<p>事务消息要解决的正是“本地事务与消息发送”之间的一致性问题。</p>
+<h2 id="二事务消息二阶段">二、事务消息二阶段</h2>
+<p>RocketMQ 事务消息采用类似二阶段提交的机制，但它不是 XA。它的目标是让消息发送和本地事务达到最终一致。</p>
+<p>流程如下：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">1. Producer -&gt; Broker: 发送半消息
+</span></span><span class="line"><span class="cl">2. Broker -&gt; Producer: 半消息写入成功，返回 ACK
+</span></span><span class="line"><span class="cl">3. Producer: 执行本地事务
+</span></span><span class="line"><span class="cl">4. Producer -&gt; Broker: 提交 Commit 或 Rollback
+</span></span><span class="line"><span class="cl">5. Broker:
+</span></span><span class="line"><span class="cl">   - Commit: 消息对 Consumer 可见
+</span></span><span class="line"><span class="cl">   - Rollback: 删除或丢弃半消息
+</span></span><span class="line"><span class="cl">   - Unknown/超时: 发起事务回查
+</span></span></code></pre></div><p>所谓半消息，就是 Broker 已经收到但暂时不投递给消费者的消息。只有第二阶段提交后，消费者才看得到它。</p>
+<h2 id="三事务回查">三、事务回查</h2>
+<p>事务回查用于处理不确定状态。</p>
+<p>比如下面几种情况：</p>
+<ul>
+<li>Producer 执行完本地事务后宕机，没来得及提交 Commit。</li>
+<li>Producer 提交 Commit 时网络抖动，Broker 没收到结果。</li>
+<li>本地事务执行时间过长，Producer 暂时返回 Unknown。</li>
+</ul>
+<p>这时 Broker 会回查生产者集群中的某个实例，询问这条半消息对应的本地事务到底成功还是失败。</p>
+<p>所以本地事务表非常重要。生产者必须能根据消息 Key 或事务 ID 查询本地事务状态：</p>
+<table>
+  <thead>
+      <tr>
+          <th>本地状态</th>
+          <th>回查结果</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>订单已创建</td>
+          <td><code>COMMIT</code></td>
+      </tr>
+      <tr>
+          <td>订单不存在</td>
+          <td><code>ROLLBACK</code></td>
+      </tr>
+      <tr>
+          <td>订单处理中</td>
+          <td><code>UNKNOWN</code></td>
+      </tr>
+  </tbody>
+</table>
+<p>如果回查逻辑写不可靠，事务消息就会失去意义。</p>
+<h2 id="四事务消息的边界">四、事务消息的边界</h2>
+<p>事务消息只保证生产端本地事务和消息发送最终一致，不保证消费者处理一定成功。</p>
+<p>换句话说：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">订单创建成功 -&gt; 消息最终可投递
+</span></span></code></pre></div><p>它不保证：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">库存一定扣减成功
+</span></span><span class="line"><span class="cl">积分一定发放成功
+</span></span><span class="line"><span class="cl">优惠券一定核销成功
+</span></span></code></pre></div><p>消费者侧仍然要靠重试、幂等、补偿和死信处理来保证业务最终完成。</p>
+<p>事务消息适合：</p>
+<ul>
+<li>创建订单后通知下游。</li>
+<li>支付成功后通知履约。</li>
+<li>账户入账后通知对账。</li>
+<li>本地状态变更后异步驱动多个系统。</li>
+</ul>
+<p>不适合：</p>
+<ul>
+<li>强一致同步事务。</li>
+<li>不能接受中间状态的业务。</li>
+<li>下游必须立即成功的链路。</li>
+</ul>
+<h2 id="五事务消息代码骨架">五、事务消息代码骨架</h2>
+<p>发送事务消息：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">Message</span><span class="o">&lt;</span><span class="n">OrderCreatedEvent</span><span class="o">&gt;</span><span class="w"> </span><span class="n">message</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">MessageBuilder</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">.</span><span class="na">withPayload</span><span class="p">(</span><span class="n">event</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">.</span><span class="na">setHeader</span><span class="p">(</span><span class="n">MessageConst</span><span class="p">.</span><span class="na">PROPERTY_KEYS</span><span class="p">,</span><span class="w"> </span><span class="n">event</span><span class="p">.</span><span class="na">getOrderId</span><span class="p">())</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">.</span><span class="na">build</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">rocketMQTemplate</span><span class="p">.</span><span class="na">sendMessageInTransaction</span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="s">&#34;order-topic:created&#34;</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">message</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">event</span><span class="p">.</span><span class="na">getOrderId</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><p>事务监听器：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="nd">@Component</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nd">@RocketMQTransactionListener</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">OrderTransactionListener</span><span class="w"> </span><span class="kd">implements</span><span class="w"> </span><span class="n">RocketMQLocalTransactionListener</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="kd">final</span><span class="w"> </span><span class="n">OrderService</span><span class="w"> </span><span class="n">orderService</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="nf">OrderTransactionListener</span><span class="p">(</span><span class="n">OrderService</span><span class="w"> </span><span class="n">orderService</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">this</span><span class="p">.</span><span class="na">orderService</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">orderService</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nd">@Override</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="n">RocketMQLocalTransactionState</span><span class="w"> </span><span class="nf">executeLocalTransaction</span><span class="p">(</span><span class="n">Message</span><span class="w"> </span><span class="n">msg</span><span class="p">,</span><span class="w"> </span><span class="n">Object</span><span class="w"> </span><span class="n">arg</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">String</span><span class="w"> </span><span class="n">orderId</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">String</span><span class="p">)</span><span class="w"> </span><span class="n">arg</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">try</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">orderService</span><span class="p">.</span><span class="na">createOrder</span><span class="p">(</span><span class="n">orderId</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="n">RocketMQLocalTransactionState</span><span class="p">.</span><span class="na">COMMIT</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(</span><span class="n">DuplicateOrderException</span><span class="w"> </span><span class="n">ex</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="n">RocketMQLocalTransactionState</span><span class="p">.</span><span class="na">COMMIT</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(</span><span class="n">Exception</span><span class="w"> </span><span class="n">ex</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="n">RocketMQLocalTransactionState</span><span class="p">.</span><span class="na">UNKNOWN</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nd">@Override</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="n">RocketMQLocalTransactionState</span><span class="w"> </span><span class="nf">checkLocalTransaction</span><span class="p">(</span><span class="n">Message</span><span class="w"> </span><span class="n">msg</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">String</span><span class="w"> </span><span class="n">orderId</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">String</span><span class="p">.</span><span class="na">valueOf</span><span class="p">(</span><span class="n">msg</span><span class="p">.</span><span class="na">getHeaders</span><span class="p">().</span><span class="na">get</span><span class="p">(</span><span class="n">MessageConst</span><span class="p">.</span><span class="na">PROPERTY_KEYS</span><span class="p">));</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">OrderStatus</span><span class="w"> </span><span class="n">status</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">orderService</span><span class="p">.</span><span class="na">queryStatus</span><span class="p">(</span><span class="n">orderId</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">status</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">OrderStatus</span><span class="p">.</span><span class="na">CREATED</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="n">RocketMQLocalTransactionState</span><span class="p">.</span><span class="na">COMMIT</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">status</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">OrderStatus</span><span class="p">.</span><span class="na">NOT_FOUND</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="n">RocketMQLocalTransactionState</span><span class="p">.</span><span class="na">ROLLBACK</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">RocketMQLocalTransactionState</span><span class="p">.</span><span class="na">UNKNOWN</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>注意这里对普通异常返回了 <code>UNKNOWN</code>。如果只是因为数据库短暂超时，直接 <code>ROLLBACK</code> 可能会把已经成功的本地事务对应消息回滚掉。是否返回 <code>ROLLBACK</code>，必须基于明确的本地事务失败事实。</p>
+<h2 id="六重复消费与幂等">六、重复消费与幂等</h2>
+<p>RocketMQ 默认是至少一次投递，因此重复消费是正常现象。</p>
+<p>重复消费可能来自：</p>
+<ul>
+<li>Producer 发送重试导致 Broker 收到重复消息。</li>
+<li>Consumer 消费成功但提交 offset 前宕机。</li>
+<li>ConsumerGroup Rebalance 后，新实例从旧 offset 拉取。</li>
+<li>消费超时后 Broker 认为失败并重新投递。</li>
+<li>人工重新投递死信消息。</li>
+</ul>
+<p>解决重复消费的方式不是祈祷它不要发生，而是让业务幂等。</p>
+<p>常见做法：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="k">CREATE</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">mq_consume_log</span><span class="w"> </span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">id</span><span class="w"> </span><span class="nb">BIGINT</span><span class="w"> </span><span class="k">PRIMARY</span><span class="w"> </span><span class="k">KEY</span><span class="w"> </span><span class="n">AUTO_INCREMENT</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">consumer_group</span><span class="w"> </span><span class="nb">VARCHAR</span><span class="p">(</span><span class="mi">128</span><span class="p">)</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">message_key</span><span class="w"> </span><span class="nb">VARCHAR</span><span class="p">(</span><span class="mi">128</span><span class="p">)</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">status</span><span class="w"> </span><span class="nb">VARCHAR</span><span class="p">(</span><span class="mi">32</span><span class="p">)</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">created_at</span><span class="w"> </span><span class="n">DATETIME</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">updated_at</span><span class="w"> </span><span class="n">DATETIME</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">UNIQUE</span><span class="w"> </span><span class="k">KEY</span><span class="w"> </span><span class="n">uk_group_message</span><span class="w"> </span><span class="p">(</span><span class="n">consumer_group</span><span class="p">,</span><span class="w"> </span><span class="n">message_key</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><p>消费时：</p>
+<ol>
+<li>取业务唯一 Key，比如 <code>orderId</code>。</li>
+<li>插入消费记录。</li>
+<li>如果唯一键冲突，说明已经处理过，直接返回成功。</li>
+<li>执行业务逻辑。</li>
+<li>更新消费记录状态。</li>
+</ol>
+<p>示例：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="nd">@Transactional</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">public</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">consume</span><span class="p">(</span><span class="n">OrderPaidEvent</span><span class="w"> </span><span class="n">event</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kt">boolean</span><span class="w"> </span><span class="n">firstConsume</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">consumeLogRepository</span><span class="p">.</span><span class="na">tryInsert</span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="s">&#34;inventory-order-paid-group&#34;</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">event</span><span class="p">.</span><span class="na">getOrderId</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">firstConsume</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">inventoryService</span><span class="p">.</span><span class="na">deduct</span><span class="p">(</span><span class="n">event</span><span class="p">.</span><span class="na">getOrderId</span><span class="p">());</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">consumeLogRepository</span><span class="p">.</span><span class="na">markSuccess</span><span class="p">(</span><span class="s">&#34;inventory-order-paid-group&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">event</span><span class="p">.</span><span class="na">getOrderId</span><span class="p">());</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>如果只是单机内存布隆过滤器，重启就会丢状态；如果是分布式集群，各实例之间也无法共享准确处理结果。布隆过滤器可以做前置拦截，但不能替代数据库唯一键、Redis 原子写入或业务状态机。</p>
+<h2 id="七发送重试">七、发送重试</h2>
+<p>生产者发送失败时，RocketMQ 可以自动重试。</p>
+<p>常见配置：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">DefaultMQProducer</span><span class="w"> </span><span class="n">producer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">DefaultMQProducer</span><span class="p">(</span><span class="s">&#34;order-producer-group&#34;</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">producer</span><span class="p">.</span><span class="na">setRetryTimesWhenSendFailed</span><span class="p">(</span><span class="n">2</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">producer</span><span class="p">.</span><span class="na">setRetryTimesWhenSendAsyncFailed</span><span class="p">(</span><span class="n">2</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">producer</span><span class="p">.</span><span class="na">setRetryAnotherBrokerWhenNotStoreOK</span><span class="p">(</span><span class="kc">true</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><p>需要注意：</p>
+<ul>
+<li>同步发送失败默认会重试。</li>
+<li>异步发送失败可配置重试次数。</li>
+<li>单向发送没有可靠失败反馈。</li>
+<li>发送重试可能造成重复消息。</li>
+</ul>
+<p>对关键业务来说，发送失败后还应记录本地发送日志，通过定时任务或 Outbox 机制补偿，而不是只依赖客户端内存里的重试。</p>
+<h2 id="八消费重试">八、消费重试</h2>
+<p>消费者消费失败后，可以通过抛异常或返回失败状态触发重试。</p>
+<p>并发消费中：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">consumer</span><span class="p">.</span><span class="na">registerMessageListener</span><span class="p">((</span><span class="n">MessageListenerConcurrently</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="n">msgs</span><span class="p">,</span><span class="w"> </span><span class="n">context</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">try</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">handle</span><span class="p">(</span><span class="n">msgs</span><span class="p">.</span><span class="na">get</span><span class="p">(</span><span class="n">0</span><span class="p">));</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">ConsumeConcurrentlyStatus</span><span class="p">.</span><span class="na">CONSUME_SUCCESS</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(</span><span class="n">Exception</span><span class="w"> </span><span class="n">ex</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">ConsumeConcurrentlyStatus</span><span class="p">.</span><span class="na">RECONSUME_LATER</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">});</span><span class="w">
+</span></span></span></code></pre></div><p>Spring 监听器中：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="nd">@Override</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">public</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">onMessage</span><span class="p">(</span><span class="n">OrderPaidEvent</span><span class="w"> </span><span class="n">event</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">inventoryService</span><span class="p">.</span><span class="na">deduct</span><span class="p">(</span><span class="n">event</span><span class="p">.</span><span class="na">getOrderId</span><span class="p">());</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>如果 <code>deduct</code> 抛出异常，框架会认为消费失败并触发重试。</p>
+<p>消费重试适合临时故障：</p>
+<ul>
+<li>数据库短暂不可用。</li>
+<li>Redis 超时。</li>
+<li>下游接口临时失败。</li>
+<li>网络抖动。</li>
+</ul>
+<p>不适合永久错误：</p>
+<ul>
+<li>消息字段缺失。</li>
+<li>业务状态已经不允许处理。</li>
+<li>参数格式根本不合法。</li>
+</ul>
+<p>永久错误应记录异常并结束重试，否则只是在认真地浪费机器。</p>
+<h2 id="九死信队列">九、死信队列</h2>
+<p>当消息超过最大重试次数仍然失败，就会进入死信队列。RocketMQ 中死信队列通常是以 ConsumerGroup 维度生成的特殊 Topic。</p>
+<p>死信消息意味着：</p>
+<ul>
+<li>正常消费链路已经处理不了这条消息。</li>
+<li>需要人工、补偿任务或专门的死信消费者介入。</li>
+<li>不能简单删除，除非已经确认业务无需处理。</li>
+</ul>
+<p>监听死信队列的示例：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="nd">@Service</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nd">@RocketMQMessageListener</span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">topic</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&#34;%DLQ%inventory-order-paid-group&#34;</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">consumerGroup</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&#34;inventory-dlq-handler-group&#34;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">InventoryDlqConsumer</span><span class="w"> </span><span class="kd">implements</span><span class="w"> </span><span class="n">RocketMQListener</span><span class="o">&lt;</span><span class="n">MessageExt</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nd">@Override</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">onMessage</span><span class="p">(</span><span class="n">MessageExt</span><span class="w"> </span><span class="n">message</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">String</span><span class="w"> </span><span class="n">body</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">String</span><span class="p">(</span><span class="n">message</span><span class="p">.</span><span class="na">getBody</span><span class="p">(),</span><span class="w"> </span><span class="n">StandardCharsets</span><span class="p">.</span><span class="na">UTF_8</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">System</span><span class="p">.</span><span class="na">out</span><span class="p">.</span><span class="na">println</span><span class="p">(</span><span class="s">&#34;dlq message: &#34;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">body</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>实际项目中，死信处理通常要做：</p>
+<ul>
+<li>记录消息体、Topic、Tag、Key、重试次数。</li>
+<li>记录异常原因。</li>
+<li>提供后台页面查看。</li>
+<li>支持修复数据后重新投递。</li>
+<li>支持标记忽略，但必须留审计记录。</li>
+</ul>
+<h2 id="十顺序消息边界">十、顺序消息边界</h2>
+<p>顺序消息分两类：</p>
+<ul>
+<li>全局有序：整个 Topic 只有一个队列，吞吐很低。</li>
+<li>分区有序：同一个业务 Key 进入同一个队列，工程上更常用。</li>
+</ul>
+<p>订单状态流转通常用分区有序：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">orderId=10001 -&gt; queue0: created -&gt; paid -&gt; shipped
+</span></span><span class="line"><span class="cl">orderId=10002 -&gt; queue1: created -&gt; canceled
+</span></span></code></pre></div><p>生产端要保证同一个订单号进入同一个队列：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">rocketMQTemplate</span><span class="p">.</span><span class="na">syncSendOrderly</span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="s">&#34;order-status-topic&#34;</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">message</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">event</span><span class="p">.</span><span class="na">getOrderId</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><p>消费端要启用顺序消费：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="nd">@RocketMQMessageListener</span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">topic</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&#34;order-status-topic&#34;</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">consumerGroup</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&#34;order-status-group&#34;</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">consumeMode</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ConsumeMode</span><span class="p">.</span><span class="na">ORDERLY</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">)</span><span class="w">
+</span></span></span></code></pre></div><p>顺序消费失败时，同一队列后续消息会被阻塞。因此顺序消息的消费逻辑必须尽量短、稳定、可观测。</p>
+<h2 id="十一延迟消息">十一、延迟消息</h2>
+<p>延迟消息用于“过一段时间再触发检查”。</p>
+<p>典型场景：</p>
+<ul>
+<li>下单 30 分钟后检查是否支付。</li>
+<li>支付后延迟检查履约状态。</li>
+<li>任务提交后延迟检查执行结果。</li>
+</ul>
+<p>示例：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">Message</span><span class="o">&lt;</span><span class="n">String</span><span class="o">&gt;</span><span class="w"> </span><span class="n">message</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">MessageBuilder</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">.</span><span class="na">withPayload</span><span class="p">(</span><span class="n">orderId</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">.</span><span class="na">setHeader</span><span class="p">(</span><span class="n">MessageConst</span><span class="p">.</span><span class="na">PROPERTY_KEYS</span><span class="p">,</span><span class="w"> </span><span class="n">orderId</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">.</span><span class="na">build</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">rocketMQTemplate</span><span class="p">.</span><span class="na">syncSend</span><span class="p">(</span><span class="s">&#34;order-delay-topic:close&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">message</span><span class="p">,</span><span class="w"> </span><span class="n">3000</span><span class="p">,</span><span class="w"> </span><span class="n">16</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><p>延迟消息消费时要重新查询业务状态：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="kd">public</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">onMessage</span><span class="p">(</span><span class="n">String</span><span class="w"> </span><span class="n">orderId</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">Order</span><span class="w"> </span><span class="n">order</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">orderRepository</span><span class="p">.</span><span class="na">findById</span><span class="p">(</span><span class="n">orderId</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">order</span><span class="p">.</span><span class="na">isUnpaid</span><span class="p">())</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">orderService</span><span class="p">.</span><span class="na">close</span><span class="p">(</span><span class="n">orderId</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>不要在发送延迟消息时就假设 30 分钟后一定要关闭订单。业务状态会变化，消息只是提醒你去检查。</p>
+<h2 id="十二topic-与-tag-设计">十二、Topic 与 Tag 设计</h2>
+<p>Topic 和 Tag 的拆分建议：</p>
+<table>
+  <thead>
+      <tr>
+          <th>判断维度</th>
+          <th>建议</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>业务域完全不同</td>
+          <td>拆 Topic</td>
+      </tr>
+      <tr>
+          <td>消息类型不同</td>
+          <td>拆 Topic</td>
+      </tr>
+      <tr>
+          <td>消息量级差异巨大</td>
+          <td>拆 Topic</td>
+      </tr>
+      <tr>
+          <td>同一业务下的事件类型</td>
+          <td>用 Tag</td>
+      </tr>
+      <tr>
+          <td>消费权限和隔离要求不同</td>
+          <td>拆 Topic</td>
+      </tr>
+  </tbody>
+</table>
+<p>例子：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">order-topic
+</span></span><span class="line"><span class="cl">  - created
+</span></span><span class="line"><span class="cl">  - paid
+</span></span><span class="line"><span class="cl">  - canceled
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">inventory-topic
+</span></span><span class="line"><span class="cl">  - locked
+</span></span><span class="line"><span class="cl">  - deducted
+</span></span><span class="line"><span class="cl">  - released
+</span></span></code></pre></div><p>不要为了省 Topic 把毫不相关的消息都塞进去，也不要为了“看起来清晰”给每个小事件都建 Topic。设计不是数量竞赛。</p>
+<h2 id="十三生产建议">十三、生产建议</h2>
+<p>上线前至少确认：</p>
+<ul>
+<li>每条消息都有业务 Key。</li>
+<li>消费者具备幂等处理。</li>
+<li>消费失败能区分临时失败和永久失败。</li>
+<li>死信队列有处理流程。</li>
+<li>消费积压有监控。</li>
+<li>Producer 发送失败有日志和补偿。</li>
+<li>重要 Topic 有合理队列数。</li>
+<li>顺序消息的 sharding key 选择稳定。</li>
+<li>事务消息有可靠本地事务查询。</li>
+</ul>
+<h2 id="十四一句话总结">十四、一句话总结</h2>
+<p>RocketMQ 的高级特性本质上都在处理“不确定性”：网络不确定、进程不确定、下游不确定、业务状态不确定。把这些不确定性设计进系统里，消息队列才会成为可靠的工程工具。</p>
+<h2 id="参考资料">参考资料</h2>
+<ul>
+<li><a href="https://rocketmq.apache.org/docs/featureBehavior/04transactionmessage/">Apache RocketMQ：Transaction Message</a>
+</li>
+<li><a href="https://rocketmq.apache.org/docs/featureBehavior/03fifomessage/">Apache RocketMQ：Ordered Message</a>
+</li>
+<li><a href="https://rocketmq.apache.org/docs/featureBehavior/10consumerretrypolicy/">Apache RocketMQ：Consumption Retry</a>
+</li>
+</ul>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

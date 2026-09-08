@@ -1,0 +1,1339 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>单核cpu的性能瓶颈 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="单核 CPU 的性能瓶颈，本质上可以概括为一句话：
+同一时刻，一个 CPU 核只能真正执行一条指令流。
+无论上层看起来有多少请求、多少连接、多少协程，只要最终都落到同一个 CPU 核上执行，它们就必须分享这一核的执行时间。当单位时间内要处理的工作量超过这一核的处理能力时，就会出现 CPU 使用率接近 100%、延迟上升、吞吐不再增长等现象。
+一、单核瓶颈到底是什么意思？ 可以用一个很粗略的公式理解：
+CPU 消耗 = 单次请求消耗的 CPU 时间 x 请求数 当总 CPU 消耗超过一个核心在单位时间内能提供的执行时间时，请求就会排队。
+假设一个请求平均需要 100 微秒 CPU 时间，那么一个核心在理想情况下最多处理：
+1 秒 / 100 微秒 = 10000 次请求/秒 这只是理想估算。真实系统还会受到缓存命中率、系统调用、网络协议栈、内存访问、锁竞争、上下文切换等因素影响。工程上当然没有那么温柔，不会刚好按公式排队给你看。
+二、单核 CPU 通常卡在哪里？ 单核瓶颈不一定只来自“计算太多”。常见来源主要有几类。
+1. 纯计算量 如果每次请求都要做大量计算，就很容易把单核打满，例如：
+JSON 解析和序列化。 哈希计算。 压缩和解压缩。 加密和解密。 正则匹配。 排序、聚合、编码转换。 这些操作没有问题，但它们都要消耗 CPU 指令。请求量上来以后，单核迟早会遇到上限。
+2. 内存访问和缓存命中率 很多程序不是“算不过来”，而是“等数据等得太久”。
+例如：
+大量随机访问哈希表、跳表、树结构。 频繁分配和释放对象。 大量拷贝字符串或二进制数据。 工作集太大，放不进 CPU Cache。 CPU 访问 L1 Cache 很快，访问内存就慢得多。如果数据总是不在缓存里，CPU 就会花大量时间等待内存返回数据。表面上看 CPU 很忙，实际上它并不总是在高效执行业务逻辑。
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/computerorganization/%E5%8D%95%E6%A0%B8cpu%E7%9A%84%E6%80%A7%E8%83%BD%E7%93%B6%E9%A2%88/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/computerorganization/%E5%8D%95%E6%A0%B8cpu%E7%9A%84%E6%80%A7%E8%83%BD%E7%93%B6%E9%A2%88/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="单核cpu的性能瓶颈">
+  <meta property="og:description" content="单核 CPU 的性能瓶颈，本质上可以概括为一句话：
+同一时刻，一个 CPU 核只能真正执行一条指令流。
+无论上层看起来有多少请求、多少连接、多少协程，只要最终都落到同一个 CPU 核上执行，它们就必须分享这一核的执行时间。当单位时间内要处理的工作量超过这一核的处理能力时，就会出现 CPU 使用率接近 100%、延迟上升、吞吐不再增长等现象。
+一、单核瓶颈到底是什么意思？ 可以用一个很粗略的公式理解：
+CPU 消耗 = 单次请求消耗的 CPU 时间 x 请求数 当总 CPU 消耗超过一个核心在单位时间内能提供的执行时间时，请求就会排队。
+假设一个请求平均需要 100 微秒 CPU 时间，那么一个核心在理想情况下最多处理：
+1 秒 / 100 微秒 = 10000 次请求/秒 这只是理想估算。真实系统还会受到缓存命中率、系统调用、网络协议栈、内存访问、锁竞争、上下文切换等因素影响。工程上当然没有那么温柔，不会刚好按公式排队给你看。
+二、单核 CPU 通常卡在哪里？ 单核瓶颈不一定只来自“计算太多”。常见来源主要有几类。
+1. 纯计算量 如果每次请求都要做大量计算，就很容易把单核打满，例如：
+JSON 解析和序列化。 哈希计算。 压缩和解压缩。 加密和解密。 正则匹配。 排序、聚合、编码转换。 这些操作没有问题，但它们都要消耗 CPU 指令。请求量上来以后，单核迟早会遇到上限。
+2. 内存访问和缓存命中率 很多程序不是“算不过来”，而是“等数据等得太久”。
+例如：
+大量随机访问哈希表、跳表、树结构。 频繁分配和释放对象。 大量拷贝字符串或二进制数据。 工作集太大，放不进 CPU Cache。 CPU 访问 L1 Cache 很快，访问内存就慢得多。如果数据总是不在缓存里，CPU 就会花大量时间等待内存返回数据。表面上看 CPU 很忙，实际上它并不总是在高效执行业务逻辑。">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="computerorganization">
+    <meta property="article:published_time" content="2026-02-19T17:50:23+08:00">
+    <meta property="article:modified_time" content="2026-02-19T17:50:23+08:00">
+
+  
+  <meta itemprop="name" content="单核cpu的性能瓶颈">
+  <meta itemprop="description" content="单核 CPU 的性能瓶颈，本质上可以概括为一句话：
+同一时刻，一个 CPU 核只能真正执行一条指令流。
+无论上层看起来有多少请求、多少连接、多少协程，只要最终都落到同一个 CPU 核上执行，它们就必须分享这一核的执行时间。当单位时间内要处理的工作量超过这一核的处理能力时，就会出现 CPU 使用率接近 100%、延迟上升、吞吐不再增长等现象。
+一、单核瓶颈到底是什么意思？ 可以用一个很粗略的公式理解：
+CPU 消耗 = 单次请求消耗的 CPU 时间 x 请求数 当总 CPU 消耗超过一个核心在单位时间内能提供的执行时间时，请求就会排队。
+假设一个请求平均需要 100 微秒 CPU 时间，那么一个核心在理想情况下最多处理：
+1 秒 / 100 微秒 = 10000 次请求/秒 这只是理想估算。真实系统还会受到缓存命中率、系统调用、网络协议栈、内存访问、锁竞争、上下文切换等因素影响。工程上当然没有那么温柔，不会刚好按公式排队给你看。
+二、单核 CPU 通常卡在哪里？ 单核瓶颈不一定只来自“计算太多”。常见来源主要有几类。
+1. 纯计算量 如果每次请求都要做大量计算，就很容易把单核打满，例如：
+JSON 解析和序列化。 哈希计算。 压缩和解压缩。 加密和解密。 正则匹配。 排序、聚合、编码转换。 这些操作没有问题，但它们都要消耗 CPU 指令。请求量上来以后，单核迟早会遇到上限。
+2. 内存访问和缓存命中率 很多程序不是“算不过来”，而是“等数据等得太久”。
+例如：
+大量随机访问哈希表、跳表、树结构。 频繁分配和释放对象。 大量拷贝字符串或二进制数据。 工作集太大，放不进 CPU Cache。 CPU 访问 L1 Cache 很快，访问内存就慢得多。如果数据总是不在缓存里，CPU 就会花大量时间等待内存返回数据。表面上看 CPU 很忙，实际上它并不总是在高效执行业务逻辑。">
+  <meta itemprop="datePublished" content="2026-02-19T17:50:23+08:00">
+  <meta itemprop="dateModified" content="2026-02-19T17:50:23+08:00">
+  <meta itemprop="wordCount" content="379">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="单核cpu的性能瓶颈">
+  <meta name="twitter:description" content="单核 CPU 的性能瓶颈，本质上可以概括为一句话：
+同一时刻，一个 CPU 核只能真正执行一条指令流。
+无论上层看起来有多少请求、多少连接、多少协程，只要最终都落到同一个 CPU 核上执行，它们就必须分享这一核的执行时间。当单位时间内要处理的工作量超过这一核的处理能力时，就会出现 CPU 使用率接近 100%、延迟上升、吞吐不再增长等现象。
+一、单核瓶颈到底是什么意思？ 可以用一个很粗略的公式理解：
+CPU 消耗 = 单次请求消耗的 CPU 时间 x 请求数 当总 CPU 消耗超过一个核心在单位时间内能提供的执行时间时，请求就会排队。
+假设一个请求平均需要 100 微秒 CPU 时间，那么一个核心在理想情况下最多处理：
+1 秒 / 100 微秒 = 10000 次请求/秒 这只是理想估算。真实系统还会受到缓存命中率、系统调用、网络协议栈、内存访问、锁竞争、上下文切换等因素影响。工程上当然没有那么温柔，不会刚好按公式排队给你看。
+二、单核 CPU 通常卡在哪里？ 单核瓶颈不一定只来自“计算太多”。常见来源主要有几类。
+1. 纯计算量 如果每次请求都要做大量计算，就很容易把单核打满，例如：
+JSON 解析和序列化。 哈希计算。 压缩和解压缩。 加密和解密。 正则匹配。 排序、聚合、编码转换。 这些操作没有问题，但它们都要消耗 CPU 指令。请求量上来以后，单核迟早会遇到上限。
+2. 内存访问和缓存命中率 很多程序不是“算不过来”，而是“等数据等得太久”。
+例如：
+大量随机访问哈希表、跳表、树结构。 频繁分配和释放对象。 大量拷贝字符串或二进制数据。 工作集太大，放不进 CPU Cache。 CPU 访问 L1 Cache 很快，访问内存就慢得多。如果数据总是不在缓存里，CPU 就会花大量时间等待内存返回数据。表面上看 CPU 很忙，实际上它并不总是在高效执行业务逻辑。">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">单核cpu的性能瓶颈</h1>
+
+    
+      <div class="post-date">February 19, 2026</div>
+    
+
+    <div class="post-content">
+      <p>单核 CPU 的性能瓶颈，本质上可以概括为一句话：</p>
+<blockquote>
+<p>同一时刻，一个 CPU 核只能真正执行一条指令流。</p></blockquote>
+<p>无论上层看起来有多少请求、多少连接、多少协程，只要最终都落到同一个 CPU 核上执行，它们就必须分享这一核的执行时间。当单位时间内要处理的工作量超过这一核的处理能力时，就会出现 CPU 使用率接近 100%、延迟上升、吞吐不再增长等现象。</p>
+<h2 id="一单核瓶颈到底是什么意思">一、单核瓶颈到底是什么意思？</h2>
+<p>可以用一个很粗略的公式理解：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">CPU 消耗 = 单次请求消耗的 CPU 时间 x 请求数
+</span></span></code></pre></div><p>当总 CPU 消耗超过一个核心在单位时间内能提供的执行时间时，请求就会排队。</p>
+<p>假设一个请求平均需要 100 微秒 CPU 时间，那么一个核心在理想情况下最多处理：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">1 秒 / 100 微秒 = 10000 次请求/秒
+</span></span></code></pre></div><p>这只是理想估算。真实系统还会受到缓存命中率、系统调用、网络协议栈、内存访问、锁竞争、上下文切换等因素影响。工程上当然没有那么温柔，不会刚好按公式排队给你看。</p>
+<h2 id="二单核-cpu-通常卡在哪里">二、单核 CPU 通常卡在哪里？</h2>
+<p>单核瓶颈不一定只来自“计算太多”。常见来源主要有几类。</p>
+<h3 id="1-纯计算量">1. 纯计算量</h3>
+<p>如果每次请求都要做大量计算，就很容易把单核打满，例如：</p>
+<ul>
+<li>JSON 解析和序列化。</li>
+<li>哈希计算。</li>
+<li>压缩和解压缩。</li>
+<li>加密和解密。</li>
+<li>正则匹配。</li>
+<li>排序、聚合、编码转换。</li>
+</ul>
+<p>这些操作没有问题，但它们都要消耗 CPU 指令。请求量上来以后，单核迟早会遇到上限。</p>
+<h3 id="2-内存访问和缓存命中率">2. 内存访问和缓存命中率</h3>
+<p>很多程序不是“算不过来”，而是“等数据等得太久”。</p>
+<p>例如：</p>
+<ul>
+<li>大量随机访问哈希表、跳表、树结构。</li>
+<li>频繁分配和释放对象。</li>
+<li>大量拷贝字符串或二进制数据。</li>
+<li>工作集太大，放不进 CPU Cache。</li>
+</ul>
+<p>CPU 访问 L1 Cache 很快，访问内存就慢得多。如果数据总是不在缓存里，CPU 就会花大量时间等待内存返回数据。表面上看 CPU 很忙，实际上它并不总是在高效执行业务逻辑。</p>
+<h3 id="3-系统调用和网络-io">3. 系统调用和网络 I/O</h3>
+<p>单核服务处理网络请求时，CPU 还要承担不少系统层面的工作：</p>
+<ul>
+<li><code>read</code> / <code>write</code> / <code>send</code> / <code>recv</code>。</li>
+<li><code>epoll</code> 事件处理。</li>
+<li>内核态和用户态切换。</li>
+<li>网络协议栈处理。</li>
+<li>数据从内核缓冲区到用户缓冲区的拷贝。</li>
+<li>小包高频收发带来的额外开销。</li>
+</ul>
+<p>所以有些服务看起来业务逻辑很轻，却依然会被网络和系统调用开销顶满。</p>
+<h3 id="4-单线程排队效应">4. 单线程排队效应</h3>
+<p>单线程或单核模型下，一个请求执行得慢，后面的请求就只能等。</p>
+<p>比如某个请求执行了一个 O(N) 大操作，或者处理了一个非常大的对象，它前面的任务可能没问题，但它后面的请求都会被拖住。结果就是：</p>
+<ul>
+<li>平均延迟可能只是稍微变高。</li>
+<li>P99、P999 这类尾延迟会明显恶化。</li>
+<li>用户感受到的是偶发卡顿或超时。</li>
+</ul>
+<p>这也是单线程系统最需要警惕的地方：不是每个请求都慢，而是慢请求会挡住后面的一串请求。</p>
+<h2 id="三redis-单线程是否意味着只能用一个核">三、Redis 单线程是否意味着只能用一个核？</h2>
+<p>先分清两个问题：</p>
+<ol>
+<li>Redis 的核心命令执行是否主要是单线程？</li>
+<li>Redis 整个进程是否完全只有一个线程或只能使用一个 CPU 核？</li>
+</ol>
+<p>第一点，Redis 的核心数据结构操作长期采用单线程执行模型。常见命令会在主线程中顺序执行，这样设计有几个好处：</p>
+<ul>
+<li>避免复杂的锁竞争。</li>
+<li>数据结构操作更简单。</li>
+<li>上下文切换少。</li>
+<li>延迟更稳定。</li>
+<li>代码实现和故障排查成本更低。</li>
+</ul>
+<p>第二点，Redis 并不等于“整个程序永远只有一个线程”。实际运行中，它可能使用后台线程或子进程处理一些辅助工作，例如：</p>
+<ul>
+<li>RDB 持久化。</li>
+<li>AOF rewrite。</li>
+<li>异步释放内存。</li>
+<li>后台清理。</li>
+<li>网络 I/O 线程。</li>
+</ul>
+<p>但关键点在于：</p>
+<blockquote>
+<p>一个 Redis 实例对数据结构的核心命令执行，主要仍受单个主线程限制。</p></blockquote>
+<p>因此，一个 Redis 实例的核心读写吞吐通常主要受单核能力影响；要吃满多核，常见做法不是让一个实例的所有命令在多核上乱序并行，而是通过多实例或分片扩展。</p>
+<h2 id="四redis-为什么经常不先卡在-cpu">四、Redis 为什么经常不先卡在 CPU？</h2>
+<p>很多业务里，Redis 的常见命令很轻，例如：</p>
+<ul>
+<li><code>GET</code></li>
+<li><code>SET</code></li>
+<li><code>HGET</code></li>
+<li><code>HSET</code></li>
+<li><code>INCR</code></li>
+<li><code>EXPIRE</code></li>
+</ul>
+<p>这类操作路径短，很多还是接近 O(1) 的操作。只要 value 不大、客户端使用方式合理、网络没有严重瓶颈，单核就能支撑相当高的吞吐。</p>
+<p>Redis 之所以能快，核心原因并不是“单线程天然强大”，而是它同时做对了几件事：</p>
+<ul>
+<li>数据主要在内存中。</li>
+<li>常见操作复杂度低。</li>
+<li>单线程避免了共享数据结构上的锁竞争。</li>
+<li>I/O 多路复用减少了线程切换成本。</li>
+<li>数据结构实现高度针对场景优化。</li>
+</ul>
+<p>但是，这不意味着 Redis 不会遇到 CPU 瓶颈。它当然会，只是瓶颈出现的位置取决于你的使用方式。</p>
+<h2 id="五哪些情况容易把-redis-单核打满">五、哪些情况容易把 Redis 单核打满？</h2>
+<p>下面这些场景尤其危险。</p>
+<h3 id="1-大-key-和大-value">1. 大 key 和大 value</h3>
+<p>一次操作如果涉及很大的数据，就会消耗更多 CPU 和内存带宽：</p>
+<ul>
+<li>大字符串 GET / SET。</li>
+<li>大 List / Set / Hash / ZSet。</li>
+<li>大对象序列化和反序列化。</li>
+<li>网络发送大 value。</li>
+</ul>
+<p>大 key 的问题不只是占空间，它还会制造阻塞、拷贝和尾延迟。平时不出事，一出事就很难看。</p>
+<h3 id="2-on-或阻塞型命令">2. O(N) 或阻塞型命令</h3>
+<p>例如：</p>
+<ul>
+<li><code>KEYS</code></li>
+<li>大范围 <code>LRANGE</code></li>
+<li>大集合 <code>SMEMBERS</code></li>
+<li>大集合运算 <code>SUNION</code> / <code>SINTER</code></li>
+<li><code>SORT</code></li>
+<li>复杂 Lua 脚本</li>
+</ul>
+<p>这类命令会长时间占用主线程。主线程一旦被占住，其他请求就只能排队。</p>
+<h3 id="3-lua-脚本或模块做重计算">3. Lua 脚本或模块做重计算</h3>
+<p>Lua 脚本在 Redis 主线程中执行。它适合做小而原子的逻辑，不适合做复杂计算。</p>
+<p>如果脚本执行太久，Redis 并不会因为你写的是脚本就变出第二个主线程来帮忙。很遗憾，现实并不体贴。</p>
+<h3 id="4-高频过期淘汰和内存管理">4. 高频过期、淘汰和内存管理</h3>
+<p>大量 key 同时过期、大量对象创建释放、淘汰策略频繁触发，都可能增加 CPU 消耗。</p>
+<p>尤其是在内存压力较大时，Redis 不仅要处理请求，还要处理内存回收和淘汰逻辑，延迟就可能抖动。</p>
+<h3 id="5-客户端使用方式不合理">5. 客户端使用方式不合理</h3>
+<p>例如：</p>
+<ul>
+<li>不使用 pipeline，导致大量 RTT。</li>
+<li>连接数过多，事件处理成本增加。</li>
+<li>请求过碎，小包数量过高。</li>
+<li>热 key 集中过度，单个实例压力失衡。</li>
+</ul>
+<p>这类问题看起来像 Redis 慢，实际上可能是访问模式把单核能力浪费掉了。</p>
+<h2 id="六redis-如何扩展到多核">六、Redis 如何扩展到多核？</h2>
+<p>Redis 常见扩展方式是横向扩展。</p>
+<h3 id="1-多实例">1. 多实例</h3>
+<p>在同一台机器上启动多个 Redis 实例，让不同实例绑定不同端口、不同 CPU 核。这样可以更直接地利用多核。</p>
+<p>这种方式简单，但需要业务或代理层处理 key 的分布。</p>
+<h3 id="2-redis-cluster--分片">2. Redis Cluster / 分片</h3>
+<p>把 key 空间拆到多个节点或多个实例中。每个分片处理自己负责的一部分 key，自然可以利用多核甚至多机。</p>
+<p>这是更标准的扩展方式，但要注意：</p>
+<ul>
+<li>跨 slot 操作会受限制。</li>
+<li>多 key 操作需要考虑 key 分布。</li>
+<li>客户端需要支持 Cluster。</li>
+<li>运维复杂度会上升。</li>
+</ul>
+<h3 id="3-读写分离">3. 读写分离</h3>
+<p>通过主从复制，让读请求走 replica。</p>
+<p>适合读多写少的场景，但要注意复制延迟和一致性要求。需要强一致读时，就不能随便把读请求丢给从库。</p>
+<h3 id="4-pipeline-和批处理">4. Pipeline 和批处理</h3>
+<p>Pipeline 不是让 Redis 多核执行命令，而是减少网络往返和系统调用开销，让单核更充分地处理命令。</p>
+<p>对于大量小请求，pipeline 往往能显著提高吞吐。</p>
+<h3 id="5-io-threading">5. I/O threading</h3>
+<p>网络 I/O 线程可以帮助 Redis 分担读写 socket、协议解析或响应写回相关的部分开销。但数据结构命令执行仍然主要在主线程。</p>
+<p>所以 I/O threading 适合缓解网络 I/O 压力，不等于把所有命令执行自动变成多核并行。</p>
+<h2 id="七如何判断单核已经成为瓶颈">七、如何判断单核已经成为瓶颈？</h2>
+<p>可以从这些现象入手：</p>
+<ul>
+<li>单个 Redis 主线程所在 CPU 核接近 100%。</li>
+<li>总 CPU 使用率不高，但某一个核很满。</li>
+<li>QPS 不再随请求增加而增长。</li>
+<li>延迟，尤其是 P99 / P999 延迟明显上升。</li>
+<li>慢查询日志出现大 key 或 O(N) 命令。</li>
+<li><code>INFO commandstats</code> 中某些命令耗时异常。</li>
+<li>网络带宽未满，但 Redis 响应变慢。</li>
+</ul>
+<p>排查时不要只看整机 CPU 平均值。单线程瓶颈经常表现为“整机 CPU 看起来还有余量，但一个核心已经被打满”。</p>
+<h2 id="八优化思路">八、优化思路</h2>
+<ol>
+<li>
+<p><strong>减少单次请求 CPU 消耗</strong></p>
+<p>避免大 key、大 value、复杂 Lua、大范围扫描和昂贵命令。</p>
+</li>
+<li>
+<p><strong>降低请求次数</strong></p>
+<p>使用 pipeline、批处理、合并请求，减少系统调用和网络往返。</p>
+</li>
+<li>
+<p><strong>拆分热点</strong></p>
+<p>对热点 key 做拆分，避免所有请求集中到一个 key 或一个分片。</p>
+</li>
+<li>
+<p><strong>横向扩展</strong></p>
+<p>使用多实例、Redis Cluster 或代理分片，把压力分散到多个核心。</p>
+</li>
+<li>
+<p><strong>让慢操作离开主路径</strong></p>
+<p>大量计算、复杂聚合、报表统计等任务，尽量不要压在 Redis 主线程上。</p>
+</li>
+<li>
+<p><strong>控制连接和客户端行为</strong></p>
+<p>减少无意义短连接，避免过多连接制造事件处理和调度开销。</p>
+</li>
+</ol>
+<h2 id="九一句话总结">九、一句话总结</h2>
+<blockquote>
+<p>单核 CPU 的瓶颈来自同一时刻只能执行一条指令流。Redis 的核心命令执行主要受单个主线程限制，因此一个实例的核心吞吐通常受单核能力影响。Redis 快，是因为它让单线程路径足够短、数据结构足够高效、锁竞争足够少；一旦出现大 key、慢命令、复杂脚本或热点集中，单核瓶颈就会非常明显。</p></blockquote>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

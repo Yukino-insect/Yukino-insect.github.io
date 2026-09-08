@@ -1,0 +1,1338 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>加密算法 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="实习中遇到过一个敏感数据加密场景：客户不允许手机号、身份证等信息以明文存入数据库。项目最终通过第三方 KMS 平台完成加解密，业务系统按接口规范远程调用 KMS。
+这个方案安全性有优势，但也暴露出一个性能问题：如果列表页有几十条数据，每条手机号都要远程解密一次，分页查询就会变成高频 KMS 调用。接口本身也许不慢，但 N 次远程调用叠起来，用户不会替你的架构感动。
+借这个场景，把常见加密概念和工程落地整理一下。
+加密、哈希、签名 先区分三个概念。
+类型 是否可逆 解决什么问题 加密 可逆 保护内容不被未授权方读取 哈希 不可逆 生成摘要、校验完整性、做指纹 签名/MAC 不可逆验证 证明内容未被篡改，并确认发送方身份 如果目标是之后还能看到手机号明文，就必须使用可逆加密。如果只是登录密码，绝不应该加密后存储，而应该使用带盐的慢哈希算法，例如 BCrypt、Argon2。
+对称加密 对称加密使用同一把密钥加密和解密。
+特点：
+性能好，适合加密大量数据。 常用于文件、数据库字段、通信内容。 难点在于密钥管理。 常见算法：
+AES：国际通用分组加密算法。 SM4：国密分组加密算法。 ChaCha20：流加密算法，常见于移动端和高性能场景。 对称加密还需要选择工作模式。现代业务中优先考虑 GCM 这类带认证的模式，因为它同时提供保密性和完整性校验。
+不要使用 ECB。它会泄露明文模式，看起来像加密了，实际上很有表演性质。
+非对称加密 非对称加密使用一对密钥：
+公钥：可以公开。 私钥：必须保密。 常见算法：
+RSA ECC SM2 DH/ECDH 非对称加密性能比对称加密差，不适合直接加密大文件或大量字段。它更常用于密钥协商、数字签名、证书体系，或者加密一把较短的对称密钥。
+哈希和 HMAC 哈希算法把任意长度输入转换成固定长度摘要。
+常见算法：
+SHA-256 SHA-512 SM3 哈希不可逆，适合做完整性校验、文件指纹、数据去重、索引辅助字段等。
+但普通哈希不能证明“是谁生成的”。任何人拿到原文都能算出同样摘要。
+HMAC 在哈希基础上加入密钥：
+HMAC = Hash(message &#43; secret) 准确说 HMAC 有标准结构，不是简单字符串拼接。它的重点是：只有持有密钥的一方才能生成正确 MAC，所以它能同时提供完整性校验和身份认证。
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/randomthoughts/%E5%8A%A0%E5%AF%86%E7%AE%97%E6%B3%95/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/randomthoughts/%E5%8A%A0%E5%AF%86%E7%AE%97%E6%B3%95/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="加密算法">
+  <meta property="og:description" content="实习中遇到过一个敏感数据加密场景：客户不允许手机号、身份证等信息以明文存入数据库。项目最终通过第三方 KMS 平台完成加解密，业务系统按接口规范远程调用 KMS。
+这个方案安全性有优势，但也暴露出一个性能问题：如果列表页有几十条数据，每条手机号都要远程解密一次，分页查询就会变成高频 KMS 调用。接口本身也许不慢，但 N 次远程调用叠起来，用户不会替你的架构感动。
+借这个场景，把常见加密概念和工程落地整理一下。
+加密、哈希、签名 先区分三个概念。
+类型 是否可逆 解决什么问题 加密 可逆 保护内容不被未授权方读取 哈希 不可逆 生成摘要、校验完整性、做指纹 签名/MAC 不可逆验证 证明内容未被篡改，并确认发送方身份 如果目标是之后还能看到手机号明文，就必须使用可逆加密。如果只是登录密码，绝不应该加密后存储，而应该使用带盐的慢哈希算法，例如 BCrypt、Argon2。
+对称加密 对称加密使用同一把密钥加密和解密。
+特点：
+性能好，适合加密大量数据。 常用于文件、数据库字段、通信内容。 难点在于密钥管理。 常见算法：
+AES：国际通用分组加密算法。 SM4：国密分组加密算法。 ChaCha20：流加密算法，常见于移动端和高性能场景。 对称加密还需要选择工作模式。现代业务中优先考虑 GCM 这类带认证的模式，因为它同时提供保密性和完整性校验。
+不要使用 ECB。它会泄露明文模式，看起来像加密了，实际上很有表演性质。
+非对称加密 非对称加密使用一对密钥：
+公钥：可以公开。 私钥：必须保密。 常见算法：
+RSA ECC SM2 DH/ECDH 非对称加密性能比对称加密差，不适合直接加密大文件或大量字段。它更常用于密钥协商、数字签名、证书体系，或者加密一把较短的对称密钥。
+哈希和 HMAC 哈希算法把任意长度输入转换成固定长度摘要。
+常见算法：
+SHA-256 SHA-512 SM3 哈希不可逆，适合做完整性校验、文件指纹、数据去重、索引辅助字段等。
+但普通哈希不能证明“是谁生成的”。任何人拿到原文都能算出同样摘要。
+HMAC 在哈希基础上加入密钥：
+HMAC = Hash(message &#43; secret) 准确说 HMAC 有标准结构，不是简单字符串拼接。它的重点是：只有持有密钥的一方才能生成正确 MAC，所以它能同时提供完整性校验和身份认证。">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="randomthoughts">
+    <meta property="article:published_time" content="2026-02-24T09:44:08+08:00">
+    <meta property="article:modified_time" content="2026-02-24T09:44:08+08:00">
+
+  
+  <meta itemprop="name" content="加密算法">
+  <meta itemprop="description" content="实习中遇到过一个敏感数据加密场景：客户不允许手机号、身份证等信息以明文存入数据库。项目最终通过第三方 KMS 平台完成加解密，业务系统按接口规范远程调用 KMS。
+这个方案安全性有优势，但也暴露出一个性能问题：如果列表页有几十条数据，每条手机号都要远程解密一次，分页查询就会变成高频 KMS 调用。接口本身也许不慢，但 N 次远程调用叠起来，用户不会替你的架构感动。
+借这个场景，把常见加密概念和工程落地整理一下。
+加密、哈希、签名 先区分三个概念。
+类型 是否可逆 解决什么问题 加密 可逆 保护内容不被未授权方读取 哈希 不可逆 生成摘要、校验完整性、做指纹 签名/MAC 不可逆验证 证明内容未被篡改，并确认发送方身份 如果目标是之后还能看到手机号明文，就必须使用可逆加密。如果只是登录密码，绝不应该加密后存储，而应该使用带盐的慢哈希算法，例如 BCrypt、Argon2。
+对称加密 对称加密使用同一把密钥加密和解密。
+特点：
+性能好，适合加密大量数据。 常用于文件、数据库字段、通信内容。 难点在于密钥管理。 常见算法：
+AES：国际通用分组加密算法。 SM4：国密分组加密算法。 ChaCha20：流加密算法，常见于移动端和高性能场景。 对称加密还需要选择工作模式。现代业务中优先考虑 GCM 这类带认证的模式，因为它同时提供保密性和完整性校验。
+不要使用 ECB。它会泄露明文模式，看起来像加密了，实际上很有表演性质。
+非对称加密 非对称加密使用一对密钥：
+公钥：可以公开。 私钥：必须保密。 常见算法：
+RSA ECC SM2 DH/ECDH 非对称加密性能比对称加密差，不适合直接加密大文件或大量字段。它更常用于密钥协商、数字签名、证书体系，或者加密一把较短的对称密钥。
+哈希和 HMAC 哈希算法把任意长度输入转换成固定长度摘要。
+常见算法：
+SHA-256 SHA-512 SM3 哈希不可逆，适合做完整性校验、文件指纹、数据去重、索引辅助字段等。
+但普通哈希不能证明“是谁生成的”。任何人拿到原文都能算出同样摘要。
+HMAC 在哈希基础上加入密钥：
+HMAC = Hash(message &#43; secret) 准确说 HMAC 有标准结构，不是简单字符串拼接。它的重点是：只有持有密钥的一方才能生成正确 MAC，所以它能同时提供完整性校验和身份认证。">
+  <meta itemprop="datePublished" content="2026-02-24T09:44:08+08:00">
+  <meta itemprop="dateModified" content="2026-02-24T09:44:08+08:00">
+  <meta itemprop="wordCount" content="198">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="加密算法">
+  <meta name="twitter:description" content="实习中遇到过一个敏感数据加密场景：客户不允许手机号、身份证等信息以明文存入数据库。项目最终通过第三方 KMS 平台完成加解密，业务系统按接口规范远程调用 KMS。
+这个方案安全性有优势，但也暴露出一个性能问题：如果列表页有几十条数据，每条手机号都要远程解密一次，分页查询就会变成高频 KMS 调用。接口本身也许不慢，但 N 次远程调用叠起来，用户不会替你的架构感动。
+借这个场景，把常见加密概念和工程落地整理一下。
+加密、哈希、签名 先区分三个概念。
+类型 是否可逆 解决什么问题 加密 可逆 保护内容不被未授权方读取 哈希 不可逆 生成摘要、校验完整性、做指纹 签名/MAC 不可逆验证 证明内容未被篡改，并确认发送方身份 如果目标是之后还能看到手机号明文，就必须使用可逆加密。如果只是登录密码，绝不应该加密后存储，而应该使用带盐的慢哈希算法，例如 BCrypt、Argon2。
+对称加密 对称加密使用同一把密钥加密和解密。
+特点：
+性能好，适合加密大量数据。 常用于文件、数据库字段、通信内容。 难点在于密钥管理。 常见算法：
+AES：国际通用分组加密算法。 SM4：国密分组加密算法。 ChaCha20：流加密算法，常见于移动端和高性能场景。 对称加密还需要选择工作模式。现代业务中优先考虑 GCM 这类带认证的模式，因为它同时提供保密性和完整性校验。
+不要使用 ECB。它会泄露明文模式，看起来像加密了，实际上很有表演性质。
+非对称加密 非对称加密使用一对密钥：
+公钥：可以公开。 私钥：必须保密。 常见算法：
+RSA ECC SM2 DH/ECDH 非对称加密性能比对称加密差，不适合直接加密大文件或大量字段。它更常用于密钥协商、数字签名、证书体系，或者加密一把较短的对称密钥。
+哈希和 HMAC 哈希算法把任意长度输入转换成固定长度摘要。
+常见算法：
+SHA-256 SHA-512 SM3 哈希不可逆，适合做完整性校验、文件指纹、数据去重、索引辅助字段等。
+但普通哈希不能证明“是谁生成的”。任何人拿到原文都能算出同样摘要。
+HMAC 在哈希基础上加入密钥：
+HMAC = Hash(message &#43; secret) 准确说 HMAC 有标准结构，不是简单字符串拼接。它的重点是：只有持有密钥的一方才能生成正确 MAC，所以它能同时提供完整性校验和身份认证。">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">加密算法</h1>
+
+    
+      <div class="post-date">February 24, 2026</div>
+    
+
+    <div class="post-content">
+      <p>实习中遇到过一个敏感数据加密场景：客户不允许手机号、身份证等信息以明文存入数据库。项目最终通过第三方 KMS 平台完成加解密，业务系统按接口规范远程调用 KMS。</p>
+<p>这个方案安全性有优势，但也暴露出一个性能问题：如果列表页有几十条数据，每条手机号都要远程解密一次，分页查询就会变成高频 KMS 调用。接口本身也许不慢，但 N 次远程调用叠起来，用户不会替你的架构感动。</p>
+<p>借这个场景，把常见加密概念和工程落地整理一下。</p>
+<h2 id="加密哈希签名">加密、哈希、签名</h2>
+<p>先区分三个概念。</p>
+<table>
+  <thead>
+      <tr>
+          <th>类型</th>
+          <th>是否可逆</th>
+          <th>解决什么问题</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>加密</td>
+          <td>可逆</td>
+          <td>保护内容不被未授权方读取</td>
+      </tr>
+      <tr>
+          <td>哈希</td>
+          <td>不可逆</td>
+          <td>生成摘要、校验完整性、做指纹</td>
+      </tr>
+      <tr>
+          <td>签名/MAC</td>
+          <td>不可逆验证</td>
+          <td>证明内容未被篡改，并确认发送方身份</td>
+      </tr>
+  </tbody>
+</table>
+<p>如果目标是之后还能看到手机号明文，就必须使用可逆加密。如果只是登录密码，绝不应该加密后存储，而应该使用带盐的慢哈希算法，例如 BCrypt、Argon2。</p>
+<h2 id="对称加密">对称加密</h2>
+<p>对称加密使用同一把密钥加密和解密。</p>
+<p>特点：</p>
+<ul>
+<li>性能好，适合加密大量数据。</li>
+<li>常用于文件、数据库字段、通信内容。</li>
+<li>难点在于密钥管理。</li>
+</ul>
+<p>常见算法：</p>
+<ul>
+<li><code>AES</code>：国际通用分组加密算法。</li>
+<li><code>SM4</code>：国密分组加密算法。</li>
+<li><code>ChaCha20</code>：流加密算法，常见于移动端和高性能场景。</li>
+</ul>
+<p>对称加密还需要选择工作模式。现代业务中优先考虑 <code>GCM</code> 这类带认证的模式，因为它同时提供保密性和完整性校验。</p>
+<p>不要使用 <code>ECB</code>。它会泄露明文模式，看起来像加密了，实际上很有表演性质。</p>
+<h2 id="非对称加密">非对称加密</h2>
+<p>非对称加密使用一对密钥：</p>
+<ul>
+<li>公钥：可以公开。</li>
+<li>私钥：必须保密。</li>
+</ul>
+<p>常见算法：</p>
+<ul>
+<li><code>RSA</code></li>
+<li><code>ECC</code></li>
+<li><code>SM2</code></li>
+<li><code>DH/ECDH</code></li>
+</ul>
+<p>非对称加密性能比对称加密差，不适合直接加密大文件或大量字段。它更常用于密钥协商、数字签名、证书体系，或者加密一把较短的对称密钥。</p>
+<h2 id="哈希和-hmac">哈希和 HMAC</h2>
+<p>哈希算法把任意长度输入转换成固定长度摘要。</p>
+<p>常见算法：</p>
+<ul>
+<li><code>SHA-256</code></li>
+<li><code>SHA-512</code></li>
+<li><code>SM3</code></li>
+</ul>
+<p>哈希不可逆，适合做完整性校验、文件指纹、数据去重、索引辅助字段等。</p>
+<p>但普通哈希不能证明“是谁生成的”。任何人拿到原文都能算出同样摘要。</p>
+<p>HMAC 在哈希基础上加入密钥：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">HMAC = Hash(message + secret)
+</span></span></code></pre></div><p>准确说 HMAC 有标准结构，不是简单字符串拼接。它的重点是：只有持有密钥的一方才能生成正确 MAC，所以它能同时提供完整性校验和身份认证。</p>
+<h2 id="数字信封">数字信封</h2>
+<p>数字信封是一种组合方案：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">真实数据 -&gt; 用对称密钥加密
+</span></span><span class="line"><span class="cl">对称密钥 -&gt; 用非对称公钥或 KMS 主密钥加密
+</span></span></code></pre></div><p>它解决的是两个矛盾：</p>
+<ul>
+<li>对称加密快，但密钥不好分发。</li>
+<li>非对称加密方便分发密钥，但加密大数据慢。</li>
+</ul>
+<p>所以工程上经常这样做：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">1. 生成一把数据密钥 DEK。
+</span></span><span class="line"><span class="cl">2. 用 DEK 加密业务数据。
+</span></span><span class="line"><span class="cl">3. 用 KMS 或公钥加密 DEK，得到 encryptedDEK。
+</span></span><span class="line"><span class="cl">4. 数据库存业务密文和 encryptedDEK。
+</span></span><span class="line"><span class="cl">5. 解密时先解开 encryptedDEK，再用 DEK 解开业务数据。
+</span></span></code></pre></div><p>这就是信封加密的基本思路。</p>
+<h2 id="kms-模式">KMS 模式</h2>
+<p>KMS 的核心价值是让业务系统不直接持有主密钥。</p>
+<p>常见能力：</p>
+<ul>
+<li>密钥托管。</li>
+<li>权限控制。</li>
+<li>调用审计。</li>
+<li>密钥轮换。</li>
+<li>禁用和吊销。</li>
+<li>对接 HSM 或云厂商安全能力。</li>
+</ul>
+<p>业务系统一般只拿 <code>keyId</code>、<code>encryptedDEK</code> 或调用凭证。主密钥材料不出 KMS，这比把密钥写在配置文件里靠谱得多。把密钥写进 <code>application.yml</code>，再把配置传进 Git 仓库，那已经不是安全方案，是事故预告。</p>
+<h2 id="敏感字段落库方案">敏感字段落库方案</h2>
+<p>对手机号、身份证这类字段，常见表结构可以这样设计：</p>
+<table>
+  <thead>
+      <tr>
+          <th>字段</th>
+          <th>含义</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>phone_cipher</code></td>
+          <td>手机号密文</td>
+      </tr>
+      <tr>
+          <td><code>phone_mask</code></td>
+          <td>脱敏展示字段，例如 <code>138****1234</code></td>
+      </tr>
+      <tr>
+          <td><code>phone_hash</code></td>
+          <td>查询用摘要，例如精确匹配手机号</td>
+      </tr>
+      <tr>
+          <td><code>encrypted_dek</code></td>
+          <td>被 KMS 保护的数据密钥</td>
+      </tr>
+      <tr>
+          <td><code>key_id</code></td>
+          <td>KMS 密钥标识</td>
+      </tr>
+      <tr>
+          <td><code>key_version</code></td>
+          <td>密钥版本</td>
+      </tr>
+      <tr>
+          <td><code>iv</code></td>
+          <td>初始化向量</td>
+      </tr>
+      <tr>
+          <td><code>tag</code></td>
+          <td>GCM 认证标签</td>
+      </tr>
+      <tr>
+          <td><code>alg</code></td>
+          <td>加密算法</td>
+      </tr>
+  </tbody>
+</table>
+<p>列表页通常只展示 <code>phone_mask</code>，不解密明文。详情页、导出、客服核验等确实需要明文的场景，再走解密流程。</p>
+<p>这样能把高频路径从“每条记录调用一次 KMS”变成“普通查询直接返回脱敏字段”。</p>
+<h2 id="高频解密优化">高频解密优化</h2>
+<p>如果业务确实必须批量解密，可以考虑这些优化：</p>
+<ul>
+<li>优先让 KMS 或加密服务支持批量接口。</li>
+<li>使用信封加密，本地完成数据解密，只让 KMS 解开 DEK。</li>
+<li>对 <code>encryptedDEK -&gt; plaintextDEK</code> 做短 TTL 缓存。</li>
+<li>按 <code>encryptedDEK</code> 去重，减少重复解包。</li>
+<li>区分列表展示和详情查看，列表不返回明文。</li>
+<li>对解密操作做审计、限流和告警。</li>
+</ul>
+<p>缓存明文 DEK 要非常谨慎，TTL 要短，权限要严，日志不能打印。优化性能不能把安全边界拆了；那不叫优化，叫换一种方式出事。</p>
+<h2 id="防重放和防篡改">防重放和防篡改</h2>
+<p>很多接口加密只解决“别人看不到内容”，但还要考虑篡改和重放。</p>
+<p>常见补强：</p>
+<ul>
+<li><code>timestamp</code>：限制请求有效时间。</li>
+<li><code>nonce</code>：一次性随机数，避免重放。</li>
+<li><code>requestId</code>：幂等和追踪。</li>
+<li><code>HMAC</code> 或签名：校验内容未被篡改。</li>
+<li>HTTPS：保护传输通道，防窃听和中间人攻击。</li>
+</ul>
+<p>如果接口已经走 HTTPS，业务层是否还要加密，要看威胁模型。比如防数据库泄露、日志泄露、内部越权读取，就需要字段级加密；如果只是防网络窃听，HTTPS 已经解决了主要问题。</p>
+<h2 id="小结">小结</h2>
+<p>敏感数据加密不是简单地“调一个加密接口”。算法只是工具，真正难的是密钥管理、查询设计、展示脱敏、审计追踪和性能控制。KMS 能降低密钥泄露风险，但不能替业务系统设计好所有访问路径。安全这件事，最讨厌的不是不知道，而是知道一点就以为足够了。</p>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

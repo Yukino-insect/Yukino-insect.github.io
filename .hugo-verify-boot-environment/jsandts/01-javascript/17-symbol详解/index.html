@@ -1,0 +1,2092 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>JavaScript Symbol 详解：唯一标识、对象 key 与内置协议 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="Symbol 是 JavaScript 的一种基础类型。它经常出现在对象属性、库源码、迭代器、typeof 判断和一些看起来很神秘的写法里。
+比如：
+const idKey = Symbol(&#39;id&#39;) const user = { name: &#39;Yuki&#39;, [idKey]: 1 } console.log(user[idKey]) // 1 如果你只看表面，会觉得 Symbol(&#39;id&#39;) 像是创建了一个字符串 &#39;id&#39;。但它不是字符串。Symbol 的核心价值是：创建一个唯一的标识值。
+先给结论：
+Symbol 是 JavaScript 的基础类型之一，typeof Symbol() 的结果是 &#39;symbol&#39;。 每次调用 Symbol() 都会创建一个全新的、唯一的值。 Symbol 可以作为对象属性 key，避免和普通字符串 key 冲突。 Symbol 属性不会被 Object.keys()、for...in、JSON.stringify() 常规枚举出来。 Symbol.for() 可以从全局注册表中创建或复用 Symbol。 JavaScript 内置了一批 well-known symbols，用来定制语言内部行为，例如 Symbol.iterator、Symbol.toPrimitive、Symbol.toStringTag。 一句话：
+Symbol 不是“特殊字符串”，而是“唯一标识”；它既能当对象属性 key，也能参与 JavaScript 的一些内置协议。
+一、Symbol 是什么 Symbol 是 JavaScript 的原始类型之一。
+JavaScript 常见原始类型包括：
+类型 示例 string &#39;hello&#39; number 123 boolean true undefined undefined bigint 123n symbol Symbol(&#39;id&#39;) null null 注意，null 用 typeof 判断会得到 &#39;object&#39;，这是历史遗留问题，不代表它真的是普通对象。
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/jsandts/01-javascript/17-symbol%E8%AF%A6%E8%A7%A3/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/jsandts/01-javascript/17-symbol%E8%AF%A6%E8%A7%A3/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="JavaScript Symbol 详解：唯一标识、对象 key 与内置协议">
+  <meta property="og:description" content="Symbol 是 JavaScript 的一种基础类型。它经常出现在对象属性、库源码、迭代器、typeof 判断和一些看起来很神秘的写法里。
+比如：
+const idKey = Symbol(&#39;id&#39;) const user = { name: &#39;Yuki&#39;, [idKey]: 1 } console.log(user[idKey]) // 1 如果你只看表面，会觉得 Symbol(&#39;id&#39;) 像是创建了一个字符串 &#39;id&#39;。但它不是字符串。Symbol 的核心价值是：创建一个唯一的标识值。
+先给结论：
+Symbol 是 JavaScript 的基础类型之一，typeof Symbol() 的结果是 &#39;symbol&#39;。 每次调用 Symbol() 都会创建一个全新的、唯一的值。 Symbol 可以作为对象属性 key，避免和普通字符串 key 冲突。 Symbol 属性不会被 Object.keys()、for...in、JSON.stringify() 常规枚举出来。 Symbol.for() 可以从全局注册表中创建或复用 Symbol。 JavaScript 内置了一批 well-known symbols，用来定制语言内部行为，例如 Symbol.iterator、Symbol.toPrimitive、Symbol.toStringTag。 一句话：
+Symbol 不是“特殊字符串”，而是“唯一标识”；它既能当对象属性 key，也能参与 JavaScript 的一些内置协议。
+一、Symbol 是什么 Symbol 是 JavaScript 的原始类型之一。
+JavaScript 常见原始类型包括：
+类型 示例 string &#39;hello&#39; number 123 boolean true undefined undefined bigint 123n symbol Symbol(&#39;id&#39;) null null 注意，null 用 typeof 判断会得到 &#39;object&#39;，这是历史遗留问题，不代表它真的是普通对象。">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="jsandts">
+    <meta property="article:published_time" content="2026-08-21T16:24:00+08:00">
+    <meta property="article:modified_time" content="2026-08-21T16:24:00+08:00">
+
+  
+  <meta itemprop="name" content="JavaScript Symbol 详解：唯一标识、对象 key 与内置协议">
+  <meta itemprop="description" content="Symbol 是 JavaScript 的一种基础类型。它经常出现在对象属性、库源码、迭代器、typeof 判断和一些看起来很神秘的写法里。
+比如：
+const idKey = Symbol(&#39;id&#39;) const user = { name: &#39;Yuki&#39;, [idKey]: 1 } console.log(user[idKey]) // 1 如果你只看表面，会觉得 Symbol(&#39;id&#39;) 像是创建了一个字符串 &#39;id&#39;。但它不是字符串。Symbol 的核心价值是：创建一个唯一的标识值。
+先给结论：
+Symbol 是 JavaScript 的基础类型之一，typeof Symbol() 的结果是 &#39;symbol&#39;。 每次调用 Symbol() 都会创建一个全新的、唯一的值。 Symbol 可以作为对象属性 key，避免和普通字符串 key 冲突。 Symbol 属性不会被 Object.keys()、for...in、JSON.stringify() 常规枚举出来。 Symbol.for() 可以从全局注册表中创建或复用 Symbol。 JavaScript 内置了一批 well-known symbols，用来定制语言内部行为，例如 Symbol.iterator、Symbol.toPrimitive、Symbol.toStringTag。 一句话：
+Symbol 不是“特殊字符串”，而是“唯一标识”；它既能当对象属性 key，也能参与 JavaScript 的一些内置协议。
+一、Symbol 是什么 Symbol 是 JavaScript 的原始类型之一。
+JavaScript 常见原始类型包括：
+类型 示例 string &#39;hello&#39; number 123 boolean true undefined undefined bigint 123n symbol Symbol(&#39;id&#39;) null null 注意，null 用 typeof 判断会得到 &#39;object&#39;，这是历史遗留问题，不代表它真的是普通对象。">
+  <meta itemprop="datePublished" content="2026-08-21T16:24:00+08:00">
+  <meta itemprop="dateModified" content="2026-08-21T16:24:00+08:00">
+  <meta itemprop="wordCount" content="1824">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="JavaScript Symbol 详解：唯一标识、对象 key 与内置协议">
+  <meta name="twitter:description" content="Symbol 是 JavaScript 的一种基础类型。它经常出现在对象属性、库源码、迭代器、typeof 判断和一些看起来很神秘的写法里。
+比如：
+const idKey = Symbol(&#39;id&#39;) const user = { name: &#39;Yuki&#39;, [idKey]: 1 } console.log(user[idKey]) // 1 如果你只看表面，会觉得 Symbol(&#39;id&#39;) 像是创建了一个字符串 &#39;id&#39;。但它不是字符串。Symbol 的核心价值是：创建一个唯一的标识值。
+先给结论：
+Symbol 是 JavaScript 的基础类型之一，typeof Symbol() 的结果是 &#39;symbol&#39;。 每次调用 Symbol() 都会创建一个全新的、唯一的值。 Symbol 可以作为对象属性 key，避免和普通字符串 key 冲突。 Symbol 属性不会被 Object.keys()、for...in、JSON.stringify() 常规枚举出来。 Symbol.for() 可以从全局注册表中创建或复用 Symbol。 JavaScript 内置了一批 well-known symbols，用来定制语言内部行为，例如 Symbol.iterator、Symbol.toPrimitive、Symbol.toStringTag。 一句话：
+Symbol 不是“特殊字符串”，而是“唯一标识”；它既能当对象属性 key，也能参与 JavaScript 的一些内置协议。
+一、Symbol 是什么 Symbol 是 JavaScript 的原始类型之一。
+JavaScript 常见原始类型包括：
+类型 示例 string &#39;hello&#39; number 123 boolean true undefined undefined bigint 123n symbol Symbol(&#39;id&#39;) null null 注意，null 用 typeof 判断会得到 &#39;object&#39;，这是历史遗留问题，不代表它真的是普通对象。">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">JavaScript Symbol 详解：唯一标识、对象 key 与内置协议</h1>
+
+    
+      <div class="post-date">August 21, 2026</div>
+    
+
+    <div class="post-content">
+      <p><code>Symbol</code> 是 JavaScript 的一种基础类型。它经常出现在对象属性、库源码、迭代器、<code>typeof</code> 判断和一些看起来很神秘的写法里。</p>
+<p>比如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">idKey</span> <span class="o">=</span> <span class="nx">Symbol</span><span class="p">(</span><span class="s1">&#39;id&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">user</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">name</span><span class="o">:</span> <span class="s1">&#39;Yuki&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="p">[</span><span class="nx">idKey</span><span class="p">]</span><span class="o">:</span> <span class="mi">1</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">user</span><span class="p">[</span><span class="nx">idKey</span><span class="p">])</span> <span class="c1">// 1
+</span></span></span></code></pre></div><p>如果你只看表面，会觉得 <code>Symbol('id')</code> 像是创建了一个字符串 <code>'id'</code>。但它不是字符串。<code>Symbol</code> 的核心价值是：<strong>创建一个唯一的标识值</strong>。</p>
+<p>先给结论：</p>
+<ul>
+<li><code>Symbol</code> 是 JavaScript 的基础类型之一，<code>typeof Symbol()</code> 的结果是 <code>'symbol'</code>。</li>
+<li>每次调用 <code>Symbol()</code> 都会创建一个全新的、唯一的值。</li>
+<li><code>Symbol</code> 可以作为对象属性 key，避免和普通字符串 key 冲突。</li>
+<li><code>Symbol</code> 属性不会被 <code>Object.keys()</code>、<code>for...in</code>、<code>JSON.stringify()</code> 常规枚举出来。</li>
+<li><code>Symbol.for()</code> 可以从全局注册表中创建或复用 Symbol。</li>
+<li>JavaScript 内置了一批 well-known symbols，用来定制语言内部行为，例如 <code>Symbol.iterator</code>、<code>Symbol.toPrimitive</code>、<code>Symbol.toStringTag</code>。</li>
+</ul>
+<p>一句话：</p>
+<blockquote>
+<p><code>Symbol</code> 不是“特殊字符串”，而是“唯一标识”；它既能当对象属性 key，也能参与 JavaScript 的一些内置协议。</p></blockquote>
+<h2 id="一symbol-是什么">一、Symbol 是什么</h2>
+<p><code>Symbol</code> 是 JavaScript 的原始类型之一。</p>
+<p>JavaScript 常见原始类型包括：</p>
+<table>
+  <thead>
+      <tr>
+          <th>类型</th>
+          <th>示例</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>string</code></td>
+          <td><code>'hello'</code></td>
+      </tr>
+      <tr>
+          <td><code>number</code></td>
+          <td><code>123</code></td>
+      </tr>
+      <tr>
+          <td><code>boolean</code></td>
+          <td><code>true</code></td>
+      </tr>
+      <tr>
+          <td><code>undefined</code></td>
+          <td><code>undefined</code></td>
+      </tr>
+      <tr>
+          <td><code>bigint</code></td>
+          <td><code>123n</code></td>
+      </tr>
+      <tr>
+          <td><code>symbol</code></td>
+          <td><code>Symbol('id')</code></td>
+      </tr>
+      <tr>
+          <td><code>null</code></td>
+          <td><code>null</code></td>
+      </tr>
+  </tbody>
+</table>
+<p>注意，<code>null</code> 用 <code>typeof</code> 判断会得到 <code>'object'</code>，这是历史遗留问题，不代表它真的是普通对象。</p>
+<p>创建 Symbol：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">key</span> <span class="o">=</span> <span class="nx">Symbol</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="k">typeof</span> <span class="nx">key</span><span class="p">)</span> <span class="c1">// symbol
+</span></span></span></code></pre></div><p>可以传入描述：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">key</span> <span class="o">=</span> <span class="nx">Symbol</span><span class="p">(</span><span class="s1">&#39;id&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">key</span><span class="p">)</span> <span class="c1">// Symbol(id)
+</span></span></span></code></pre></div><p>这里的 <code>'id'</code> 只是描述，方便调试。它不是这个 Symbol 的实际值，也不会让两个 Symbol 相等。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">a</span> <span class="o">=</span> <span class="nx">Symbol</span><span class="p">(</span><span class="s1">&#39;id&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">b</span> <span class="o">=</span> <span class="nx">Symbol</span><span class="p">(</span><span class="s1">&#39;id&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">a</span> <span class="o">===</span> <span class="nx">b</span><span class="p">)</span> <span class="c1">// false
+</span></span></span></code></pre></div><p>哪怕描述一样，<code>a</code> 和 <code>b</code> 也是两个不同的 Symbol。</p>
+<p>这就是 Symbol 最重要的特性：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">每次调用 Symbol()，都会得到一个唯一的新值。
+</span></span></code></pre></div><h2 id="二symbol-不是字符串">二、Symbol 不是字符串</h2>
+<p>很多初学者会把：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="nx">Symbol</span><span class="p">(</span><span class="s1">&#39;id&#39;</span><span class="p">)</span>
+</span></span></code></pre></div><p>理解成某种特殊字符串。这个理解不对。</p>
+<p>看下面的比较：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">key</span> <span class="o">=</span> <span class="nx">Symbol</span><span class="p">(</span><span class="s1">&#39;id&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">key</span> <span class="o">===</span> <span class="s1">&#39;id&#39;</span><span class="p">)</span> <span class="c1">// false
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="k">typeof</span> <span class="nx">key</span><span class="p">)</span> <span class="c1">// symbol
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="k">typeof</span> <span class="s1">&#39;id&#39;</span><span class="p">)</span> <span class="c1">// string
+</span></span></span></code></pre></div><p>Symbol 不能和字符串直接拼接：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">key</span> <span class="o">=</span> <span class="nx">Symbol</span><span class="p">(</span><span class="s1">&#39;id&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;key is &#39;</span> <span class="o">+</span> <span class="nx">key</span><span class="p">)</span> <span class="c1">// TypeError
+</span></span></span></code></pre></div><p>如果确实要转成字符串，需要显式转换：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">key</span> <span class="o">=</span> <span class="nx">Symbol</span><span class="p">(</span><span class="s1">&#39;id&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nb">String</span><span class="p">(</span><span class="nx">key</span><span class="p">))</span> <span class="c1">// Symbol(id)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">key</span><span class="p">.</span><span class="nx">toString</span><span class="p">())</span> <span class="c1">// Symbol(id)
+</span></span></span></code></pre></div><p>为什么不允许隐式拼接？因为 Symbol 的定位是唯一标识，不是展示文本。语言在这里表现得很强硬，倒也不是坏事。要是所有东西都能悄悄变成字符串，错误就会变得格外会隐藏自己。</p>
+<h2 id="三symbol-的描述-description">三、Symbol 的描述 description</h2>
+<p>创建 Symbol 时传入的参数叫描述。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">key</span> <span class="o">=</span> <span class="nx">Symbol</span><span class="p">(</span><span class="s1">&#39;user id&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">key</span><span class="p">.</span><span class="nx">description</span><span class="p">)</span> <span class="c1">// user id
+</span></span></span></code></pre></div><p>描述只用于调试和展示，不参与唯一性判断。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">a</span> <span class="o">=</span> <span class="nx">Symbol</span><span class="p">(</span><span class="s1">&#39;same&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">b</span> <span class="o">=</span> <span class="nx">Symbol</span><span class="p">(</span><span class="s1">&#39;same&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">a</span><span class="p">.</span><span class="nx">description</span><span class="p">)</span> <span class="c1">// same
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">b</span><span class="p">.</span><span class="nx">description</span><span class="p">)</span> <span class="c1">// same
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">a</span> <span class="o">===</span> <span class="nx">b</span><span class="p">)</span> <span class="c1">// false
+</span></span></span></code></pre></div><p>可以把描述理解成标签纸，不是身份证号。两张标签纸都写着 <code>same</code>，也不代表贴着它们的东西是同一个。</p>
+<p>如果不传描述：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">key</span> <span class="o">=</span> <span class="nx">Symbol</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">key</span><span class="p">.</span><span class="nx">description</span><span class="p">)</span> <span class="c1">// undefined
+</span></span></span></code></pre></div><h2 id="四symbol-可以作为对象属性-key">四、Symbol 可以作为对象属性 key</h2>
+<p>普通对象的属性 key 主要是两类：</p>
+<ul>
+<li>字符串。</li>
+<li>Symbol。</li>
+</ul>
+<p>例如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">idKey</span> <span class="o">=</span> <span class="nx">Symbol</span><span class="p">(</span><span class="s1">&#39;id&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">user</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">name</span><span class="o">:</span> <span class="s1">&#39;Yuki&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="p">[</span><span class="nx">idKey</span><span class="p">]</span><span class="o">:</span> <span class="mi">1</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">user</span><span class="p">.</span><span class="nx">name</span><span class="p">)</span> <span class="c1">// Yuki
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">user</span><span class="p">[</span><span class="nx">idKey</span><span class="p">])</span> <span class="c1">// 1
+</span></span></span></code></pre></div><p>注意这里必须使用计算属性名：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">user</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="p">[</span><span class="nx">idKey</span><span class="p">]</span><span class="o">:</span> <span class="mi">1</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>如果写成：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">user</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">idKey</span><span class="o">:</span> <span class="mi">1</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>那属性名就是字符串 <code>'idKey'</code>，不是变量 <code>idKey</code> 对应的 Symbol。</p>
+<p>读取 Symbol 属性时，也要用方括号：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">user</span><span class="p">[</span><span class="nx">idKey</span><span class="p">])</span>
+</span></span></code></pre></div><p>不能写：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">user</span><span class="p">.</span><span class="nx">idKey</span><span class="p">)</span>
+</span></span></code></pre></div><p>点语法里的 <code>idKey</code> 会被当作字符串属性名，而不是 Symbol 变量。</p>
+<h2 id="五symbol-key-的意义避免命名冲突">五、Symbol key 的意义：避免命名冲突</h2>
+<p>假设你在给一个对象追加内部状态：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">user</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">id</span><span class="o">:</span> <span class="mi">1</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">name</span><span class="o">:</span> <span class="s1">&#39;Yuki&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">user</span><span class="p">.</span><span class="nx">id</span> <span class="o">=</span> <span class="s1">&#39;internal-id&#39;</span>
+</span></span></code></pre></div><p>这很危险，因为你覆盖了业务字段 <code>id</code>。</p>
+<p>可以用 Symbol 创建一个不会和字符串 key 冲突的属性：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">internalIdKey</span> <span class="o">=</span> <span class="nx">Symbol</span><span class="p">(</span><span class="s1">&#39;internal id&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">user</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">id</span><span class="o">:</span> <span class="mi">1</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">name</span><span class="o">:</span> <span class="s1">&#39;Yuki&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">user</span><span class="p">[</span><span class="nx">internalIdKey</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;internal-id&#39;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">user</span><span class="p">.</span><span class="nx">id</span><span class="p">)</span> <span class="c1">// 1
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">user</span><span class="p">[</span><span class="nx">internalIdKey</span><span class="p">])</span> <span class="c1">// internal-id
+</span></span></span></code></pre></div><p>即使描述也是 <code>'id'</code>，它也不会和字符串属性 <code>'id'</code> 冲突：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">idKey</span> <span class="o">=</span> <span class="nx">Symbol</span><span class="p">(</span><span class="s1">&#39;id&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">user</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">id</span><span class="o">:</span> <span class="mi">1</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="p">[</span><span class="nx">idKey</span><span class="p">]</span><span class="o">:</span> <span class="s1">&#39;symbol id&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">user</span><span class="p">.</span><span class="nx">id</span><span class="p">)</span> <span class="c1">// 1
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">user</span><span class="p">[</span><span class="nx">idKey</span><span class="p">])</span> <span class="c1">// symbol id
+</span></span></span></code></pre></div><p>这就是 Symbol 常见用途之一：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">给对象挂载不容易和外部字段冲突的属性。
+</span></span></code></pre></div><p>但不要误会：Symbol 属性不是绝对私有。别人如果拿到了这个 Symbol，也能访问对应属性。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">secretKey</span> <span class="o">=</span> <span class="nx">Symbol</span><span class="p">(</span><span class="s1">&#39;secret&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">user</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="p">[</span><span class="nx">secretKey</span><span class="p">]</span><span class="o">:</span> <span class="s1">&#39;hidden value&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">user</span><span class="p">[</span><span class="nx">secretKey</span><span class="p">])</span> <span class="c1">// hidden value
+</span></span></span></code></pre></div><p>它是“难以意外冲突”，不是“绝对不可访问”。要真正私有字段，现代 JavaScript 有 <code>#privateField</code>。</p>
+<h2 id="六symbol-属性不会被常规枚举拿到">六、Symbol 属性不会被常规枚举拿到</h2>
+<p>看这个对象：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">idKey</span> <span class="o">=</span> <span class="nx">Symbol</span><span class="p">(</span><span class="s1">&#39;id&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">user</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">id</span><span class="o">:</span> <span class="mi">1</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">name</span><span class="o">:</span> <span class="s1">&#39;Yuki&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="p">[</span><span class="nx">idKey</span><span class="p">]</span><span class="o">:</span> <span class="s1">&#39;symbol id&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p><code>Object.keys()</code> 只返回字符串 key：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nb">Object</span><span class="p">.</span><span class="nx">keys</span><span class="p">(</span><span class="nx">user</span><span class="p">))</span> <span class="c1">// [&#39;id&#39;, &#39;name&#39;]
+</span></span></span></code></pre></div><p><code>Object.entries()</code> 也是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nb">Object</span><span class="p">.</span><span class="nx">entries</span><span class="p">(</span><span class="nx">user</span><span class="p">))</span>
+</span></span></code></pre></div><p>结果：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">[[&#39;id&#39;, 1], [&#39;name&#39;, &#39;Yuki&#39;]]
+</span></span></code></pre></div><p><code>for...in</code> 也不会遍历 Symbol key：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="k">for</span> <span class="p">(</span><span class="kr">const</span> <span class="nx">key</span> <span class="k">in</span> <span class="nx">user</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">key</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>输出：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">id
+</span></span><span class="line"><span class="cl">name
+</span></span></code></pre></div><p>如果要拿到 Symbol 属性，需要用：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nb">Object</span><span class="p">.</span><span class="nx">getOwnPropertySymbols</span><span class="p">(</span><span class="nx">user</span><span class="p">))</span> <span class="c1">// [Symbol(id)]
+</span></span></span></code></pre></div><p>如果想同时拿到字符串 key 和 Symbol key，可以用：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">Reflect</span><span class="p">.</span><span class="nx">ownKeys</span><span class="p">(</span><span class="nx">user</span><span class="p">))</span> <span class="c1">// [&#39;id&#39;, &#39;name&#39;, Symbol(id)]
+</span></span></span></code></pre></div><p>所以：</p>
+<table>
+  <thead>
+      <tr>
+          <th>方法</th>
+          <th>是否包含字符串 key</th>
+          <th>是否包含 Symbol key</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>Object.keys(obj)</code></td>
+          <td>是</td>
+          <td>否</td>
+      </tr>
+      <tr>
+          <td><code>Object.values(obj)</code></td>
+          <td>是</td>
+          <td>否</td>
+      </tr>
+      <tr>
+          <td><code>Object.entries(obj)</code></td>
+          <td>是</td>
+          <td>否</td>
+      </tr>
+      <tr>
+          <td><code>for...in</code></td>
+          <td>是，且会遍历可枚举原型属性</td>
+          <td>否</td>
+      </tr>
+      <tr>
+          <td><code>Object.getOwnPropertyNames(obj)</code></td>
+          <td>是</td>
+          <td>否</td>
+      </tr>
+      <tr>
+          <td><code>Object.getOwnPropertySymbols(obj)</code></td>
+          <td>否</td>
+          <td>是</td>
+      </tr>
+      <tr>
+          <td><code>Reflect.ownKeys(obj)</code></td>
+          <td>是</td>
+          <td>是</td>
+      </tr>
+  </tbody>
+</table>
+<p>这也是为什么 Symbol 适合放一些内部扩展信息。它不会轻易出现在普通枚举逻辑里。轻易这两个字很重要，因为不是拿不到，只是不在默认路径里。</p>
+<h2 id="七jsonstringify-会忽略-symbol">七、JSON.stringify 会忽略 Symbol</h2>
+<p><code>JSON.stringify()</code> 会忽略 Symbol key。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">idKey</span> <span class="o">=</span> <span class="nx">Symbol</span><span class="p">(</span><span class="s1">&#39;id&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">user</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">id</span><span class="o">:</span> <span class="mi">1</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">name</span><span class="o">:</span> <span class="s1">&#39;Yuki&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="p">[</span><span class="nx">idKey</span><span class="p">]</span><span class="o">:</span> <span class="s1">&#39;symbol id&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">JSON</span><span class="p">.</span><span class="nx">stringify</span><span class="p">(</span><span class="nx">user</span><span class="p">))</span>
+</span></span></code></pre></div><p>输出：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span><span class="nt">&#34;id&#34;</span><span class="p">:</span><span class="mi">1</span><span class="p">,</span><span class="nt">&#34;name&#34;</span><span class="p">:</span><span class="s2">&#34;Yuki&#34;</span><span class="p">}</span>
+</span></span></code></pre></div><p>如果属性值本身是 Symbol，也会被忽略或变成 <code>null</code>，取决于它所在的位置。</p>
+<p>对象属性值是 Symbol：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">obj</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">id</span><span class="o">:</span> <span class="nx">Symbol</span><span class="p">(</span><span class="s1">&#39;id&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">JSON</span><span class="p">.</span><span class="nx">stringify</span><span class="p">(</span><span class="nx">obj</span><span class="p">))</span>
+</span></span></code></pre></div><p>输出：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{}</span>
+</span></span></code></pre></div><p>数组元素是 Symbol：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">list</span> <span class="o">=</span> <span class="p">[</span><span class="nx">Symbol</span><span class="p">(</span><span class="s1">&#39;id&#39;</span><span class="p">)]</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">JSON</span><span class="p">.</span><span class="nx">stringify</span><span class="p">(</span><span class="nx">list</span><span class="p">))</span>
+</span></span></code></pre></div><p>输出：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">[</span><span class="kc">null</span><span class="p">]</span>
+</span></span></code></pre></div><p>这说明 Symbol 不适合作为需要传输或持久化的数据值。接口数据、数据库数据、本地存储数据，最好使用字符串、数字、布尔值、对象、数组这些 JSON 能表达的结构。</p>
+<p>Symbol 更适合运行时内部标识，不适合跨网络传递。让它去做 JSON 的工作，就像让校服去参加晚宴，倒不是不能出现，只是场合不对。</p>
+<h2 id="八symbol-不能用-new-创建">八、Symbol 不能用 new 创建</h2>
+<p><code>Symbol</code> 是函数，但不能作为构造函数使用。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">key</span> <span class="o">=</span> <span class="nx">Symbol</span><span class="p">(</span><span class="s1">&#39;id&#39;</span><span class="p">)</span>
+</span></span></code></pre></div><p>不能写：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">key</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">Symbol</span><span class="p">(</span><span class="s1">&#39;id&#39;</span><span class="p">)</span> <span class="c1">// TypeError
+</span></span></span></code></pre></div><p>因为 Symbol 是原始值，不是普通对象实例。</p>
+<p>不过可以用 <code>Object()</code> 把 Symbol 包装成对象：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">key</span> <span class="o">=</span> <span class="nx">Symbol</span><span class="p">(</span><span class="s1">&#39;id&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">boxed</span> <span class="o">=</span> <span class="nb">Object</span><span class="p">(</span><span class="nx">key</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="k">typeof</span> <span class="nx">key</span><span class="p">)</span> <span class="c1">// symbol
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="k">typeof</span> <span class="nx">boxed</span><span class="p">)</span> <span class="c1">// object
+</span></span></span></code></pre></div><p>日常代码里几乎不需要这么做。知道有这回事即可，不要为了显得高级而包装它。代码不是展示柜。</p>
+<h2 id="九symbolfor-和全局注册表">九、Symbol.for 和全局注册表</h2>
+<p>普通 <code>Symbol()</code> 每次都会创建新值：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">a</span> <span class="o">=</span> <span class="nx">Symbol</span><span class="p">(</span><span class="s1">&#39;id&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">b</span> <span class="o">=</span> <span class="nx">Symbol</span><span class="p">(</span><span class="s1">&#39;id&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">a</span> <span class="o">===</span> <span class="nx">b</span><span class="p">)</span> <span class="c1">// false
+</span></span></span></code></pre></div><p>如果你希望根据同一个字符串拿到同一个 Symbol，可以用 <code>Symbol.for()</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">a</span> <span class="o">=</span> <span class="nx">Symbol</span><span class="p">.</span><span class="k">for</span><span class="p">(</span><span class="s1">&#39;app.user.id&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">b</span> <span class="o">=</span> <span class="nx">Symbol</span><span class="p">.</span><span class="k">for</span><span class="p">(</span><span class="s1">&#39;app.user.id&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">a</span> <span class="o">===</span> <span class="nx">b</span><span class="p">)</span> <span class="c1">// true
+</span></span></span></code></pre></div><p><code>Symbol.for(key)</code> 会先查全局 Symbol 注册表：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">如果 key 已存在 -&gt; 返回已有 Symbol
+</span></span><span class="line"><span class="cl">如果 key 不存在 -&gt; 创建一个新的 Symbol 并登记
+</span></span></code></pre></div><p>可以用 <code>Symbol.keyFor()</code> 反查注册表中的 key：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">key</span> <span class="o">=</span> <span class="nx">Symbol</span><span class="p">.</span><span class="k">for</span><span class="p">(</span><span class="s1">&#39;app.user.id&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">Symbol</span><span class="p">.</span><span class="nx">keyFor</span><span class="p">(</span><span class="nx">key</span><span class="p">))</span> <span class="c1">// app.user.id
+</span></span></span></code></pre></div><p>但普通 <code>Symbol()</code> 创建的值不在全局注册表里：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">localKey</span> <span class="o">=</span> <span class="nx">Symbol</span><span class="p">(</span><span class="s1">&#39;app.user.id&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">Symbol</span><span class="p">.</span><span class="nx">keyFor</span><span class="p">(</span><span class="nx">localKey</span><span class="p">))</span> <span class="c1">// undefined
+</span></span></span></code></pre></div><p>使用建议：</p>
+<table>
+  <thead>
+      <tr>
+          <th>场景</th>
+          <th>推荐</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>只在当前模块内部使用</td>
+          <td><code>Symbol()</code></td>
+      </tr>
+      <tr>
+          <td>多个模块需要共享同一个 Symbol</td>
+          <td><code>Symbol.for()</code></td>
+      </tr>
+      <tr>
+          <td>需要避免全局命名污染</td>
+          <td>优先 <code>Symbol()</code></td>
+      </tr>
+      <tr>
+          <td>需要跨模块约定协议 key</td>
+          <td>可以考虑 <code>Symbol.for()</code></td>
+      </tr>
+  </tbody>
+</table>
+<p>不要随便把所有 Symbol 都写成 <code>Symbol.for()</code>。全局注册表是全局的，既然是全局，就要承担命名冲突和长期占用的责任。随手往全局扔东西，通常不是成熟，是懒。</p>
+<h2 id="十symbol-和常量">十、Symbol 和常量</h2>
+<p>有时会用 Symbol 表示唯一常量：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">STATUS_LOADING</span> <span class="o">=</span> <span class="nx">Symbol</span><span class="p">(</span><span class="s1">&#39;loading&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">STATUS_SUCCESS</span> <span class="o">=</span> <span class="nx">Symbol</span><span class="p">(</span><span class="s1">&#39;success&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">STATUS_ERROR</span> <span class="o">=</span> <span class="nx">Symbol</span><span class="p">(</span><span class="s1">&#39;error&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">let</span> <span class="nx">status</span> <span class="o">=</span> <span class="nx">STATUS_LOADING</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">if</span> <span class="p">(</span><span class="nx">status</span> <span class="o">===</span> <span class="nx">STATUS_LOADING</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;加载中&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>这样做的好处是不会和普通字符串混淆：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="nx">status</span> <span class="o">=</span> <span class="s1">&#39;loading&#39;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">status</span> <span class="o">===</span> <span class="nx">STATUS_LOADING</span><span class="p">)</span> <span class="c1">// false
+</span></span></span></code></pre></div><p>但在业务代码中，字符串常量也很常见：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">STATUS_LOADING</span> <span class="o">=</span> <span class="s1">&#39;loading&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">STATUS_SUCCESS</span> <span class="o">=</span> <span class="s1">&#39;success&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">STATUS_ERROR</span> <span class="o">=</span> <span class="s1">&#39;error&#39;</span>
+</span></span></code></pre></div><p>两种方式怎么选？</p>
+<table>
+  <thead>
+      <tr>
+          <th>需求</th>
+          <th>推荐</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>需要序列化、传接口、存本地</td>
+          <td>字符串</td>
+      </tr>
+      <tr>
+          <td>需要展示、日志、调试清晰</td>
+          <td>字符串</td>
+      </tr>
+      <tr>
+          <td>只在运行时内部比较</td>
+          <td>Symbol 可以考虑</td>
+      </tr>
+      <tr>
+          <td>担心和外部字符串混用</td>
+          <td>Symbol 可以考虑</td>
+      </tr>
+  </tbody>
+</table>
+<p>前端业务状态通常更适合字符串，因为它要和接口、路由、缓存、调试工具一起工作。Symbol 可以用，但不要为了“唯一”牺牲可读性和可传输性。</p>
+<h2 id="十一symbol-和-map-的区别">十一、Symbol 和 Map 的区别</h2>
+<p><code>Symbol</code> 是一个值，可以作为对象 key。</p>
+<p><code>Map</code> 是一种键值集合。</p>
+<p>这两个概念不要混。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">key</span> <span class="o">=</span> <span class="nx">Symbol</span><span class="p">(</span><span class="s1">&#39;id&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">obj</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="p">[</span><span class="nx">key</span><span class="p">]</span><span class="o">:</span> <span class="mi">1</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">obj</span><span class="p">[</span><span class="nx">key</span><span class="p">])</span> <span class="c1">// 1
+</span></span></span></code></pre></div><p>这是用 Symbol 作为对象属性 key。</p>
+<p>而 <code>Map</code> 是容器：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">key</span> <span class="o">=</span> <span class="nx">Symbol</span><span class="p">(</span><span class="s1">&#39;id&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">map</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">Map</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">map</span><span class="p">.</span><span class="nx">set</span><span class="p">(</span><span class="nx">key</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">map</span><span class="p">.</span><span class="nx">get</span><span class="p">(</span><span class="nx">key</span><span class="p">))</span> <span class="c1">// 1
+</span></span></span></code></pre></div><p><code>Map</code> 的 key 可以是任意值，包括 Symbol、对象、函数、数字、字符串。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">map</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">Map</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">map</span><span class="p">.</span><span class="nx">set</span><span class="p">(</span><span class="nx">Symbol</span><span class="p">(</span><span class="s1">&#39;id&#39;</span><span class="p">),</span> <span class="s1">&#39;symbol key&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">map</span><span class="p">.</span><span class="nx">set</span><span class="p">({</span> <span class="nx">id</span><span class="o">:</span> <span class="mi">1</span> <span class="p">},</span> <span class="s1">&#39;object key&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">map</span><span class="p">.</span><span class="nx">set</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="s1">&#39;number key&#39;</span><span class="p">)</span>
+</span></span></code></pre></div><p>如果你只是需要一个不会冲突的对象属性名，可以用 Symbol。如果你需要维护一组动态键值关系，更应该考虑 <code>Map</code>。</p>
+<h2 id="十二内置-symbolwell-known-symbols">十二、内置 Symbol：well-known symbols</h2>
+<p>JavaScript 内置了一批特殊 Symbol，称为 well-known symbols。它们不是普通业务常量，而是语言用来开放内部协议的钩子。</p>
+<p>常见的有：</p>
+<table>
+  <thead>
+      <tr>
+          <th>Symbol</th>
+          <th>作用</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>Symbol.iterator</code></td>
+          <td>定义对象如何被迭代</td>
+      </tr>
+      <tr>
+          <td><code>Symbol.asyncIterator</code></td>
+          <td>定义对象如何被异步迭代</td>
+      </tr>
+      <tr>
+          <td><code>Symbol.toPrimitive</code></td>
+          <td>定义对象如何转换为原始值</td>
+      </tr>
+      <tr>
+          <td><code>Symbol.toStringTag</code></td>
+          <td>自定义 <code>Object.prototype.toString</code> 的标签</td>
+      </tr>
+      <tr>
+          <td><code>Symbol.hasInstance</code></td>
+          <td>自定义 <code>instanceof</code> 行为</td>
+      </tr>
+      <tr>
+          <td><code>Symbol.match</code></td>
+          <td>定义对象如何参与 <code>String.prototype.match</code></td>
+      </tr>
+      <tr>
+          <td><code>Symbol.replace</code></td>
+          <td>定义对象如何参与 <code>String.prototype.replace</code></td>
+      </tr>
+      <tr>
+          <td><code>Symbol.search</code></td>
+          <td>定义对象如何参与 <code>String.prototype.search</code></td>
+      </tr>
+      <tr>
+          <td><code>Symbol.split</code></td>
+          <td>定义对象如何参与 <code>String.prototype.split</code></td>
+      </tr>
+      <tr>
+          <td><code>Symbol.isConcatSpreadable</code></td>
+          <td>定义对象被 <code>Array.prototype.concat</code> 时是否展开</td>
+      </tr>
+      <tr>
+          <td><code>Symbol.species</code></td>
+          <td>定义派生对象构造器</td>
+      </tr>
+  </tbody>
+</table>
+<p>初学阶段不用把它们全背下来。先重点理解三个：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Symbol.iterator
+</span></span><span class="line"><span class="cl">Symbol.toPrimitive
+</span></span><span class="line"><span class="cl">Symbol.toStringTag
+</span></span></code></pre></div><p>它们最能体现 Symbol 和语言协议之间的关系。</p>
+<h2 id="十三symboliterator让对象可以被遍历">十三、Symbol.iterator：让对象可以被遍历</h2>
+<p>数组可以被 <code>for...of</code> 遍历：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">list</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;a&#39;</span><span class="p">,</span> <span class="s1">&#39;b&#39;</span><span class="p">,</span> <span class="s1">&#39;c&#39;</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">for</span> <span class="p">(</span><span class="kr">const</span> <span class="nx">item</span> <span class="k">of</span> <span class="nx">list</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">item</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>因为数组内部有 <code>Symbol.iterator</code> 方法：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">list</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;a&#39;</span><span class="p">,</span> <span class="s1">&#39;b&#39;</span><span class="p">,</span> <span class="s1">&#39;c&#39;</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="k">typeof</span> <span class="nx">list</span><span class="p">[</span><span class="nx">Symbol</span><span class="p">.</span><span class="nx">iterator</span><span class="p">])</span> <span class="c1">// function
+</span></span></span></code></pre></div><p>普通对象默认不能被 <code>for...of</code> 遍历：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">user</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">id</span><span class="o">:</span> <span class="mi">1</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">name</span><span class="o">:</span> <span class="s1">&#39;Yuki&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">for</span> <span class="p">(</span><span class="kr">const</span> <span class="nx">item</span> <span class="k">of</span> <span class="nx">user</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">item</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>这会报错，因为普通对象默认没有迭代器。</p>
+<p>你可以给对象定义 <code>Symbol.iterator</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">range</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">start</span><span class="o">:</span> <span class="mi">1</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">end</span><span class="o">:</span> <span class="mi">3</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="p">[</span><span class="nx">Symbol</span><span class="p">.</span><span class="nx">iterator</span><span class="p">]()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kd">let</span> <span class="nx">current</span> <span class="o">=</span> <span class="k">this</span><span class="p">.</span><span class="nx">start</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">const</span> <span class="nx">end</span> <span class="o">=</span> <span class="k">this</span><span class="p">.</span><span class="nx">end</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">next</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">if</span> <span class="p">(</span><span class="nx">current</span> <span class="o">&lt;=</span> <span class="nx">end</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">          <span class="k">return</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">value</span><span class="o">:</span> <span class="nx">current</span><span class="o">++</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">done</span><span class="o">:</span> <span class="kc">false</span>
+</span></span><span class="line"><span class="cl">          <span class="p">}</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">          <span class="nx">value</span><span class="o">:</span> <span class="kc">undefined</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">          <span class="nx">done</span><span class="o">:</span> <span class="kc">true</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">      <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">for</span> <span class="p">(</span><span class="kr">const</span> <span class="nx">value</span> <span class="k">of</span> <span class="nx">range</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">value</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>输出：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">1
+</span></span><span class="line"><span class="cl">2
+</span></span><span class="line"><span class="cl">3
+</span></span></code></pre></div><p>这说明 <code>for...of</code> 不是随便遍历对象属性。它会寻找对象上的 <code>Symbol.iterator</code> 方法，并按照迭代器协议取值。</p>
+<p>也可以用生成器函数简化：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">range</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">start</span><span class="o">:</span> <span class="mi">1</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">end</span><span class="o">:</span> <span class="mi">3</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="o">*</span><span class="p">[</span><span class="nx">Symbol</span><span class="p">.</span><span class="nx">iterator</span><span class="p">]()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="p">(</span><span class="kd">let</span> <span class="nx">value</span> <span class="o">=</span> <span class="k">this</span><span class="p">.</span><span class="nx">start</span><span class="p">;</span> <span class="nx">value</span> <span class="o">&lt;=</span> <span class="k">this</span><span class="p">.</span><span class="nx">end</span><span class="p">;</span> <span class="nx">value</span><span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="k">yield</span> <span class="nx">value</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">([...</span><span class="nx">range</span><span class="p">])</span> <span class="c1">// [1, 2, 3]
+</span></span></span></code></pre></div><p><code>Symbol.iterator</code> 是理解展开语法、<code>for...of</code>、数组解构、<code>Map</code>、<code>Set</code> 的关键之一。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">set</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">Set</span><span class="p">([</span><span class="s1">&#39;js&#39;</span><span class="p">,</span> <span class="s1">&#39;vue&#39;</span><span class="p">])</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">([...</span><span class="nx">set</span><span class="p">])</span> <span class="c1">// [&#39;js&#39;, &#39;vue&#39;]
+</span></span></span></code></pre></div><p><code>Set</code> 能被展开，是因为它是可迭代对象。</p>
+<h2 id="十四symboltoprimitive自定义原始值转换">十四、Symbol.toPrimitive：自定义原始值转换</h2>
+<p>对象在某些场景下会被转换成原始值，比如参与加法或字符串转换。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">user</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">name</span><span class="o">:</span> <span class="s1">&#39;Yuki&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nb">String</span><span class="p">(</span><span class="nx">user</span><span class="p">))</span> <span class="c1">// [object Object]
+</span></span></span></code></pre></div><p>可以用 <code>Symbol.toPrimitive</code> 自定义转换行为：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">score</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">value</span><span class="o">:</span> <span class="mi">100</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="p">[</span><span class="nx">Symbol</span><span class="p">.</span><span class="nx">toPrimitive</span><span class="p">](</span><span class="nx">hint</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="p">(</span><span class="nx">hint</span> <span class="o">===</span> <span class="s1">&#39;number&#39;</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="k">return</span> <span class="k">this</span><span class="p">.</span><span class="nx">value</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="p">(</span><span class="nx">hint</span> <span class="o">===</span> <span class="s1">&#39;string&#39;</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="k">return</span> <span class="sb">`Score(</span><span class="si">${</span><span class="k">this</span><span class="p">.</span><span class="nx">value</span><span class="si">}</span><span class="sb">)`</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="k">this</span><span class="p">.</span><span class="nx">value</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nb">Number</span><span class="p">(</span><span class="nx">score</span><span class="p">))</span> <span class="c1">// 100
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nb">String</span><span class="p">(</span><span class="nx">score</span><span class="p">))</span> <span class="c1">// Score(100)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">score</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="c1">// 101
+</span></span></span></code></pre></div><p><code>hint</code> 表示转换倾向，常见值是：</p>
+<table>
+  <thead>
+      <tr>
+          <th>hint</th>
+          <th>含义</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>'number'</code></td>
+          <td>倾向转成数字</td>
+      </tr>
+      <tr>
+          <td><code>'string'</code></td>
+          <td>倾向转成字符串</td>
+      </tr>
+      <tr>
+          <td><code>'default'</code></td>
+          <td>默认转换倾向</td>
+      </tr>
+  </tbody>
+</table>
+<p>这个能力很强，但业务代码里要谨慎使用。因为它会让对象在不同表达式里表现得像不同类型。写得漂亮时像魔法，调试时也会像魔法。区别只在于你当时是不是清醒。</p>
+<p>普通业务对象不建议随便定义 <code>Symbol.toPrimitive</code>。库、框架、日期/金额/数学对象这类封装场景更适合它。</p>
+<h2 id="十五symboltostringtag自定义类型标签">十五、Symbol.toStringTag：自定义类型标签</h2>
+<p>你可能见过这种判断：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="nb">Object</span><span class="p">.</span><span class="nx">prototype</span><span class="p">.</span><span class="nx">toString</span><span class="p">.</span><span class="nx">call</span><span class="p">([])</span>
+</span></span></code></pre></div><p>输出：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">[object Array]
+</span></span></code></pre></div><p>对象可以用 <code>Symbol.toStringTag</code> 自定义这个标签：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">user</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="p">[</span><span class="nx">Symbol</span><span class="p">.</span><span class="nx">toStringTag</span><span class="p">]</span><span class="o">:</span> <span class="s1">&#39;User&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nb">Object</span><span class="p">.</span><span class="nx">prototype</span><span class="p">.</span><span class="nx">toString</span><span class="p">.</span><span class="nx">call</span><span class="p">(</span><span class="nx">user</span><span class="p">))</span>
+</span></span></code></pre></div><p>输出：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">[object User]
+</span></span></code></pre></div><p>很多内置对象也有自己的标签：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nb">Object</span><span class="p">.</span><span class="nx">prototype</span><span class="p">.</span><span class="nx">toString</span><span class="p">.</span><span class="nx">call</span><span class="p">(</span><span class="k">new</span> <span class="nx">Map</span><span class="p">()))</span> <span class="c1">// [object Map]
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nb">Object</span><span class="p">.</span><span class="nx">prototype</span><span class="p">.</span><span class="nx">toString</span><span class="p">.</span><span class="nx">call</span><span class="p">(</span><span class="k">new</span> <span class="nx">Set</span><span class="p">()))</span> <span class="c1">// [object Set]
+</span></span></span></code></pre></div><p><code>Symbol.toStringTag</code> 可以改善调试和类型展示，但它不应该被过度当作安全可靠的类型判断。</p>
+<p>因为别人也可以伪造：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">fakeMap</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="p">[</span><span class="nx">Symbol</span><span class="p">.</span><span class="nx">toStringTag</span><span class="p">]</span><span class="o">:</span> <span class="s1">&#39;Map&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nb">Object</span><span class="p">.</span><span class="nx">prototype</span><span class="p">.</span><span class="nx">toString</span><span class="p">.</span><span class="nx">call</span><span class="p">(</span><span class="nx">fakeMap</span><span class="p">))</span> <span class="c1">// [object Map]
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">fakeMap</span> <span class="k">instanceof</span> <span class="nx">Map</span><span class="p">)</span> <span class="c1">// false
+</span></span></span></code></pre></div><p>所以它更像“标签”，不是身份证明。标签这种东西，最大的风险就是有人以为贴上去就是真的。</p>
+<h2 id="十六symbolhasinstance自定义-instanceof">十六、Symbol.hasInstance：自定义 instanceof</h2>
+<p><code>instanceof</code> 默认会检查构造函数的 <code>prototype</code> 是否出现在对象的原型链上。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">class</span> <span class="nx">User</span> <span class="p">{}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">user</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">User</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">user</span> <span class="k">instanceof</span> <span class="nx">User</span><span class="p">)</span> <span class="c1">// true
+</span></span></span></code></pre></div><p>可以通过 <code>Symbol.hasInstance</code> 自定义判断逻辑：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">class</span> <span class="nx">EvenNumber</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">static</span> <span class="p">[</span><span class="nx">Symbol</span><span class="p">.</span><span class="nx">hasInstance</span><span class="p">](</span><span class="nx">value</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="k">typeof</span> <span class="nx">value</span> <span class="o">===</span> <span class="s1">&#39;number&#39;</span> <span class="o">&amp;&amp;</span> <span class="nx">value</span> <span class="o">%</span> <span class="mi">2</span> <span class="o">===</span> <span class="mi">0</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="mi">2</span> <span class="k">instanceof</span> <span class="nx">EvenNumber</span><span class="p">)</span> <span class="c1">// true
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="mi">3</span> <span class="k">instanceof</span> <span class="nx">EvenNumber</span><span class="p">)</span> <span class="c1">// false
+</span></span></span></code></pre></div><p>这段代码很有趣，但在业务代码里通常不建议这么写。因为大多数人看到 <code>instanceof</code>，会自然以为它在判断原型链。你突然改变规则，就等于让熟悉的语法变得不熟悉。</p>
+<p>可以了解它，但不要轻易把它作为日常建模方式。</p>
+<h2 id="十七symbolisconcatspreadable">十七、Symbol.isConcatSpreadable</h2>
+<p><code>Array.prototype.concat()</code> 默认会展开数组：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">result</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">].</span><span class="nx">concat</span><span class="p">([</span><span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">])</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">result</span><span class="p">)</span> <span class="c1">// [1, 2, 3, 4]
+</span></span></span></code></pre></div><p>可以用 <code>Symbol.isConcatSpreadable</code> 控制是否展开。</p>
+<p>让数组不展开：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">list</span> <span class="o">=</span> <span class="p">[</span><span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">list</span><span class="p">[</span><span class="nx">Symbol</span><span class="p">.</span><span class="nx">isConcatSpreadable</span><span class="p">]</span> <span class="o">=</span> <span class="kc">false</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">].</span><span class="nx">concat</span><span class="p">(</span><span class="nx">list</span><span class="p">))</span> <span class="c1">// [1, 2, [3, 4]]
+</span></span></span></code></pre></div><p>让类数组对象展开：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">arrayLike</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="mi">0</span><span class="o">:</span> <span class="s1">&#39;a&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="mi">1</span><span class="o">:</span> <span class="s1">&#39;b&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">length</span><span class="o">:</span> <span class="mi">2</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="p">[</span><span class="nx">Symbol</span><span class="p">.</span><span class="nx">isConcatSpreadable</span><span class="p">]</span><span class="o">:</span> <span class="kc">true</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">([</span><span class="s1">&#39;start&#39;</span><span class="p">].</span><span class="nx">concat</span><span class="p">(</span><span class="nx">arrayLike</span><span class="p">))</span> <span class="c1">// [&#39;start&#39;, &#39;a&#39;, &#39;b&#39;]
+</span></span></span></code></pre></div><p>这种能力在库源码里更常见。业务代码里如果只是想合并数组，用展开语法通常更清楚：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">result</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="p">...[</span><span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">]]</span>
+</span></span></code></pre></div><h2 id="十八symbolmatch-等字符串协议">十八、Symbol.match 等字符串协议</h2>
+<p>一些字符串方法会读取对象上的特殊 Symbol。</p>
+<p>例如 <code>String.prototype.match()</code> 会看对象是否实现了 <code>Symbol.match</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">matcher</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="p">[</span><span class="nx">Symbol</span><span class="p">.</span><span class="nx">match</span><span class="p">](</span><span class="nx">text</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nx">text</span><span class="p">.</span><span class="nx">includes</span><span class="p">(</span><span class="s1">&#39;js&#39;</span><span class="p">)</span> <span class="o">?</span> <span class="p">[</span><span class="s1">&#39;js&#39;</span><span class="p">]</span> <span class="o">:</span> <span class="kc">null</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;learn js&#39;</span><span class="p">.</span><span class="nx">match</span><span class="p">(</span><span class="nx">matcher</span><span class="p">))</span> <span class="c1">// [&#39;js&#39;]
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;learn css&#39;</span><span class="p">.</span><span class="nx">match</span><span class="p">(</span><span class="nx">matcher</span><span class="p">))</span> <span class="c1">// null
+</span></span></span></code></pre></div><p>类似的还有：</p>
+<ul>
+<li><code>Symbol.replace</code> 对应 <code>replace</code>。</li>
+<li><code>Symbol.search</code> 对应 <code>search</code>。</li>
+<li><code>Symbol.split</code> 对应 <code>split</code>。</li>
+</ul>
+<p>这些 Symbol 允许对象参与字符串方法的内部流程。</p>
+<p>不过平时你大概率会直接用正则：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;learn js&#39;</span><span class="p">.</span><span class="nx">match</span><span class="p">(</span><span class="sr">/js/</span><span class="p">))</span>
+</span></span></code></pre></div><p>理解这些协议主要是为了读懂源码和规范行为，不是为了把每个字符串处理都写成自定义对象。能用直白写法解决的问题，就不要特意绕过人类阅读能力。</p>
+<h2 id="十九symbolspecies">十九、Symbol.species</h2>
+<p><code>Symbol.species</code> 用来指定派生对象使用哪个构造器。</p>
+<p>看一个例子：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">class</span> <span class="nx">MyArray</span> <span class="kr">extends</span> <span class="nb">Array</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">static</span> <span class="nx">get</span> <span class="p">[</span><span class="nx">Symbol</span><span class="p">.</span><span class="nx">species</span><span class="p">]()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nb">Array</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">list</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">MyArray</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">mapped</span> <span class="o">=</span> <span class="nx">list</span><span class="p">.</span><span class="nx">map</span><span class="p">(</span><span class="nx">item</span> <span class="p">=&gt;</span> <span class="nx">item</span> <span class="o">*</span> <span class="mi">2</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">mapped</span> <span class="k">instanceof</span> <span class="nx">MyArray</span><span class="p">)</span> <span class="c1">// false
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">mapped</span> <span class="k">instanceof</span> <span class="nb">Array</span><span class="p">)</span> <span class="c1">// true
+</span></span></span></code></pre></div><p>如果不指定 <code>Symbol.species</code>，某些数组方法可能会返回子类实例。指定后，可以让派生结果回到普通 <code>Array</code>。</p>
+<p>这个知识点偏底层，主要出现在继承内置类、库设计、框架源码中。普通业务代码很少需要它。知道它存在即可，不需要每天把它请出来证明自己懂 JavaScript。</p>
+<h2 id="二十symbol-和私有属性">二十、Symbol 和私有属性</h2>
+<p>Symbol 常被误认为可以实现真正私有属性。</p>
+<p>例如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">passwordKey</span> <span class="o">=</span> <span class="nx">Symbol</span><span class="p">(</span><span class="s1">&#39;password&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">class</span> <span class="nx">User</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">constructor</span><span class="p">(</span><span class="nx">name</span><span class="p">,</span> <span class="nx">password</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">this</span><span class="p">.</span><span class="nx">name</span> <span class="o">=</span> <span class="nx">name</span>
+</span></span><span class="line"><span class="cl">    <span class="k">this</span><span class="p">[</span><span class="nx">passwordKey</span><span class="p">]</span> <span class="o">=</span> <span class="nx">password</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="nx">checkPassword</span><span class="p">(</span><span class="nx">password</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="k">this</span><span class="p">[</span><span class="nx">passwordKey</span><span class="p">]</span> <span class="o">===</span> <span class="nx">password</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">user</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">User</span><span class="p">(</span><span class="s1">&#39;Yuki&#39;</span><span class="p">,</span> <span class="s1">&#39;123456&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">user</span><span class="p">.</span><span class="nx">name</span><span class="p">)</span> <span class="c1">// Yuki
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">user</span><span class="p">.</span><span class="nx">password</span><span class="p">)</span> <span class="c1">// undefined
+</span></span></span></code></pre></div><p>看起来 <code>password</code> 被隐藏了。</p>
+<p>但它并不是真正私有：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">symbols</span> <span class="o">=</span> <span class="nb">Object</span><span class="p">.</span><span class="nx">getOwnPropertySymbols</span><span class="p">(</span><span class="nx">user</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">user</span><span class="p">[</span><span class="nx">symbols</span><span class="p">[</span><span class="mi">0</span><span class="p">]])</span> <span class="c1">// 123456
+</span></span></span></code></pre></div><p>所以 Symbol 更适合表达：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">不希望和普通属性冲突
+</span></span><span class="line"><span class="cl">不希望被常规枚举扫出来
+</span></span></code></pre></div><p>不适合表达：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">绝对禁止外部访问
+</span></span></code></pre></div><p>真正的私有字段应该用：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">class</span> <span class="nx">User</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="err">#</span><span class="nx">password</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="nx">constructor</span><span class="p">(</span><span class="nx">name</span><span class="p">,</span> <span class="nx">password</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">this</span><span class="p">.</span><span class="nx">name</span> <span class="o">=</span> <span class="nx">name</span>
+</span></span><span class="line"><span class="cl">    <span class="k">this</span><span class="p">.</span><span class="err">#</span><span class="nx">password</span> <span class="o">=</span> <span class="nx">password</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="nx">checkPassword</span><span class="p">(</span><span class="nx">password</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="k">this</span><span class="p">.</span><span class="err">#</span><span class="nx">password</span> <span class="o">===</span> <span class="nx">password</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>外部直接访问：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="nx">user</span><span class="p">.</span><span class="err">#</span><span class="nx">password</span>
+</span></span></code></pre></div><p>会产生语法错误。</p>
+<p>当然，前端代码里也不要真的把敏感密码放在对象里长期保存。语法能隐藏字段，不代表安全问题就从现实世界里消失了。</p>
+<h2 id="二十一symbol-属性和展开语法">二十一、Symbol 属性和展开语法</h2>
+<p>对象展开会复制可枚举的自有属性，包括可枚举的 Symbol 属性。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">idKey</span> <span class="o">=</span> <span class="nx">Symbol</span><span class="p">(</span><span class="s1">&#39;id&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">user</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">name</span><span class="o">:</span> <span class="s1">&#39;Yuki&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="p">[</span><span class="nx">idKey</span><span class="p">]</span><span class="o">:</span> <span class="mi">1</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">copy</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="p">...</span><span class="nx">user</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">copy</span><span class="p">.</span><span class="nx">name</span><span class="p">)</span> <span class="c1">// Yuki
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">copy</span><span class="p">[</span><span class="nx">idKey</span><span class="p">])</span> <span class="c1">// 1
+</span></span></span></code></pre></div><p><code>Object.assign()</code> 也会复制可枚举的 Symbol 属性：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">copy</span> <span class="o">=</span> <span class="nb">Object</span><span class="p">.</span><span class="nx">assign</span><span class="p">({},</span> <span class="nx">user</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">copy</span><span class="p">[</span><span class="nx">idKey</span><span class="p">])</span> <span class="c1">// 1
+</span></span></span></code></pre></div><p>这点容易和 <code>Object.keys()</code> 混淆。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nb">Object</span><span class="p">.</span><span class="nx">keys</span><span class="p">(</span><span class="nx">user</span><span class="p">))</span> <span class="c1">// [&#39;name&#39;]
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">Reflect</span><span class="p">.</span><span class="nx">ownKeys</span><span class="p">(</span><span class="nx">user</span><span class="p">))</span> <span class="c1">// [&#39;name&#39;, Symbol(id)]
+</span></span></span></code></pre></div><p>如果 Symbol 属性是不可枚举的，对象展开就不会复制它：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">idKey</span> <span class="o">=</span> <span class="nx">Symbol</span><span class="p">(</span><span class="s1">&#39;id&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">user</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">name</span><span class="o">:</span> <span class="s1">&#39;Yuki&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nb">Object</span><span class="p">.</span><span class="nx">defineProperty</span><span class="p">(</span><span class="nx">user</span><span class="p">,</span> <span class="nx">idKey</span><span class="p">,</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">value</span><span class="o">:</span> <span class="mi">1</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">enumerable</span><span class="o">:</span> <span class="kc">false</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">copy</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="p">...</span><span class="nx">user</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">copy</span><span class="p">[</span><span class="nx">idKey</span><span class="p">])</span> <span class="c1">// undefined
+</span></span></span></code></pre></div><p>所以要分清两个问题：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">是不是 Symbol key？
+</span></span><span class="line"><span class="cl">是不是可枚举属性？
+</span></span></code></pre></div><p>它们是不同维度。</p>
+<h2 id="二十二什么时候应该使用-symbol">二十二、什么时候应该使用 Symbol</h2>
+<p>适合使用 Symbol 的场景：</p>
+<table>
+  <thead>
+      <tr>
+          <th>场景</th>
+          <th>示例</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>创建不会冲突的对象属性 key</td>
+          <td>给对象挂内部元数据</td>
+      </tr>
+      <tr>
+          <td>定义模块内部唯一常量</td>
+          <td>内部状态标识</td>
+      </tr>
+      <tr>
+          <td>接入语言内置协议</td>
+          <td><code>Symbol.iterator</code></td>
+      </tr>
+      <tr>
+          <td>定制对象转换或调试标签</td>
+          <td><code>Symbol.toPrimitive</code>、<code>Symbol.toStringTag</code></td>
+      </tr>
+      <tr>
+          <td>编写库或框架内部机制</td>
+          <td>避免和用户字段冲突</td>
+      </tr>
+  </tbody>
+</table>
+<p>不太适合使用 Symbol 的场景：</p>
+<table>
+  <thead>
+      <tr>
+          <th>场景</th>
+          <th>更合适的选择</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>接口字段</td>
+          <td>字符串 key</td>
+      </tr>
+      <tr>
+          <td>JSON 数据</td>
+          <td>字符串、数字、布尔、对象、数组</td>
+      </tr>
+      <tr>
+          <td>页面展示文本</td>
+          <td>字符串</td>
+      </tr>
+      <tr>
+          <td>需要长期持久化的状态</td>
+          <td>字符串或数字</td>
+      </tr>
+      <tr>
+          <td>团队成员都要直观看懂的业务枚举</td>
+          <td>字符串字面量</td>
+      </tr>
+  </tbody>
+</table>
+<p>一个简单判断：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">需要跨系统传递 -&gt; 不用 Symbol
+</span></span><span class="line"><span class="cl">只在运行时内部唯一识别 -&gt; 可以考虑 Symbol
+</span></span><span class="line"><span class="cl">需要接入 JS 内置协议 -&gt; 使用对应内置 Symbol
+</span></span></code></pre></div><h2 id="二十三常见误区">二十三、常见误区</h2>
+<h3 id="1-以为-symbolid-等于-id">1. 以为 Symbol(&lsquo;id&rsquo;) 等于 &lsquo;id&rsquo;</h3>
+<p>不等于。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="nx">Symbol</span><span class="p">(</span><span class="s1">&#39;id&#39;</span><span class="p">)</span> <span class="o">===</span> <span class="s1">&#39;id&#39;</span> <span class="c1">// false
+</span></span></span></code></pre></div><p><code>'id'</code> 只是描述，不是字符串值。</p>
+<h3 id="2-以为描述相同的-symbol-相等">2. 以为描述相同的 Symbol 相等</h3>
+<p>不相等。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="nx">Symbol</span><span class="p">(</span><span class="s1">&#39;id&#39;</span><span class="p">)</span> <span class="o">===</span> <span class="nx">Symbol</span><span class="p">(</span><span class="s1">&#39;id&#39;</span><span class="p">)</span> <span class="c1">// false
+</span></span></span></code></pre></div><p>每次调用 <code>Symbol()</code> 都是新值。</p>
+<h3 id="3-以为-symbol-属性绝对私有">3. 以为 Symbol 属性绝对私有</h3>
+<p>不是。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="nb">Object</span><span class="p">.</span><span class="nx">getOwnPropertySymbols</span><span class="p">(</span><span class="nx">obj</span><span class="p">)</span>
+</span></span></code></pre></div><p>可以拿到对象自己的 Symbol 属性。Symbol 只能降低意外访问和命名冲突，不提供绝对私有性。</p>
+<h3 id="4-以为-objectkeys-能拿到所有-key">4. 以为 Object.keys 能拿到所有 key</h3>
+<p>不能。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="nb">Object</span><span class="p">.</span><span class="nx">keys</span><span class="p">(</span><span class="nx">obj</span><span class="p">)</span>
+</span></span></code></pre></div><p>只拿可枚举字符串 key。要拿 Symbol key，用：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="nb">Object</span><span class="p">.</span><span class="nx">getOwnPropertySymbols</span><span class="p">(</span><span class="nx">obj</span><span class="p">)</span>
+</span></span></code></pre></div><p>要拿所有自有 key，用：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="nx">Reflect</span><span class="p">.</span><span class="nx">ownKeys</span><span class="p">(</span><span class="nx">obj</span><span class="p">)</span>
+</span></span></code></pre></div><h3 id="5-以为-symbol-能直接进-json">5. 以为 Symbol 能直接进 JSON</h3>
+<p>不能。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="nx">JSON</span><span class="p">.</span><span class="nx">stringify</span><span class="p">({</span> <span class="nx">key</span><span class="o">:</span> <span class="nx">Symbol</span><span class="p">(</span><span class="s1">&#39;id&#39;</span><span class="p">)</span> <span class="p">})</span> <span class="c1">// &#39;{}&#39;
+</span></span></span></code></pre></div><p>Symbol 是运行时标识，不是 JSON 数据格式的一部分。</p>
+<h3 id="6-滥用-well-known-symbols">6. 滥用 well-known symbols</h3>
+<p><code>Symbol.iterator</code>、<code>Symbol.toPrimitive</code> 这些能力很强，但不要把普通业务逻辑写得像语言扩展。可读性不是低级需求，它是维护代码时的最低保障。</p>
+<h2 id="二十四练习">二十四、练习</h2>
+<h3 id="1-判断相等">1. 判断相等</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">a</span> <span class="o">=</span> <span class="nx">Symbol</span><span class="p">(</span><span class="s1">&#39;id&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">b</span> <span class="o">=</span> <span class="nx">Symbol</span><span class="p">(</span><span class="s1">&#39;id&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">c</span> <span class="o">=</span> <span class="nx">a</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">a</span> <span class="o">===</span> <span class="nx">b</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">a</span> <span class="o">===</span> <span class="nx">c</span><span class="p">)</span>
+</span></span></code></pre></div><p>结果：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">false
+</span></span><span class="line"><span class="cl">true
+</span></span></code></pre></div><h3 id="2-判断对象-key">2. 判断对象 key</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">idKey</span> <span class="o">=</span> <span class="nx">Symbol</span><span class="p">(</span><span class="s1">&#39;id&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">user</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">id</span><span class="o">:</span> <span class="mi">1</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="p">[</span><span class="nx">idKey</span><span class="p">]</span><span class="o">:</span> <span class="mi">2</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">user</span><span class="p">.</span><span class="nx">id</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">user</span><span class="p">[</span><span class="nx">idKey</span><span class="p">])</span>
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nb">Object</span><span class="p">.</span><span class="nx">keys</span><span class="p">(</span><span class="nx">user</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nb">Object</span><span class="p">.</span><span class="nx">getOwnPropertySymbols</span><span class="p">(</span><span class="nx">user</span><span class="p">))</span>
+</span></span></code></pre></div><p>结果：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">1
+</span></span><span class="line"><span class="cl">2
+</span></span><span class="line"><span class="cl">[&#39;id&#39;]
+</span></span><span class="line"><span class="cl">[Symbol(id)]
+</span></span></code></pre></div><h3 id="3-判断-json-结果">3. 判断 JSON 结果</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">key</span> <span class="o">=</span> <span class="nx">Symbol</span><span class="p">(</span><span class="s1">&#39;id&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">user</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">name</span><span class="o">:</span> <span class="s1">&#39;Yuki&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="p">[</span><span class="nx">key</span><span class="p">]</span><span class="o">:</span> <span class="mi">1</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">token</span><span class="o">:</span> <span class="nx">Symbol</span><span class="p">(</span><span class="s1">&#39;token&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">JSON</span><span class="p">.</span><span class="nx">stringify</span><span class="p">(</span><span class="nx">user</span><span class="p">))</span>
+</span></span></code></pre></div><p>结果：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span><span class="nt">&#34;name&#34;</span><span class="p">:</span><span class="s2">&#34;Yuki&#34;</span><span class="p">}</span>
+</span></span></code></pre></div><p>Symbol key 会被忽略，Symbol 值也不会进入对象 JSON。</p>
+<h3 id="4-实现一个可迭代对象">4. 实现一个可迭代对象</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">todoList</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">items</span><span class="o">:</span> <span class="p">[</span><span class="s1">&#39;learn js&#39;</span><span class="p">,</span> <span class="s1">&#39;write code&#39;</span><span class="p">],</span>
+</span></span><span class="line"><span class="cl">  <span class="o">*</span><span class="p">[</span><span class="nx">Symbol</span><span class="p">.</span><span class="nx">iterator</span><span class="p">]()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="p">(</span><span class="kr">const</span> <span class="nx">item</span> <span class="k">of</span> <span class="k">this</span><span class="p">.</span><span class="nx">items</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="k">yield</span> <span class="nx">item</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">([...</span><span class="nx">todoList</span><span class="p">])</span>
+</span></span></code></pre></div><p>结果：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">[&#39;learn js&#39;, &#39;write code&#39;]
+</span></span></code></pre></div><h2 id="二十五总结">二十五、总结</h2>
+<p>Symbol 可以这样记：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Symbol()                  -&gt; 创建一个唯一 Symbol
+</span></span><span class="line"><span class="cl">Symbol(&#39;id&#39;)              -&gt; 创建带描述的唯一 Symbol
+</span></span><span class="line"><span class="cl">typeof Symbol()           -&gt; &#39;symbol&#39;
+</span></span><span class="line"><span class="cl">Symbol.for(&#39;key&#39;)         -&gt; 从全局注册表创建或复用 Symbol
+</span></span><span class="line"><span class="cl">Symbol.keyFor(symbol)     -&gt; 查询全局注册表中的 key
+</span></span><span class="line"><span class="cl">obj[symbolKey]            -&gt; 用 Symbol 作为对象属性 key
+</span></span><span class="line"><span class="cl">Object.getOwnPropertySymbols(obj) -&gt; 获取对象自己的 Symbol key
+</span></span><span class="line"><span class="cl">Reflect.ownKeys(obj)      -&gt; 获取字符串 key 和 Symbol key
+</span></span><span class="line"><span class="cl">Symbol.iterator           -&gt; 定义对象如何被迭代
+</span></span><span class="line"><span class="cl">Symbol.toPrimitive        -&gt; 定义对象如何转原始值
+</span></span><span class="line"><span class="cl">Symbol.toStringTag        -&gt; 定义对象的 toString 标签
+</span></span></code></pre></div><p>最后用一句话收束：</p>
+<blockquote>
+<p>Symbol 是 JavaScript 中用于创建唯一标识的原始类型；它常用于避免对象属性名冲突，也通过 well-known symbols 暴露了迭代、类型标签、原始值转换等语言内部协议。</p></blockquote>
+<p>日常业务代码里，不要为了显得“底层”而滥用 Symbol。真正需要它时，它很好用；不需要它时，普通字符串和普通对象往往更清楚。工具本身没有虚荣心，虚荣的是使用工具的人。</p>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

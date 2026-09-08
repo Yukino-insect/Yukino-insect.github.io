@@ -1,0 +1,1545 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>考研泰勒公式的应用：从零基础到常见题型 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="泰勒公式并不是一张要求死记硬背的“展开表”。它做的事很朴素：用一个容易计算的多项式，在某个点附近近似原来的函数。而考研数学之所以频繁考它，是因为极限、等价无穷小、函数近似和导数判定，表面不同，实际都在问同一件事：当 $x$ 很接近某一点时，哪个低阶项真正决定了函数的行为。
+如果你刚接触它，也不必先被 $o(x^n)$、余项这些符号劝退。先记住一个画面：曲线在足够小的局部，看起来像一条切线；再精细一些，可以像一条抛物线；继续增加项，就会越来越像原曲线。泰勒公式只是把这种“局部模仿”写成了公式。毕竟，考试不会因为符号长一点就突然有了神秘属性。
+一、开始前：先分清近似、等价与展开 设 $x$ 很接近 $0$。下面三种写法常常一起出现，但意思并不完全相同。
+1. 近似：数值上差不多 例如当 $x$ 很小时，$\sin x \approx x$。这句话用于估算数值，强调“差得很小”，却没有说明误差到底有多小。
+2. 等价无穷小：相对误差趋于零 记作：
+$$ \sin x \sim x \quad (x \to 0) $$它的严格含义是：
+$$ \lim_{x \to 0}\frac{\sin x}{x}=1 $$在乘除型极限中，等价无穷小可以互换。例如：
+$$ \lim_{x\to 0}\frac{\sin x}{\tan x} =\lim_{x\to 0}\frac{x}{x}=1 $$但在加减法里不能随意替换。因为两个很接近的量相减时，低阶项可能恰好抵消，隐藏在后面的高阶项会立刻变成主角。
+例如：
+$$ \lim_{x\to 0}\frac{x-\sin x}{x^3} $$若把 $\sin x$ 直接换成 $x$，分子变成 $0$，你会得到错误的 $0$；实际极限是 $\frac16$。这类题正是泰勒展开的用武之地。
+3. 展开：把误差的阶数写清楚 在 $x=0$ 附近，$\sin x$ 的麦克劳林展开为：
+$$ \sin x=x-\frac{x^3}{3!}&#43;\frac{x^5}{5!}&#43;o(x^5) $$这里不仅告诉你“$\sin x$ 和 $x$ 很接近”，还告诉你它们相差的第一个非零项是 $-\frac{x^3}{6}$。因此：
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/math/%E8%80%83%E7%A0%94%E6%B3%B0%E5%8B%92%E5%85%AC%E5%BC%8F%E7%9A%84%E5%BA%94%E7%94%A8%E4%BB%8E%E9%9B%B6%E5%9F%BA%E7%A1%80%E5%88%B0%E5%B8%B8%E8%A7%81%E9%A2%98%E5%9E%8B/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/math/%E8%80%83%E7%A0%94%E6%B3%B0%E5%8B%92%E5%85%AC%E5%BC%8F%E7%9A%84%E5%BA%94%E7%94%A8%E4%BB%8E%E9%9B%B6%E5%9F%BA%E7%A1%80%E5%88%B0%E5%B8%B8%E8%A7%81%E9%A2%98%E5%9E%8B/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="考研泰勒公式的应用：从零基础到常见题型">
+  <meta property="og:description" content="泰勒公式并不是一张要求死记硬背的“展开表”。它做的事很朴素：用一个容易计算的多项式，在某个点附近近似原来的函数。而考研数学之所以频繁考它，是因为极限、等价无穷小、函数近似和导数判定，表面不同，实际都在问同一件事：当 $x$ 很接近某一点时，哪个低阶项真正决定了函数的行为。
+如果你刚接触它，也不必先被 $o(x^n)$、余项这些符号劝退。先记住一个画面：曲线在足够小的局部，看起来像一条切线；再精细一些，可以像一条抛物线；继续增加项，就会越来越像原曲线。泰勒公式只是把这种“局部模仿”写成了公式。毕竟，考试不会因为符号长一点就突然有了神秘属性。
+一、开始前：先分清近似、等价与展开 设 $x$ 很接近 $0$。下面三种写法常常一起出现，但意思并不完全相同。
+1. 近似：数值上差不多 例如当 $x$ 很小时，$\sin x \approx x$。这句话用于估算数值，强调“差得很小”，却没有说明误差到底有多小。
+2. 等价无穷小：相对误差趋于零 记作：
+$$ \sin x \sim x \quad (x \to 0) $$它的严格含义是：
+$$ \lim_{x \to 0}\frac{\sin x}{x}=1 $$在乘除型极限中，等价无穷小可以互换。例如：
+$$ \lim_{x\to 0}\frac{\sin x}{\tan x} =\lim_{x\to 0}\frac{x}{x}=1 $$但在加减法里不能随意替换。因为两个很接近的量相减时，低阶项可能恰好抵消，隐藏在后面的高阶项会立刻变成主角。
+例如：
+$$ \lim_{x\to 0}\frac{x-\sin x}{x^3} $$若把 $\sin x$ 直接换成 $x$，分子变成 $0$，你会得到错误的 $0$；实际极限是 $\frac16$。这类题正是泰勒展开的用武之地。
+3. 展开：把误差的阶数写清楚 在 $x=0$ 附近，$\sin x$ 的麦克劳林展开为：
+$$ \sin x=x-\frac{x^3}{3!}&#43;\frac{x^5}{5!}&#43;o(x^5) $$这里不仅告诉你“$\sin x$ 和 $x$ 很接近”，还告诉你它们相差的第一个非零项是 $-\frac{x^3}{6}$。因此：">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="math">
+    <meta property="article:published_time" content="2026-09-08T19:00:00+08:00">
+    <meta property="article:modified_time" content="2026-09-08T19:00:00+08:00">
+
+  
+  <meta itemprop="name" content="考研泰勒公式的应用：从零基础到常见题型">
+  <meta itemprop="description" content="泰勒公式并不是一张要求死记硬背的“展开表”。它做的事很朴素：用一个容易计算的多项式，在某个点附近近似原来的函数。而考研数学之所以频繁考它，是因为极限、等价无穷小、函数近似和导数判定，表面不同，实际都在问同一件事：当 $x$ 很接近某一点时，哪个低阶项真正决定了函数的行为。
+如果你刚接触它，也不必先被 $o(x^n)$、余项这些符号劝退。先记住一个画面：曲线在足够小的局部，看起来像一条切线；再精细一些，可以像一条抛物线；继续增加项，就会越来越像原曲线。泰勒公式只是把这种“局部模仿”写成了公式。毕竟，考试不会因为符号长一点就突然有了神秘属性。
+一、开始前：先分清近似、等价与展开 设 $x$ 很接近 $0$。下面三种写法常常一起出现，但意思并不完全相同。
+1. 近似：数值上差不多 例如当 $x$ 很小时，$\sin x \approx x$。这句话用于估算数值，强调“差得很小”，却没有说明误差到底有多小。
+2. 等价无穷小：相对误差趋于零 记作：
+$$ \sin x \sim x \quad (x \to 0) $$它的严格含义是：
+$$ \lim_{x \to 0}\frac{\sin x}{x}=1 $$在乘除型极限中，等价无穷小可以互换。例如：
+$$ \lim_{x\to 0}\frac{\sin x}{\tan x} =\lim_{x\to 0}\frac{x}{x}=1 $$但在加减法里不能随意替换。因为两个很接近的量相减时，低阶项可能恰好抵消，隐藏在后面的高阶项会立刻变成主角。
+例如：
+$$ \lim_{x\to 0}\frac{x-\sin x}{x^3} $$若把 $\sin x$ 直接换成 $x$，分子变成 $0$，你会得到错误的 $0$；实际极限是 $\frac16$。这类题正是泰勒展开的用武之地。
+3. 展开：把误差的阶数写清楚 在 $x=0$ 附近，$\sin x$ 的麦克劳林展开为：
+$$ \sin x=x-\frac{x^3}{3!}&#43;\frac{x^5}{5!}&#43;o(x^5) $$这里不仅告诉你“$\sin x$ 和 $x$ 很接近”，还告诉你它们相差的第一个非零项是 $-\frac{x^3}{6}$。因此：">
+  <meta itemprop="datePublished" content="2026-09-08T19:00:00+08:00">
+  <meta itemprop="dateModified" content="2026-09-08T19:00:00+08:00">
+  <meta itemprop="wordCount" content="500">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="考研泰勒公式的应用：从零基础到常见题型">
+  <meta name="twitter:description" content="泰勒公式并不是一张要求死记硬背的“展开表”。它做的事很朴素：用一个容易计算的多项式，在某个点附近近似原来的函数。而考研数学之所以频繁考它，是因为极限、等价无穷小、函数近似和导数判定，表面不同，实际都在问同一件事：当 $x$ 很接近某一点时，哪个低阶项真正决定了函数的行为。
+如果你刚接触它，也不必先被 $o(x^n)$、余项这些符号劝退。先记住一个画面：曲线在足够小的局部，看起来像一条切线；再精细一些，可以像一条抛物线；继续增加项，就会越来越像原曲线。泰勒公式只是把这种“局部模仿”写成了公式。毕竟，考试不会因为符号长一点就突然有了神秘属性。
+一、开始前：先分清近似、等价与展开 设 $x$ 很接近 $0$。下面三种写法常常一起出现，但意思并不完全相同。
+1. 近似：数值上差不多 例如当 $x$ 很小时，$\sin x \approx x$。这句话用于估算数值，强调“差得很小”，却没有说明误差到底有多小。
+2. 等价无穷小：相对误差趋于零 记作：
+$$ \sin x \sim x \quad (x \to 0) $$它的严格含义是：
+$$ \lim_{x \to 0}\frac{\sin x}{x}=1 $$在乘除型极限中，等价无穷小可以互换。例如：
+$$ \lim_{x\to 0}\frac{\sin x}{\tan x} =\lim_{x\to 0}\frac{x}{x}=1 $$但在加减法里不能随意替换。因为两个很接近的量相减时，低阶项可能恰好抵消，隐藏在后面的高阶项会立刻变成主角。
+例如：
+$$ \lim_{x\to 0}\frac{x-\sin x}{x^3} $$若把 $\sin x$ 直接换成 $x$，分子变成 $0$，你会得到错误的 $0$；实际极限是 $\frac16$。这类题正是泰勒展开的用武之地。
+3. 展开：把误差的阶数写清楚 在 $x=0$ 附近，$\sin x$ 的麦克劳林展开为：
+$$ \sin x=x-\frac{x^3}{3!}&#43;\frac{x^5}{5!}&#43;o(x^5) $$这里不仅告诉你“$\sin x$ 和 $x$ 很接近”，还告诉你它们相差的第一个非零项是 $-\frac{x^3}{6}$。因此：">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+<script>
+  MathJax = {
+    tex: {
+      inlineMath: { '[+]': [['$', '$']] },
+      displayMath: { '[+]': [['$$', '$$']] },
+      processEscapes: true
+    }
+  };
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-chtml.js"></script>
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">考研泰勒公式的应用：从零基础到常见题型</h1>
+
+    
+      <div class="post-date">September 8, 2026</div>
+    
+
+    <div class="post-content">
+      <p>泰勒公式并不是一张要求死记硬背的“展开表”。它做的事很朴素：<strong>用一个容易计算的多项式，在某个点附近近似原来的函数</strong>。而考研数学之所以频繁考它，是因为极限、等价无穷小、函数近似和导数判定，表面不同，实际都在问同一件事：当 $x$ 很接近某一点时，哪个低阶项真正决定了函数的行为。</p>
+<p>如果你刚接触它，也不必先被 $o(x^n)$、余项这些符号劝退。先记住一个画面：曲线在足够小的局部，看起来像一条切线；再精细一些，可以像一条抛物线；继续增加项，就会越来越像原曲线。泰勒公式只是把这种“局部模仿”写成了公式。毕竟，考试不会因为符号长一点就突然有了神秘属性。</p>
+<h2 id="一开始前先分清近似等价与展开">一、开始前：先分清近似、等价与展开</h2>
+<p>设 $x$ 很接近 $0$。下面三种写法常常一起出现，但意思并不完全相同。</p>
+<h3 id="1-近似数值上差不多">1. 近似：数值上差不多</h3>
+<p>例如当 $x$ 很小时，$\sin x \approx x$。这句话用于估算数值，强调“差得很小”，却没有说明误差到底有多小。</p>
+<h3 id="2-等价无穷小相对误差趋于零">2. 等价无穷小：相对误差趋于零</h3>
+<p>记作：</p>
+$$
+\sin x \sim x \quad (x \to 0)
+$$<p>它的严格含义是：</p>
+$$
+\lim_{x \to 0}\frac{\sin x}{x}=1
+$$<p>在<strong>乘除型极限</strong>中，等价无穷小可以互换。例如：</p>
+$$
+\lim_{x\to 0}\frac{\sin x}{\tan x}
+=\lim_{x\to 0}\frac{x}{x}=1
+$$<p>但在加减法里不能随意替换。因为两个很接近的量相减时，低阶项可能恰好抵消，隐藏在后面的高阶项会立刻变成主角。</p>
+<p>例如：</p>
+$$
+\lim_{x\to 0}\frac{x-\sin x}{x^3}
+$$<p>若把 $\sin x$ 直接换成 $x$，分子变成 $0$，你会得到错误的 $0$；实际极限是 $\frac16$。这类题正是泰勒展开的用武之地。</p>
+<h3 id="3-展开把误差的阶数写清楚">3. 展开：把误差的阶数写清楚</h3>
+<p>在 $x=0$ 附近，$\sin x$ 的麦克劳林展开为：</p>
+$$
+\sin x=x-\frac{x^3}{3!}+\frac{x^5}{5!}+o(x^5)
+$$<p>这里不仅告诉你“$\sin x$ 和 $x$ 很接近”，还告诉你它们相差的第一个非零项是 $-\frac{x^3}{6}$。因此：</p>
+$$
+x-\sin x=\frac{x^3}{6}+o(x^3)
+$$<p>分子为什么要保留到三次项，也就不再靠猜了。</p>
+<h2 id="二泰勒公式到底是什么">二、泰勒公式到底是什么</h2>
+<h3 id="1-在--附近展开">1. 在 $x_0$ 附近展开</h3>
+<p>如果函数 $f(x)$ 在 $x_0$ 附近具有足够阶的导数，那么：</p>
+$$
+\begin{aligned}
+f(x)=&f(x_0)+f'(x_0)(x-x_0)+\frac{f''(x_0)}{2!}(x-x_0)^2\\
+&+\cdots+\frac{f^{(n)}(x_0)}{n!}(x-x_0)^n+o\bigl((x-x_0)^n\bigr).
+\end{aligned}
+$$<p>这就是 $f(x)$ 在 $x_0$ 处的 $n$ 阶泰勒展开。它有一个固定骨架：</p>
+$$
+\frac{\text{第 }k\text{ 阶导数在展开点的值}}{k!}(x-x_0)^k.
+$$<p>所以不是“凭感觉往后写”。每一项的系数都由展开点处的导数唯一决定。</p>
+<h3 id="2-麦克劳林公式只是展开点取零">2. 麦克劳林公式只是展开点取零</h3>
+<p>考研中最常见的是 $x_0=0$，称为麦克劳林公式：</p>
+$$
+f(x)=f(0)+f'(0)x+\frac{f''(0)}{2!}x^2+\cdots+\frac{f^{(n)}(0)}{n!}x^n+o(x^n).
+$$<p>看到“$x\to0$”时，优先想到在 $0$ 处展开；看到“$x\to a$”时，优先考虑令 $h=x-a$，然后围绕 $h=0$ 展开。这个换元很普通，却能让大量题目恢复成最熟悉的形状。</p>
+<h3 id="3-如何理解">3. 如何理解 $o(x^n)$</h3>
+$$
+r(x)=o(x^n)\quad(x\to0)
+$$<p>表示：</p>
+$$
+\lim_{x\to0}\frac{r(x)}{x^n}=0.
+$$<p>也就是说，$r(x)$ 比 $x^n$ 更高阶、更“小”。例如 $x^4=o(x^3)$，但 $x^3$ 不是 $o(x^3)$。做极限时，它的价值在于：若分母是 $x^n$，所有 $o(x^n)$ 除以 $x^n$ 后都趋于 $0$，可以放心不再追究。</p>
+<h2 id="三考研最常用的基本展开式">三、考研最常用的基本展开式</h2>
+<p>以下展开式应当熟练到能写出前几项，并知道它们的符号、奇偶次幂和适用位置。默认都在 $x\to0$ 时使用。</p>
+<table>
+  <thead>
+      <tr>
+          <th>函数</th>
+          <th>常用展开式</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>$e^x$</td>
+          <td>$1+x+\frac{x^2}{2!}+\frac{x^3}{3!}+\frac{x^4}{4!}+o(x^4)$</td>
+      </tr>
+      <tr>
+          <td>$\ln(1+x)$</td>
+          <td>$x-\frac{x^2}{2}+\frac{x^3}{3}-\frac{x^4}{4}+o(x^4)$</td>
+      </tr>
+      <tr>
+          <td>$(1+x)^\alpha$</td>
+          <td>$1+\alpha x+\frac{\alpha(\alpha-1)}{2!}x^2+\frac{\alpha(\alpha-1)(\alpha-2)}{3!}x^3+o(x^3)$</td>
+      </tr>
+      <tr>
+          <td>$\sin x$</td>
+          <td>$x-\frac{x^3}{3!}+\frac{x^5}{5!}+o(x^5)$</td>
+      </tr>
+      <tr>
+          <td>$\cos x$</td>
+          <td>$1-\frac{x^2}{2!}+\frac{x^4}{4!}+o(x^4)$</td>
+      </tr>
+      <tr>
+          <td>$\tan x$</td>
+          <td>$x+\frac{x^3}{3}+o(x^3)$</td>
+      </tr>
+      <tr>
+          <td>$\arcsin x$</td>
+          <td>$x+\frac{x^3}{6}+o(x^3)$</td>
+      </tr>
+      <tr>
+          <td>$\arctan x$</td>
+          <td>$x-\frac{x^3}{3}+o(x^3)$</td>
+      </tr>
+  </tbody>
+</table>
+<p>其中 $(1+x)^\alpha$ 很值得重视。令 $\alpha=\frac12$，就有：</p>
+$$
+\sqrt{1+x}=1+\frac{x}{2}-\frac{x^2}{8}+\frac{x^3}{16}+o(x^3).
+$$<p>令 $\alpha=-1$，就有：</p>
+$$
+\frac1{1+x}=1-x+x^2-x^3+o(x^3).
+$$<p>不必把每个变形函数都当成新公式背下来。能认出“它是哪个基本函数加了一个内层”，再进行代换，记忆负担会小很多。</p>
+<h2 id="四最重要的判断到底展开到几阶">四、最重要的判断：到底展开到几阶</h2>
+<p>初学时最常见的问题不是不会写，而是写得太少或太多。一个可靠原则是：<strong>先看分母需要什么阶，再看分子可能发生几次抵消。</strong></p>
+<h3 id="1-分母决定最低保留阶数">1. 分母决定最低保留阶数</h3>
+<p>例如：</p>
+$$
+\lim_{x\to0}\frac{e^x-1-x}{x^2}.
+$$<p>分母是 $x^2$，而分子中的常数项和一次项已被题目主动减掉。因此必须写到二次项：</p>
+$$
+e^x=1+x+\frac{x^2}{2}+o(x^2).
+$$<p>代入得：</p>
+$$
+\frac{e^x-1-x}{x^2}=\frac{\frac{x^2}{2}+o(x^2)}{x^2}\to\frac12.
+$$<h3 id="2-先观察抵消再决定继续展开">2. 先观察抵消，再决定继续展开</h3>
+<p>再看：</p>
+$$
+\lim_{x\to0}\frac{\ln(1+x)-\sin x}{x^2}.
+$$<p>两者的一次项都是 $x$，相减后抵消。因此写到二次项：</p>
+$$
+\begin{aligned}
+\ln(1+x)&=x-\frac{x^2}{2}+o(x^2),\\
+\sin x&=x+o(x^2).
+\end{aligned}
+$$<p>所以：</p>
+$$
+\frac{\ln(1+x)-\sin x}{x^2}
+=\frac{-\frac{x^2}{2}+o(x^2)}{x^2}\to-\frac12.
+$$<p>这里把 $\sin x$ 写成 $x+o(x^2)$ 是允许的：它的下一项是三次项，确实属于 $o(x^2)$。</p>
+<h3 id="3-一个实用的展开阶数表">3. 一个实用的“展开阶数表”</h3>
+<table>
+  <thead>
+      <tr>
+          <th>题目现象</th>
+          <th>通常做法</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>分母为 $x^n$，分子没有明显相减</td>
+          <td>先展开到 $n$ 阶</td>
+      </tr>
+      <tr>
+          <td>分子含 $f(x)-f(0)$</td>
+          <td>常数项会消失，至少关注一次项</td>
+      </tr>
+      <tr>
+          <td>分子含 $f(x)-f(0)-f'(0)x$</td>
+          <td>常数、一次项都消失，至少关注二次项</td>
+      </tr>
+      <tr>
+          <td>多个函数相减</td>
+          <td>逐项比较，低阶项抵消后继续向高阶展开</td>
+      </tr>
+      <tr>
+          <td>出现平方、乘积、复合</td>
+          <td>先估出每个因子的阶数，再决定截断位置</td>
+      </tr>
+  </tbody>
+</table>
+<p>“展开到分母同阶”是起点，不是机械口令。真正的终点是：<strong>找到分子展开后第一个没有被抵消的项，并让余项对最终极限不再产生影响。</strong></p>
+<h2 id="五题型一求--型极限">五、题型一：求 $0/0$ 型极限</h2>
+<h3 id="例-1低阶项抵消">例 1：低阶项抵消</h3>
+<p>求：</p>
+$$
+\lim_{x\to0}\frac{x-\sin x}{x^3}.
+$$<p>由：</p>
+$$
+\sin x=x-\frac{x^3}{6}+o(x^3),
+$$<p>得：</p>
+$$
+x-\sin x=\frac{x^3}{6}+o(x^3).
+$$<p>于是：</p>
+$$
+\lim_{x\to0}\frac{x-\sin x}{x^3}=\frac16.
+$$<p>这道题的关键不是背出答案，而是看见 $x$ 与 $\sin x$ 的一次项相同。若只知道 $\sin x\sim x$，恰好会丢掉决定答案的三次项。</p>
+<h3 id="例-2指数函数与对数函数相减">例 2：指数函数与对数函数相减</h3>
+<p>求：</p>
+$$
+\lim_{x\to0}\frac{e^x-1-\ln(1+x)}{x^2}.
+$$<p>写到二次项：</p>
+$$
+\begin{aligned}
+e^x&=1+x+\frac{x^2}{2}+o(x^2),\\
+\ln(1+x)&=x-\frac{x^2}{2}+o(x^2).
+\end{aligned}
+$$<p>因此：</p>
+$$
+e^x-1-\ln(1+x)=x^2+o(x^2),
+$$<p>极限为：</p>
+$$
+1.
+$$<h3 id="例-3带参数时先保留参数">例 3：带参数时先保留参数</h3>
+<p>若 $a\ne0$，求：</p>
+$$
+\lim_{x\to0}\frac{\sin(ax)-ax}{x^3}.
+$$<p>不要把 $\sin(ax)$ 误写成 $x-\frac{x^3}{6}$。内层是 $ax$，所以：</p>
+$$
+\sin(ax)=ax-\frac{a^3x^3}{6}+o(x^3).
+$$<p>于是：</p>
+$$
+\frac{\sin(ax)-ax}{x^3}\to-\frac{a^3}{6}.
+$$<p>内层的系数会随着幂次一起被乘进去：三次项带 $a^3$，五次项带 $a^5$。这是复合函数展开最容易漏掉的一笔。</p>
+<h2 id="六题型二用泰勒公式判等价无穷小和比较阶数">六、题型二：用泰勒公式判等价无穷小和比较阶数</h2>
+<h3 id="1-什么是阶">1. 什么是“阶”</h3>
+<p>若：</p>
+$$
+f(x)=Cx^m+o(x^m),\quad C\ne0,
+$$<p>则称 $f(x)$ 是 $x\to0$ 时的 $m$ 阶无穷小，首项是 $Cx^m$。对于极限问题，首项往往已经决定了一切。</p>
+<p>例如：</p>
+$$
+1-\cos x=\frac{x^2}{2}+o(x^2),
+$$<p>因此：</p>
+$$
+1-\cos x\sim\frac{x^2}{2}.
+$$<p>注意它不与 $x^2$ 等价，因为二者比值趋于 $\frac12$，而不是 $1$。</p>
+<h3 id="2-例找出复合表达式的首项">2. 例：找出复合表达式的首项</h3>
+<p>求 $x\to0$ 时 $(1-\cos x)^2$ 的等价无穷小。</p>
+<p>先展开括号：</p>
+$$
+1-\cos x=\frac{x^2}{2}+o(x^2).
+$$<p>平方后：</p>
+$$
+(1-\cos x)^2=\left(\frac{x^2}{2}+o(x^2)\right)^2
+=\frac{x^4}{4}+o(x^4).
+$$<p>所以：</p>
+$$
+(1-\cos x)^2\sim\frac{x^4}{4}.
+$$<p>最稳妥的做法是先找每个括号的首项，再做乘、除、幂运算；不要一上来就把整个式子展开成一团，很容易既费力又出错。</p>
+<h3 id="3-加减式必须展开到首个非零项">3. 加减式必须展开到首个非零项</h3>
+<p>例如：</p>
+$$
+\tan x-\sin x
+$$<p>虽然 $\tan x\sim x$、$\sin x\sim x$，但不能得到“它们之差等于 $0$”。展开可得：</p>
+$$
+\tan x-\sin x
+=\left(x+\frac{x^3}{3}\right)-\left(x-\frac{x^3}{6}\right)+o(x^3)
+=\frac{x^3}{2}+o(x^3).
+$$<p>因此：</p>
+$$
+\tan x-\sin x\sim\frac{x^3}{2}.
+$$<p>请把这条写进错题本：<strong>等价代换主要用于乘除；遇到加减，先展开。</strong> 这不是繁琐的规矩，而是为了防止抵消把真正的主项藏起来。</p>
+<h2 id="七题型三求极限时含有复合函数">七、题型三：求极限时含有复合函数</h2>
+<p>泰勒公式最常见的失分点，是只会展开外层函数，不会处理“里面还有一个趋于零的量”。处理方法其实统一：令内层为 $u$，先确认 $u\to0$，再把基本展开式中的 $x$ 换为 $u$。</p>
+<h3 id="例-1对数复合">例 1：对数复合</h3>
+<p>求：</p>
+$$
+\lim_{x\to0}\frac{\ln(1+\sin x)-\sin x}{x^3}.
+$$<p>令 $u=\sin x$。因为 $u\to0$，所以：</p>
+$$
+\ln(1+u)-u=-\frac{u^2}{2}+\frac{u^3}{3}+o(u^3).
+$$<p>又 $u=\sin x=x+o(x)$，从而：</p>
+$$
+u^2=x^2+o(x^2),\qquad u^3=x^3+o(x^3).
+$$<p>这里分子最低阶其实是 $x^2$，所以原极限不存在为有限数，而是：</p>
+$$
+\frac{\ln(1+\sin x)-\sin x}{x^3}
+=-\frac{1}{2x}+O(1).
+$$<p>当 $x\to0^+$ 时趋于 $-\infty$，当 $x\to0^-$ 时趋于 $+\infty$，故两侧极限不存在。这个例子提醒你：不是所有写着分式的题都必然会得到一个漂亮常数，先看首项的阶数。</p>
+<h3 id="例-2外层函数的内层替换">例 2：外层函数的内层替换</h3>
+<p>求：</p>
+$$
+\lim_{x\to0}\frac{e^{x^2}-1-x^2}{x^4}.
+$$<p>令 $u=x^2$。由：</p>
+$$
+e^u=1+u+\frac{u^2}{2}+o(u^2),
+$$<p>得：</p>
+$$
+e^{x^2}=1+x^2+\frac{x^4}{2}+o(x^4).
+$$<p>所以原极限为：</p>
+$$
+\frac12.
+$$<h3 id="例-3根式先化成幂函数">例 3：根式先化成幂函数</h3>
+<p>求：</p>
+$$
+\lim_{x\to0}\frac{\sqrt{1+x}-1-\frac{x}{2}}{x^2}.
+$$<p>利用二项式展开：</p>
+$$
+\sqrt{1+x}=1+\frac{x}{2}-\frac{x^2}{8}+o(x^2).
+$$<p>因此：</p>
+$$
+\lim_{x\to0}\frac{\sqrt{1+x}-1-\frac{x}{2}}{x^2}
+=-\frac18.
+$$<p>若你记不住这一条，也可以把 $f(x)=\sqrt{1+x}$ 在 $0$ 处求两阶导数。考场上，熟悉的基本展开更快；但理解导数法，才不至于遇到陌生函数就束手无策。</p>
+<h2 id="八题型四用泰勒公式计算近似值与估计误差">八、题型四：用泰勒公式计算近似值与估计误差</h2>
+<p>泰勒公式不仅服务于极限。它最直观的作用，就是把“不好算的数”改写为“好算的多项式”。</p>
+<h3 id="1-在靠近的点展开而不是强行在零点展开">1. 在靠近的点展开，而不是强行在零点展开</h3>
+<p>估算 $\sqrt{4.04}$。直接代入常用的 $\sqrt{1+x}$ 并不顺手，但可以写成：</p>
+$$
+\sqrt{4.04}=2\sqrt{1+0.01}.
+$$<p>由：</p>
+$$
+\sqrt{1+x}=1+\frac{x}{2}-\frac{x^2}{8}+o(x^2),
+$$<p>得：</p>
+$$
+\sqrt{4.04}\approx2\left(1+\frac{0.01}{2}-\frac{0.01^2}{8}\right)
+=2.009975.
+$$<p>实际值约为 $2.00997512$，已经非常接近。选择离目标近、计算又方便的展开点，比盲目套公式更重要。</p>
+<h3 id="2-余项告诉你近似有多可靠">2. 余项告诉你“近似有多可靠”</h3>
+<p>若在 $x_0$ 处展开到 $n$ 阶，拉格朗日余项可写成：</p>
+$$
+R_n(x)=\frac{f^{(n+1)}(\xi)}{(n+1)!}(x-x_0)^{n+1},
+$$<p>其中 $\xi$ 位于 $x$ 与 $x_0$ 之间。它的意义是：只要能控制这一区间内的 $(n+1)$ 阶导数，就能给截断误差一个上界。</p>
+<p>例如用 $e^x\approx1+x$ 估算 $e^{0.01}$，一阶余项为：</p>
+$$
+R_1(0.01)=\frac{e^\xi}{2}(0.01)^2,\quad 0<\xi<0.01.
+$$<p>因为 $e^\xi<e^{0.01}$，所以：</p>
+$$
+0<R_1(0.01)<\frac{e^{0.01}}{2}\times10^{-4}.
+$$<p>这说明 $1.01$ 是偏小的近似值，误差不到约 $0.000051$。在考研中，余项常用来证明极限、比较误差或判断近似的精度；理解它，不需要把它视作额外的一堵墙。</p>
+<h2 id="九题型五用导数构造泰勒展开">九、题型五：用导数构造泰勒展开</h2>
+<p>当函数不在常用表中时，可以直接按定义求导数。以 $f(x)=\ln(1+x)$ 在 $x=0$ 处展开到三阶为例：</p>
+$$
+\begin{aligned}
+f(0)&=0,\\
+f'(x)&=\frac{1}{1+x}, & f'(0)&=1,\\
+f''(x)&=-\frac{1}{(1+x)^2}, & f''(0)&=-1,\\
+f'''(x)&=\frac{2}{(1+x)^3}, & f'''(0)&=2.
+\end{aligned}
+$$<p>代入麦克劳林公式：</p>
+$$
+\ln(1+x)=x-\frac{x^2}{2!}+\frac{2x^3}{3!}+o(x^3)
+=x-\frac{x^2}{2}+\frac{x^3}{3}+o(x^3).
+$$<p>写这类题时建议排成“函数值—一阶导—二阶导”的纵向结构，并在每一步都代入展开点。这样既方便检查符号，也不容易忘记除以 $n!$。</p>
+<h2 id="十几个高频错误以及为什么错">十、几个高频错误，以及为什么错</h2>
+<h3 id="1-在加减中直接做等价替换">1. 在加减中直接做等价替换</h3>
+<p>错误思路：</p>
+$$
+x-\sin x\sim x-x=0.
+$$<p>问题在于“$\sim$”不代表可以在加减中像等号那样任意传递。相减造成的一次项抵消，使三次项成为首项。正确做法是展开。</p>
+<h3 id="2-忘记常数项和题目中的减项">2. 忘记常数项和题目中的减项</h3>
+<p>例如：</p>
+$$
+\frac{e^x-1-x}{x^2}
+$$<p>如果只写 $e^x\sim x$，不仅丢了常数项，还忽略了题目正是在消去常数和一次项。遇到 $f(x)-f(0)-f'(0)x$ 这类结构，应立即警觉：它通常在逼你寻找二次项。</p>
+<h3 id="3-把--当作普通代数项乱算">3. 把 $o(x^n)$ 当作普通代数项乱算</h3>
+<p>可以使用的直觉规则包括：</p>
+$$
+o(x^m)+o(x^m)=o(x^m),
+$$$$
+x^k\,o(x^m)=o(x^{k+m}).
+$$<p>但前提是你在同一个极限过程下比较阶数。尤其不要把 $o(x^2)$ 直接当成某个确定的 $Cx^2$；它只说明“比 $x^2$ 更高阶”，并没有固定系数。</p>
+<h3 id="4-展开点不对却没有换元">4. 展开点不对却没有换元</h3>
+<p>求 $x\to1$ 时的极限，却仍把所有东西强行按 $x\to0$ 处理，会让式子越来越别扭。应设置：</p>
+$$
+h=x-1,\quad h\to0,
+$$<p>然后把原式改写成关于 $h$ 的表达式。例如 $\ln x=\ln(1+h)$，基本展开式立刻就能使用。</p>
+<h3 id="5-多展开几项却没有说明截断依据">5. 多展开几项，却没有说明截断依据</h3>
+<p>多写两项一般不会扣分，但容易增加计算错误，也掩盖了你对阶数的判断。最好形成习惯：先在草稿上标出“分母到 $x^3$”“一次项会抵消”，再决定写到哪一阶。准确的截断不是炫技，它是节省时间。</p>
+<h2 id="十一考场解题模板">十一、考场解题模板</h2>
+<p>遇到泰勒公式题，可以按下面的顺序处理：</p>
+<ol>
+<li><strong>确定趋近点</strong>：是 $x\to0$，还是 $x\to a$？若是后者，令 $h=x-a$。</li>
+<li><strong>看分母与减项</strong>：分母需要几阶？题目已经消掉了哪些低阶项？</li>
+<li><strong>选择展开对象</strong>：优先使用基本公式；复合函数先令内层为 $u$。</li>
+<li><strong>保留到足够阶</strong>：写出首个不抵消的项，并保留相应的 $o(\cdot)$。</li>
+<li><strong>合并同类项</strong>：不要急着约分，先确认分子真正的首项。</li>
+<li><strong>最后除以分母取极限</strong>：常数项就是答案；若阶数不匹配，则判断趋于 $0$、无穷或不存在。</li>
+</ol>
+<p>把过程压缩成一条检查链：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">趋近点 → 展开对象 → 所需阶数 → 低阶抵消 → 首个非零项 → 极限
+</span></span></code></pre></div><h2 id="十二练习先自己写再看提示">十二、练习：先自己写，再看提示</h2>
+<h3 id="练习-1">练习 1</h3>
+<p>求：</p>
+$$
+\lim_{x\to0}\frac{1-\cos x}{x^2}.
+$$<p>提示：$\cos x$ 没有一次项，直接展开到二次项。</p>
+<h3 id="练习-2">练习 2</h3>
+<p>求：</p>
+$$
+\lim_{x\to0}\frac{\ln(1+x)-x+\frac{x^2}{2}}{x^3}.
+$$<p>提示：题目已消去 $\ln(1+x)$ 的一次项和二次项，写到三次项。</p>
+<h3 id="练习-3">练习 3</h3>
+<p>求：</p>
+$$
+\lim_{x\to0}\frac{\sqrt{1+x}-\sqrt{1-x}-x}{x^3}.
+$$<p>提示：分别对 $\sqrt{1+x}$ 与 $\sqrt{1-x}$ 展开到三次项。不要漏掉代入 $-x$ 后奇次项变号。</p>
+<h3 id="参考答案">参考答案</h3>
+$$
+\text{练习 1：}\frac12,\qquad
+\text{练习 2：}\frac13,\qquad
+\text{练习 3：}\frac18.
+$$<p>练习 3 的关键过程为：</p>
+$$
+\begin{aligned}
+\sqrt{1+x}&=1+\frac{x}{2}-\frac{x^2}{8}+\frac{x^3}{16}+o(x^3),\\
+\sqrt{1-x}&=1-\frac{x}{2}-\frac{x^2}{8}-\frac{x^3}{16}+o(x^3).
+\end{aligned}
+$$<p>相减后为 $x+\frac{x^3}{8}+o(x^3)$，再减去 $x$，答案自然出现。</p>
+<h2 id="总结">总结</h2>
+<ul>
+<li>泰勒公式的本质是局部多项式近似；考研应用的核心是寻找函数展开后的<strong>首个非零项</strong>。</li>
+<li>极限中的加减结构不能粗暴做等价替换，因为低阶项可能抵消；应使用泰勒展开保留足够阶数。</li>
+<li>展开到几阶由分母、题设中的消项和复合结构共同决定。先观察，再动笔，远比多写几行可靠。</li>
+<li>熟记基本展开式，同时理解“令内层为 $u$”和“令 $h=x-a$”两种换元，绝大多数常见变形就有了入口。</li>
+<li>$o(\cdot)$ 不是装饰：它说明被舍去的部分相对哪一阶可以忽略，也让你的推导有明确边界。</li>
+</ul>
+<p>当你不再把泰勒公式当作一串孤立系数，而是把它视为“找局部首项”的工具，题目里的 $e^x$、$\ln(1+x)$、三角函数和根式就只是不同的外衣。外衣可以换，结构并不会。</p>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

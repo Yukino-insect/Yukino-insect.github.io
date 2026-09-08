@@ -1,0 +1,1272 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>函数调用与栈：RISC-V ABI、sp、ra 和栈帧 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="call start 不是一句普通跳转，而是一份调用双方必须遵守的合同：参数放在哪里？结果从哪里取？哪些寄存器可被覆盖？局部变量放哪儿？函数再调用函数时，原先的返回地址怎样保存？这些规则属于 ABI 的调用约定。
+理解调用约定与栈，才能理解 xv6 为什么必须先设置 sp 再调用第一个 C 函数。没有栈，跳转本身或许还能发生；但 C 函数的第一段编译结果就可能需要保存寄存器和创建局部变量，于是会立即写向一个未定义地址。
+一、ABI：二进制模块间的共同语言 ABI（Application Binary Interface，应用二进制接口）约定独立编译的代码怎样协作，包括：
+参数与返回值所在的寄存器或栈位置； 调用者和被调用者各自负责保存哪些寄存器； 栈的增长方向与对齐； 数据类型、结构体和 ELF 的二进制布局。 没有 ABI，C 编译器生成的代码无法可靠调用手写汇编；函数名相同远远不够，双方还必须对调用瞬间的寄存器与栈状态拥有同一理解。
+二、call、ra 与 ret 概念上，函数调用做两件事：
+ra = 调用点后下一条指令的地址 PC = 被调用函数入口地址 汇编常写：
+call start 返回地址保存于 ra（x1）。函数完成后：
+ret 会跳回 ra 指向的位置。
+为什么需要保存 ra 若 f 被调用后又调用 g，第二次 call 会改写 ra。所以 f 若还要返回给最初调用者，必须在调用 g 前保存旧 ra：
+f: addi sp, sp, -16 sd ra, 8(sp) call g ld ra, 8(sp) addi sp, sp, 16 ret 这就是嵌套调用必须使用栈的最直接理由。
+三、栈与 sp：函数的临时工作区 栈通常保存返回地址、局部变量、被调用者保存寄存器、额外参数和临时空间。RISC-V 使用 sp（x2）保存栈顶，并且栈向低地址增长：
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/assembly/04-%E5%87%BD%E6%95%B0%E8%B0%83%E7%94%A8%E4%B8%8E%E6%A0%88risc-v-abispra-%E5%92%8C%E6%A0%88%E5%B8%A7/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/assembly/04-%E5%87%BD%E6%95%B0%E8%B0%83%E7%94%A8%E4%B8%8E%E6%A0%88risc-v-abispra-%E5%92%8C%E6%A0%88%E5%B8%A7/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="函数调用与栈：RISC-V ABI、sp、ra 和栈帧">
+  <meta property="og:description" content="call start 不是一句普通跳转，而是一份调用双方必须遵守的合同：参数放在哪里？结果从哪里取？哪些寄存器可被覆盖？局部变量放哪儿？函数再调用函数时，原先的返回地址怎样保存？这些规则属于 ABI 的调用约定。
+理解调用约定与栈，才能理解 xv6 为什么必须先设置 sp 再调用第一个 C 函数。没有栈，跳转本身或许还能发生；但 C 函数的第一段编译结果就可能需要保存寄存器和创建局部变量，于是会立即写向一个未定义地址。
+一、ABI：二进制模块间的共同语言 ABI（Application Binary Interface，应用二进制接口）约定独立编译的代码怎样协作，包括：
+参数与返回值所在的寄存器或栈位置； 调用者和被调用者各自负责保存哪些寄存器； 栈的增长方向与对齐； 数据类型、结构体和 ELF 的二进制布局。 没有 ABI，C 编译器生成的代码无法可靠调用手写汇编；函数名相同远远不够，双方还必须对调用瞬间的寄存器与栈状态拥有同一理解。
+二、call、ra 与 ret 概念上，函数调用做两件事：
+ra = 调用点后下一条指令的地址 PC = 被调用函数入口地址 汇编常写：
+call start 返回地址保存于 ra（x1）。函数完成后：
+ret 会跳回 ra 指向的位置。
+为什么需要保存 ra 若 f 被调用后又调用 g，第二次 call 会改写 ra。所以 f 若还要返回给最初调用者，必须在调用 g 前保存旧 ra：
+f: addi sp, sp, -16 sd ra, 8(sp) call g ld ra, 8(sp) addi sp, sp, 16 ret 这就是嵌套调用必须使用栈的最直接理由。
+三、栈与 sp：函数的临时工作区 栈通常保存返回地址、局部变量、被调用者保存寄存器、额外参数和临时空间。RISC-V 使用 sp（x2）保存栈顶，并且栈向低地址增长：">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="assembly">
+    <meta property="article:published_time" content="2026-09-08T18:43:00+08:00">
+    <meta property="article:modified_time" content="2026-09-08T18:43:00+08:00">
+
+  
+  <meta itemprop="name" content="函数调用与栈：RISC-V ABI、sp、ra 和栈帧">
+  <meta itemprop="description" content="call start 不是一句普通跳转，而是一份调用双方必须遵守的合同：参数放在哪里？结果从哪里取？哪些寄存器可被覆盖？局部变量放哪儿？函数再调用函数时，原先的返回地址怎样保存？这些规则属于 ABI 的调用约定。
+理解调用约定与栈，才能理解 xv6 为什么必须先设置 sp 再调用第一个 C 函数。没有栈，跳转本身或许还能发生；但 C 函数的第一段编译结果就可能需要保存寄存器和创建局部变量，于是会立即写向一个未定义地址。
+一、ABI：二进制模块间的共同语言 ABI（Application Binary Interface，应用二进制接口）约定独立编译的代码怎样协作，包括：
+参数与返回值所在的寄存器或栈位置； 调用者和被调用者各自负责保存哪些寄存器； 栈的增长方向与对齐； 数据类型、结构体和 ELF 的二进制布局。 没有 ABI，C 编译器生成的代码无法可靠调用手写汇编；函数名相同远远不够，双方还必须对调用瞬间的寄存器与栈状态拥有同一理解。
+二、call、ra 与 ret 概念上，函数调用做两件事：
+ra = 调用点后下一条指令的地址 PC = 被调用函数入口地址 汇编常写：
+call start 返回地址保存于 ra（x1）。函数完成后：
+ret 会跳回 ra 指向的位置。
+为什么需要保存 ra 若 f 被调用后又调用 g，第二次 call 会改写 ra。所以 f 若还要返回给最初调用者，必须在调用 g 前保存旧 ra：
+f: addi sp, sp, -16 sd ra, 8(sp) call g ld ra, 8(sp) addi sp, sp, 16 ret 这就是嵌套调用必须使用栈的最直接理由。
+三、栈与 sp：函数的临时工作区 栈通常保存返回地址、局部变量、被调用者保存寄存器、额外参数和临时空间。RISC-V 使用 sp（x2）保存栈顶，并且栈向低地址增长：">
+  <meta itemprop="datePublished" content="2026-09-08T18:43:00+08:00">
+  <meta itemprop="dateModified" content="2026-09-08T18:43:00+08:00">
+  <meta itemprop="wordCount" content="299">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="函数调用与栈：RISC-V ABI、sp、ra 和栈帧">
+  <meta name="twitter:description" content="call start 不是一句普通跳转，而是一份调用双方必须遵守的合同：参数放在哪里？结果从哪里取？哪些寄存器可被覆盖？局部变量放哪儿？函数再调用函数时，原先的返回地址怎样保存？这些规则属于 ABI 的调用约定。
+理解调用约定与栈，才能理解 xv6 为什么必须先设置 sp 再调用第一个 C 函数。没有栈，跳转本身或许还能发生；但 C 函数的第一段编译结果就可能需要保存寄存器和创建局部变量，于是会立即写向一个未定义地址。
+一、ABI：二进制模块间的共同语言 ABI（Application Binary Interface，应用二进制接口）约定独立编译的代码怎样协作，包括：
+参数与返回值所在的寄存器或栈位置； 调用者和被调用者各自负责保存哪些寄存器； 栈的增长方向与对齐； 数据类型、结构体和 ELF 的二进制布局。 没有 ABI，C 编译器生成的代码无法可靠调用手写汇编；函数名相同远远不够，双方还必须对调用瞬间的寄存器与栈状态拥有同一理解。
+二、call、ra 与 ret 概念上，函数调用做两件事：
+ra = 调用点后下一条指令的地址 PC = 被调用函数入口地址 汇编常写：
+call start 返回地址保存于 ra（x1）。函数完成后：
+ret 会跳回 ra 指向的位置。
+为什么需要保存 ra 若 f 被调用后又调用 g，第二次 call 会改写 ra。所以 f 若还要返回给最初调用者，必须在调用 g 前保存旧 ra：
+f: addi sp, sp, -16 sd ra, 8(sp) call g ld ra, 8(sp) addi sp, sp, 16 ret 这就是嵌套调用必须使用栈的最直接理由。
+三、栈与 sp：函数的临时工作区 栈通常保存返回地址、局部变量、被调用者保存寄存器、额外参数和临时空间。RISC-V 使用 sp（x2）保存栈顶，并且栈向低地址增长：">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">函数调用与栈：RISC-V ABI、sp、ra 和栈帧</h1>
+
+    
+      <div class="post-date">September 8, 2026</div>
+    
+
+    <div class="post-content">
+      <p><code>call start</code> 不是一句普通跳转，而是一份调用双方必须遵守的合同：参数放在哪里？结果从哪里取？哪些寄存器可被覆盖？局部变量放哪儿？函数再调用函数时，原先的返回地址怎样保存？这些规则属于 ABI 的调用约定。</p>
+<p>理解调用约定与栈，才能理解 xv6 为什么必须先设置 <code>sp</code> 再调用第一个 C 函数。没有栈，跳转本身或许还能发生；但 C 函数的第一段编译结果就可能需要保存寄存器和创建局部变量，于是会立即写向一个未定义地址。</p>
+<h2 id="一abi二进制模块间的共同语言">一、ABI：二进制模块间的共同语言</h2>
+<p>ABI（Application Binary Interface，应用二进制接口）约定独立编译的代码怎样协作，包括：</p>
+<ul>
+<li>参数与返回值所在的寄存器或栈位置；</li>
+<li>调用者和被调用者各自负责保存哪些寄存器；</li>
+<li>栈的增长方向与对齐；</li>
+<li>数据类型、结构体和 ELF 的二进制布局。</li>
+</ul>
+<p>没有 ABI，C 编译器生成的代码无法可靠调用手写汇编；函数名相同远远不够，双方还必须对调用瞬间的寄存器与栈状态拥有同一理解。</p>
+<h2 id="二callra-与-ret">二、<code>call</code>、<code>ra</code> 与 <code>ret</code></h2>
+<p>概念上，函数调用做两件事：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">ra = 调用点后下一条指令的地址
+</span></span><span class="line"><span class="cl">PC = 被调用函数入口地址
+</span></span></code></pre></div><p>汇编常写：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-asm" data-lang="asm"><span class="line"><span class="cl"><span class="nf">call</span>    <span class="no">start</span>
+</span></span></code></pre></div><p>返回地址保存于 <code>ra</code>（<code>x1</code>）。函数完成后：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-asm" data-lang="asm"><span class="line"><span class="cl"><span class="nf">ret</span>
+</span></span></code></pre></div><p>会跳回 <code>ra</code> 指向的位置。</p>
+<h3 id="为什么需要保存-ra">为什么需要保存 <code>ra</code></h3>
+<p>若 <code>f</code> 被调用后又调用 <code>g</code>，第二次 <code>call</code> 会改写 <code>ra</code>。所以 <code>f</code> 若还要返回给最初调用者，必须在调用 <code>g</code> 前保存旧 <code>ra</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-asm" data-lang="asm"><span class="line"><span class="cl"><span class="nl">f:</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">addi</span>    <span class="no">sp</span><span class="p">,</span> <span class="no">sp</span><span class="p">,</span> <span class="p">-</span><span class="mi">16</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">sd</span>      <span class="no">ra</span><span class="p">,</span> <span class="mi">8</span><span class="p">(</span><span class="no">sp</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">call</span>    <span class="no">g</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">ld</span>      <span class="no">ra</span><span class="p">,</span> <span class="mi">8</span><span class="p">(</span><span class="no">sp</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">addi</span>    <span class="no">sp</span><span class="p">,</span> <span class="no">sp</span><span class="p">,</span> <span class="mi">16</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">ret</span>
+</span></span></code></pre></div><p>这就是嵌套调用必须使用栈的最直接理由。</p>
+<h2 id="三栈与-sp函数的临时工作区">三、栈与 <code>sp</code>：函数的临时工作区</h2>
+<p>栈通常保存返回地址、局部变量、被调用者保存寄存器、额外参数和临时空间。RISC-V 使用 <code>sp</code>（<code>x2</code>）保存栈顶，并且栈向<strong>低地址</strong>增长：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">高地址：调用前的 sp
+</span></span><span class="line"><span class="cl">  │
+</span></span><span class="line"><span class="cl">  │ addi sp, sp, -32   分配 32 字节栈帧
+</span></span><span class="line"><span class="cl">  ▼
+</span></span><span class="line"><span class="cl">低地址：当前的 sp
+</span></span></code></pre></div><p>若一份可用栈范围为 <code>[low, high)</code>，开始时应令 <code>sp = high</code>。第一次建立栈帧会先减少 <code>sp</code>，随后写入 <code>[sp, old_sp)</code>。把初始 <code>sp</code> 放在 <code>low</code> 会让第一次减法立刻越界。</p>
+<h2 id="四函数序言与尾声">四、函数序言与尾声</h2>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-asm" data-lang="asm"><span class="line"><span class="cl"><span class="nl">work:</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">addi</span>    <span class="no">sp</span><span class="p">,</span> <span class="no">sp</span><span class="p">,</span> <span class="p">-</span><span class="mi">32</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">sd</span>      <span class="no">ra</span><span class="p">,</span> <span class="mi">24</span><span class="p">(</span><span class="no">sp</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">sd</span>      <span class="no">s0</span><span class="p">,</span> <span class="mi">16</span><span class="p">(</span><span class="no">sp</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">addi</span>    <span class="no">s0</span><span class="p">,</span> <span class="no">sp</span><span class="p">,</span> <span class="mi">32</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">        <span class="c1"># 函数主体
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">        <span class="nf">ld</span>      <span class="no">ra</span><span class="p">,</span> <span class="mi">24</span><span class="p">(</span><span class="no">sp</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">ld</span>      <span class="no">s0</span><span class="p">,</span> <span class="mi">16</span><span class="p">(</span><span class="no">sp</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">addi</span>    <span class="no">sp</span><span class="p">,</span> <span class="no">sp</span><span class="p">,</span> <span class="mi">32</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">ret</span>
+</span></span></code></pre></div><p>前半段是函数序言（prologue），后半段是函数尾声（epilogue）。</p>
+<table>
+  <thead>
+      <tr>
+          <th>指令</th>
+          <th>作用</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>addi sp, sp, -32</code></td>
+          <td>分配 32 字节栈帧</td>
+      </tr>
+      <tr>
+          <td><code>sd ra, 24(sp)</code></td>
+          <td>保存返回地址，允许本函数继续调用其他函数</td>
+      </tr>
+      <tr>
+          <td><code>sd s0, 16(sp)</code></td>
+          <td>保存旧 <code>s0</code>，因为 <code>s</code> 寄存器由被调用者恢复</td>
+      </tr>
+      <tr>
+          <td><code>addi s0, sp, 32</code></td>
+          <td>可将 <code>s0</code> 作为帧指针</td>
+      </tr>
+      <tr>
+          <td><code>ld</code>、<code>addi sp, sp, 32</code></td>
+          <td>恢复寄存器并释放栈帧</td>
+      </tr>
+      <tr>
+          <td><code>ret</code></td>
+          <td>使用 <code>ra</code> 返回</td>
+      </tr>
+  </tbody>
+</table>
+<p>优化后的函数不一定有完全相同的形状。叶子函数可能不保存 <code>ra</code>，编译器也可能省略帧指针；ABI 约束的是调用边界的效果，不是要求每个函数机械复制模板。</p>
+<h2 id="五参数返回值与保存责任">五、参数、返回值与保存责任</h2>
+<p>RISC-V 整数调用约定中：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">a0–a7：前八个整数或指针参数
+</span></span><span class="line"><span class="cl">a0、a1：返回值
+</span></span></code></pre></div><p>例如 <code>long sum(long left, long right)</code> 调用前通常让 <code>a0=left</code>、<code>a1=right</code>，返回后结果在 <code>a0</code>。</p>
+<table>
+  <thead>
+      <tr>
+          <th>寄存器类别</th>
+          <th>例子</th>
+          <th>调用后是否保证原值</th>
+          <th>谁保存</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>调用者保存</td>
+          <td><code>a0</code>–<code>a7</code>、<code>t0</code>–<code>t6</code>、<code>ra</code></td>
+          <td>不保证</td>
+          <td>调用者若需要则先保存</td>
+      </tr>
+      <tr>
+          <td>被调用者保存</td>
+          <td><code>s0</code>–<code>s11</code></td>
+          <td>保证</td>
+          <td>被调函数使用时恢复</td>
+      </tr>
+      <tr>
+          <td>特殊</td>
+          <td><code>sp</code></td>
+          <td>返回时必须恢复</td>
+          <td>函数维护自己的栈帧</td>
+      </tr>
+  </tbody>
+</table>
+<p>这解释了 xv6 为什么能用 <code>a0</code>、<code>a1</code> 做栈地址计算：进入 <code>start()</code> 前并没有需要保留的参数值，且 <code>start()</code> 本来就可覆盖它们。</p>
+<h2 id="六16-字节对齐">六、16 字节对齐</h2>
+<p>RISC-V psABI 要求过程调用边界的栈指针满足：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">sp mod 16 = 0
+</span></span></code></pre></div><p>因此栈起始地址和栈帧大小都应保持 16 的倍数。xv6 中 <code>stack0</code> 按 16 字节对齐，每份早期栈大小为 4096（也是 16 的倍数），故每个 hart 得到的栈顶都符合 ABI。</p>
+<p>对齐不是视觉整齐。它影响编译器生成的访问、某些数据类型的要求，以及不同模块间的二进制协作。底层代码不应依赖“某次未对齐访问似乎没出错”的偶然现象。</p>
+<h2 id="七回到-xv6为何顺序不能颠倒">七、回到 xv6：为何顺序不能颠倒</h2>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-asm" data-lang="asm"><span class="line"><span class="cl"><span class="nf">add</span>     <span class="no">sp</span><span class="p">,</span> <span class="no">sp</span><span class="p">,</span> <span class="no">a0</span>
+</span></span><span class="line"><span class="cl"><span class="nf">call</span>    <span class="no">start</span>
+</span></span></code></pre></div><p>前一句使：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">sp = stack0 + 4096 * (mhartid + 1)
+</span></span></code></pre></div><p>即当前 hart 私有栈的高端。此后 <code>start()</code> 的函数序言才可安全减少 <code>sp</code>、保存 <code>ra</code> 和局部变量。若先调用再设置 <code>sp</code>，C 函数最初的栈访问就可能破坏任意内存；它未必立刻崩溃，却更可能将错误延迟到难以关联的位置。</p>
+<h2 id="小结">小结</h2>
+<ul>
+<li><code>call</code> 保存返回地址到 <code>ra</code> 并跳转，<code>ret</code> 使用 <code>ra</code> 返回。</li>
+<li>嵌套调用会覆盖 <code>ra</code>，非叶子函数通常先将它保存到栈。</li>
+<li>栈向低地址增长，<code>sp</code> 初始化在每份栈的高端。</li>
+<li><code>a</code>/<code>t</code> 寄存器通常由调用者保存，<code>s</code> 寄存器由被调用者保存。</li>
+<li>调用边界的 <code>sp</code> 必须 16 字节对齐。</li>
+<li><code>entry.S</code> 在第一次 C 调用前建立 <code>sp</code>，正是在满足这份 ABI 合同。</li>
+</ul>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

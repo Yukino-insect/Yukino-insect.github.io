@@ -1,0 +1,1358 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>多智能体是什么：Codex 如何委派、配置与协同完成任务 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="多智能体（Multi-Agent）并不是让同一个 Agent 把同一句话说很多遍，而是让一个主 Agent 把可独立推进的子任务委派给多个子智能体（subagents），并在它们完成后汇总结果、作出最终判断。在 Codex 中，这种机制通常被称为子智能体工作流（subagent workflow）。
+它最适合代码库探索、PR 审查、日志分析、测试缺口排查、资料核对等可并行的复杂任务。主线程保留需求、约束、决策和最终交付；子线程处理大量中间搜索、命令输出与局部推理，只把经过整理的结论带回。这样做的目的不是制造热闹，而是减少主对话被杂讯淹没的概率。
+本文针对 Codex 的本地客户端（桌面应用、CLI、IDE 扩展）说明。行为与配置依据 OpenAI 官方的 Subagents 文档 ；具体可用模型、界面和账户能力仍应以当前安装版本为准。
+一、先分清几个名词 名词 含义 在协作中的职责 主 Agent 接收用户任务的主线程 拆分任务、委派、汇总、作最终决策与交付 子智能体 被主 Agent 启动的专门 Agent 完成一个有边界的子任务，返回结果摘要 Agent thread 子智能体运行的独立线程 承载搜索、工具调用、日志和中间推理 子智能体工作流 多个子智能体并行后由主 Agent 汇总的过程 协调分工、等待、追问和收口 可以把它理解为一次小型的工程协作：主 Agent 是负责人，子智能体是各自有明确产出的执行者。但它们不是彼此完全隔离的“虚拟团队”。它们仍处在同一任务授权和环境约束之下，最终责任也不会因为分工而凭空消失。
+用户目标 │ ▼ 主 Agent：拆解、约束、汇总 ├── 子智能体 A：探索代码路径 ├── 子智能体 B：运行或检查测试 ├── 子智能体 C：审查安全与边界 └── 子智能体 D：核对外部文档 │ ▼ 主 Agent：合并证据、解决冲突、交付结论 二、它解决的核心问题 即使上下文窗口很大，主对话也不适合长期堆积无关细节：数百条搜索命中、冗长测试日志、失败堆栈和试错记录会掩埋真正的需求。这常被称为上下文污染（context pollution）或上下文退化（context rot）。
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/agent/agentengineering/%E5%A4%9A%E6%99%BA%E8%83%BD%E4%BD%93%E6%98%AF%E4%BB%80%E4%B9%88codex-%E5%A6%82%E4%BD%95%E5%A7%94%E6%B4%BE%E9%85%8D%E7%BD%AE%E4%B8%8E%E5%8D%8F%E5%90%8C%E5%AE%8C%E6%88%90%E4%BB%BB%E5%8A%A1/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/agent/agentengineering/%E5%A4%9A%E6%99%BA%E8%83%BD%E4%BD%93%E6%98%AF%E4%BB%80%E4%B9%88codex-%E5%A6%82%E4%BD%95%E5%A7%94%E6%B4%BE%E9%85%8D%E7%BD%AE%E4%B8%8E%E5%8D%8F%E5%90%8C%E5%AE%8C%E6%88%90%E4%BB%BB%E5%8A%A1/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="多智能体是什么：Codex 如何委派、配置与协同完成任务">
+  <meta property="og:description" content="多智能体（Multi-Agent）并不是让同一个 Agent 把同一句话说很多遍，而是让一个主 Agent 把可独立推进的子任务委派给多个子智能体（subagents），并在它们完成后汇总结果、作出最终判断。在 Codex 中，这种机制通常被称为子智能体工作流（subagent workflow）。
+它最适合代码库探索、PR 审查、日志分析、测试缺口排查、资料核对等可并行的复杂任务。主线程保留需求、约束、决策和最终交付；子线程处理大量中间搜索、命令输出与局部推理，只把经过整理的结论带回。这样做的目的不是制造热闹，而是减少主对话被杂讯淹没的概率。
+本文针对 Codex 的本地客户端（桌面应用、CLI、IDE 扩展）说明。行为与配置依据 OpenAI 官方的 Subagents 文档 ；具体可用模型、界面和账户能力仍应以当前安装版本为准。
+一、先分清几个名词 名词 含义 在协作中的职责 主 Agent 接收用户任务的主线程 拆分任务、委派、汇总、作最终决策与交付 子智能体 被主 Agent 启动的专门 Agent 完成一个有边界的子任务，返回结果摘要 Agent thread 子智能体运行的独立线程 承载搜索、工具调用、日志和中间推理 子智能体工作流 多个子智能体并行后由主 Agent 汇总的过程 协调分工、等待、追问和收口 可以把它理解为一次小型的工程协作：主 Agent 是负责人，子智能体是各自有明确产出的执行者。但它们不是彼此完全隔离的“虚拟团队”。它们仍处在同一任务授权和环境约束之下，最终责任也不会因为分工而凭空消失。
+用户目标 │ ▼ 主 Agent：拆解、约束、汇总 ├── 子智能体 A：探索代码路径 ├── 子智能体 B：运行或检查测试 ├── 子智能体 C：审查安全与边界 └── 子智能体 D：核对外部文档 │ ▼ 主 Agent：合并证据、解决冲突、交付结论 二、它解决的核心问题 即使上下文窗口很大，主对话也不适合长期堆积无关细节：数百条搜索命中、冗长测试日志、失败堆栈和试错记录会掩埋真正的需求。这常被称为上下文污染（context pollution）或上下文退化（context rot）。">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="agent">
+    <meta property="article:published_time" content="2026-08-28T18:00:00+08:00">
+    <meta property="article:modified_time" content="2026-08-28T18:00:00+08:00">
+
+  
+  <meta itemprop="name" content="多智能体是什么：Codex 如何委派、配置与协同完成任务">
+  <meta itemprop="description" content="多智能体（Multi-Agent）并不是让同一个 Agent 把同一句话说很多遍，而是让一个主 Agent 把可独立推进的子任务委派给多个子智能体（subagents），并在它们完成后汇总结果、作出最终判断。在 Codex 中，这种机制通常被称为子智能体工作流（subagent workflow）。
+它最适合代码库探索、PR 审查、日志分析、测试缺口排查、资料核对等可并行的复杂任务。主线程保留需求、约束、决策和最终交付；子线程处理大量中间搜索、命令输出与局部推理，只把经过整理的结论带回。这样做的目的不是制造热闹，而是减少主对话被杂讯淹没的概率。
+本文针对 Codex 的本地客户端（桌面应用、CLI、IDE 扩展）说明。行为与配置依据 OpenAI 官方的 Subagents 文档 ；具体可用模型、界面和账户能力仍应以当前安装版本为准。
+一、先分清几个名词 名词 含义 在协作中的职责 主 Agent 接收用户任务的主线程 拆分任务、委派、汇总、作最终决策与交付 子智能体 被主 Agent 启动的专门 Agent 完成一个有边界的子任务，返回结果摘要 Agent thread 子智能体运行的独立线程 承载搜索、工具调用、日志和中间推理 子智能体工作流 多个子智能体并行后由主 Agent 汇总的过程 协调分工、等待、追问和收口 可以把它理解为一次小型的工程协作：主 Agent 是负责人，子智能体是各自有明确产出的执行者。但它们不是彼此完全隔离的“虚拟团队”。它们仍处在同一任务授权和环境约束之下，最终责任也不会因为分工而凭空消失。
+用户目标 │ ▼ 主 Agent：拆解、约束、汇总 ├── 子智能体 A：探索代码路径 ├── 子智能体 B：运行或检查测试 ├── 子智能体 C：审查安全与边界 └── 子智能体 D：核对外部文档 │ ▼ 主 Agent：合并证据、解决冲突、交付结论 二、它解决的核心问题 即使上下文窗口很大，主对话也不适合长期堆积无关细节：数百条搜索命中、冗长测试日志、失败堆栈和试错记录会掩埋真正的需求。这常被称为上下文污染（context pollution）或上下文退化（context rot）。">
+  <meta itemprop="datePublished" content="2026-08-28T18:00:00+08:00">
+  <meta itemprop="dateModified" content="2026-08-28T18:00:00+08:00">
+  <meta itemprop="wordCount" content="350">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="多智能体是什么：Codex 如何委派、配置与协同完成任务">
+  <meta name="twitter:description" content="多智能体（Multi-Agent）并不是让同一个 Agent 把同一句话说很多遍，而是让一个主 Agent 把可独立推进的子任务委派给多个子智能体（subagents），并在它们完成后汇总结果、作出最终判断。在 Codex 中，这种机制通常被称为子智能体工作流（subagent workflow）。
+它最适合代码库探索、PR 审查、日志分析、测试缺口排查、资料核对等可并行的复杂任务。主线程保留需求、约束、决策和最终交付；子线程处理大量中间搜索、命令输出与局部推理，只把经过整理的结论带回。这样做的目的不是制造热闹，而是减少主对话被杂讯淹没的概率。
+本文针对 Codex 的本地客户端（桌面应用、CLI、IDE 扩展）说明。行为与配置依据 OpenAI 官方的 Subagents 文档 ；具体可用模型、界面和账户能力仍应以当前安装版本为准。
+一、先分清几个名词 名词 含义 在协作中的职责 主 Agent 接收用户任务的主线程 拆分任务、委派、汇总、作最终决策与交付 子智能体 被主 Agent 启动的专门 Agent 完成一个有边界的子任务，返回结果摘要 Agent thread 子智能体运行的独立线程 承载搜索、工具调用、日志和中间推理 子智能体工作流 多个子智能体并行后由主 Agent 汇总的过程 协调分工、等待、追问和收口 可以把它理解为一次小型的工程协作：主 Agent 是负责人，子智能体是各自有明确产出的执行者。但它们不是彼此完全隔离的“虚拟团队”。它们仍处在同一任务授权和环境约束之下，最终责任也不会因为分工而凭空消失。
+用户目标 │ ▼ 主 Agent：拆解、约束、汇总 ├── 子智能体 A：探索代码路径 ├── 子智能体 B：运行或检查测试 ├── 子智能体 C：审查安全与边界 └── 子智能体 D：核对外部文档 │ ▼ 主 Agent：合并证据、解决冲突、交付结论 二、它解决的核心问题 即使上下文窗口很大，主对话也不适合长期堆积无关细节：数百条搜索命中、冗长测试日志、失败堆栈和试错记录会掩埋真正的需求。这常被称为上下文污染（context pollution）或上下文退化（context rot）。">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">多智能体是什么：Codex 如何委派、配置与协同完成任务</h1>
+
+    
+      <div class="post-date">August 28, 2026</div>
+    
+
+    <div class="post-content">
+      <p>多智能体（Multi-Agent）并不是让同一个 Agent 把同一句话说很多遍，而是让一个<strong>主 Agent</strong> 把可独立推进的子任务委派给多个<strong>子智能体</strong>（subagents），并在它们完成后汇总结果、作出最终判断。在 Codex 中，这种机制通常被称为<strong>子智能体工作流</strong>（subagent workflow）。</p>
+<p>它最适合代码库探索、PR 审查、日志分析、测试缺口排查、资料核对等可并行的复杂任务。主线程保留需求、约束、决策和最终交付；子线程处理大量中间搜索、命令输出与局部推理，只把经过整理的结论带回。这样做的目的不是制造热闹，而是减少主对话被杂讯淹没的概率。</p>
+<p>本文针对 Codex 的本地客户端（桌面应用、CLI、IDE 扩展）说明。行为与配置依据 OpenAI 官方的 <a href="https://learn.chatgpt.com/docs/agent-configuration/subagents">Subagents 文档</a>
+；具体可用模型、界面和账户能力仍应以当前安装版本为准。</p>
+<h2 id="一先分清几个名词">一、先分清几个名词</h2>
+<table>
+  <thead>
+      <tr>
+          <th>名词</th>
+          <th>含义</th>
+          <th>在协作中的职责</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>主 Agent</td>
+          <td>接收用户任务的主线程</td>
+          <td>拆分任务、委派、汇总、作最终决策与交付</td>
+      </tr>
+      <tr>
+          <td>子智能体</td>
+          <td>被主 Agent 启动的专门 Agent</td>
+          <td>完成一个有边界的子任务，返回结果摘要</td>
+      </tr>
+      <tr>
+          <td>Agent thread</td>
+          <td>子智能体运行的独立线程</td>
+          <td>承载搜索、工具调用、日志和中间推理</td>
+      </tr>
+      <tr>
+          <td>子智能体工作流</td>
+          <td>多个子智能体并行后由主 Agent 汇总的过程</td>
+          <td>协调分工、等待、追问和收口</td>
+      </tr>
+  </tbody>
+</table>
+<p>可以把它理解为一次小型的工程协作：主 Agent 是负责人，子智能体是各自有明确产出的执行者。但它们不是彼此完全隔离的“虚拟团队”。它们仍处在同一任务授权和环境约束之下，最终责任也不会因为分工而凭空消失。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">用户目标
+</span></span><span class="line"><span class="cl">   │
+</span></span><span class="line"><span class="cl">   ▼
+</span></span><span class="line"><span class="cl">主 Agent：拆解、约束、汇总
+</span></span><span class="line"><span class="cl">   ├── 子智能体 A：探索代码路径
+</span></span><span class="line"><span class="cl">   ├── 子智能体 B：运行或检查测试
+</span></span><span class="line"><span class="cl">   ├── 子智能体 C：审查安全与边界
+</span></span><span class="line"><span class="cl">   └── 子智能体 D：核对外部文档
+</span></span><span class="line"><span class="cl">   │
+</span></span><span class="line"><span class="cl">   ▼
+</span></span><span class="line"><span class="cl">主 Agent：合并证据、解决冲突、交付结论
+</span></span></code></pre></div><h2 id="二它解决的核心问题">二、它解决的核心问题</h2>
+<p>即使上下文窗口很大，主对话也不适合长期堆积无关细节：数百条搜索命中、冗长测试日志、失败堆栈和试错记录会掩埋真正的需求。这常被称为<strong>上下文污染</strong>（context pollution）或<strong>上下文退化</strong>（context rot）。</p>
+<p>子智能体将这类噪声留在各自线程中，再返回文件引用、验证结果、风险等级和简短结论。于是主线程能够持续聚焦：</p>
+<ul>
+<li>用户真正要解决的问题是什么；</li>
+<li>方案之间有什么冲突与取舍；</li>
+<li>哪些结论有证据，哪些仍需确认；</li>
+<li>最终应改什么、验证什么、向用户说明什么。</li>
+</ul>
+<p>并行也可能缩短墙钟时间。例如，安全审查、测试缺口检查和依赖文档核对互不依赖时，没有理由让它们排队等待。不过每个子智能体都会进行自己的模型和工具调用，token、时间和工具开销并不会神奇地消失。</p>
+<h2 id="三什么时候值得使用多智能体">三、什么时候值得使用多智能体</h2>
+<p>适合的任务有一个共同特点：能拆成<strong>相对独立、输入明确、输出可合并</strong>的工作包。</p>
+<table>
+  <thead>
+      <tr>
+          <th>场景</th>
+          <th>合理分工</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Pull Request 审查</td>
+          <td>安全风险、行为回归、测试缺口、可维护性分别检查</td>
+      </tr>
+      <tr>
+          <td>陌生代码库定位问题</td>
+          <td>一个 Agent 绘制调用链，一个复现或读日志，一个核对配置</td>
+      </tr>
+      <tr>
+          <td>多步骤功能方案</td>
+          <td>分别调研现状、接口契约、数据模型、测试计划，再由主 Agent 整合</td>
+      </tr>
+      <tr>
+          <td>文档与迁移核对</td>
+          <td>分别检查 API 文档、兼容性、受影响模块和回滚方案</td>
+      </tr>
+      <tr>
+          <td>大量只读资料分析</td>
+          <td>按模块、主题或文件集合并行归纳，返回带来源的摘要</td>
+      </tr>
+  </tbody>
+</table>
+<p>不适合的任务同样需要直说：</p>
+<ul>
+<li>一个文件里的小修复，拆分成本通常高于收益；</li>
+<li>子任务高度串行，后一步必须依赖前一步的精确结果；</li>
+<li>多个 Agent 会同时改同一批文件；</li>
+<li>问题本身尚未定义清楚，连主 Agent 都不知道应该委派什么。</li>
+</ul>
+<p>官方建议优先将<strong>只读型</strong>工作并行化，例如探索、测试、分诊和总结；对并行写入则要谨慎，因为冲突和协调成本会迅速抵消速度优势。先并行调查，再由一个明确负责人实施修改，通常更稳定。</p>
+<h2 id="四codex-如何开启和触发子智能体">四、Codex 如何开启和触发子智能体</h2>
+<p>当前 Codex 版本默认启用子智能体工作流。最直接、也最可控的方式是在任务中明确说明要怎样委派：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">审查当前分支相对 main 的改动。
+</span></span><span class="line"><span class="cl">并行启动三个子智能体：
+</span></span><span class="line"><span class="cl">1. 审查安全问题和权限边界；
+</span></span><span class="line"><span class="cl">2. 检查行为回归与缺失测试；
+</span></span><span class="line"><span class="cl">3. 评估可维护性和文档影响。
+</span></span><span class="line"><span class="cl">等待三者全部完成后，按类别汇总真实问题；每项附文件位置、影响和复现或验证依据。
+</span></span><span class="line"><span class="cl">不要直接修改代码。
+</span></span></code></pre></div><p>这样的指令包含了五件重要的事：任务如何拆分、每人负责什么、是否需要等待全部结果、返回什么格式、是否允许写入。只说“开几个 Agent 看看”当然也能得到结果，只是结果大概也会相应地随意一些。</p>
+<p>不同客户端的入口如下：</p>
+<table>
+  <thead>
+      <tr>
+          <th>使用位置</th>
+          <th>触发与查看方式</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Codex 桌面应用聊天</td>
+          <td>直接要求委派独立子任务；可打开每条子线程查看进度与结果</td>
+      </tr>
+      <tr>
+          <td>Codex CLI 交互会话</td>
+          <td>直接要求使用子智能体；使用 <code>/agent</code> 查看或切换 Agent thread</td>
+      </tr>
+      <tr>
+          <td>Codex IDE 扩展</td>
+          <td>直接要求并行委派；支持时可从编辑器上方的后台 Agent 面板检查状态</td>
+      </tr>
+  </tbody>
+</table>
+<p>除了直接要求，适用的 <code>AGENTS.md</code> 或 Skill 也可以要求 Codex 在满足条件时委派工作。对于团队习惯，建议把委派规则限制得具体一些，例如“PR 审查且改动超过三个模块时，并行执行只读审查”；不要写成“所有任务都必须开五个 Agent”，那只是把成本制度化。</p>
+<h2 id="五用-configtoml-显式配置">五、用 <code>config.toml</code> 显式配置</h2>
+<p>默认启用并不意味着不能管理。可以在用户级 <code>~/.codex/config.toml</code>，或受信任项目的 <code>.codex/config.toml</code> 中设置全局子智能体选项：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-toml" data-lang="toml"><span class="line"><span class="cl"><span class="p">[</span><span class="nx">agents</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl"><span class="nx">enabled</span> <span class="p">=</span> <span class="kc">true</span>
+</span></span><span class="line"><span class="cl"><span class="nx">max_concurrent_threads_per_session</span> <span class="p">=</span> <span class="mi">4</span>
+</span></span><span class="line"><span class="cl"><span class="nx">default_subagent_model</span> <span class="p">=</span> <span class="s2">&#34;gpt-5.6-terra&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="nx">default_subagent_reasoning_effort</span> <span class="p">=</span> <span class="s2">&#34;medium&#34;</span>
+</span></span></code></pre></div><p>字段含义如下：</p>
+<table>
+  <thead>
+      <tr>
+          <th>字段</th>
+          <th>作用</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>agents.enabled</code></td>
+          <td>是否启用多智能体工具；当前默认值为 <code>true</code></td>
+      </tr>
+      <tr>
+          <td><code>agents.max_concurrent_threads_per_session</code></td>
+          <td>单个主会话最多并发打开多少个子线程，不计主线程</td>
+      </tr>
+      <tr>
+          <td><code>agents.default_subagent_model</code></td>
+          <td>未显式指定时，子智能体使用的默认模型</td>
+      </tr>
+      <tr>
+          <td><code>agents.default_subagent_reasoning_effort</code></td>
+          <td>未显式指定时，子智能体使用的默认推理强度</td>
+      </tr>
+      <tr>
+          <td><code>agents.interrupt_message</code></td>
+          <td>子线程被中断时，是否记录模型可见的中断消息</td>
+      </tr>
+  </tbody>
+</table>
+<p>实际模型名称和可用推理档位会随版本与账户而变化，所以配置前应检查本机支持项。若不设置模型和推理强度，子智能体会继承父 Agent 的配置。显式的本次 spawn 参数优先于这些默认值。</p>
+<p>如果需要临时关闭多智能体，不必删除自定义 Agent 文件，只需设置：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-toml" data-lang="toml"><span class="line"><span class="cl"><span class="p">[</span><span class="nx">agents</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl"><span class="nx">enabled</span> <span class="p">=</span> <span class="kc">false</span>
+</span></span></code></pre></div><h2 id="六如何创建专门的自定义-agent">六、如何创建专门的自定义 Agent</h2>
+<p>内置 Agent 通常包含通用的 <code>default</code>、偏执行的 <code>worker</code> 和偏只读探索的 <code>explorer</code>。当团队有稳定而狭窄的分工时，可以为项目创建自定义 Agent：将一个 TOML 文件放在 <code>.codex/agents/</code>；个人跨项目复用则放在 <code>~/.codex/agents/</code>。</p>
+<p>每个自定义 Agent 至少要定义 <code>name</code>、<code>description</code> 和 <code>developer_instructions</code>。以下是一个仅用于 PR 审查的项目级示例：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-toml" data-lang="toml"><span class="line"><span class="cl"><span class="c"># .codex/agents/pr-reviewer.toml</span>
+</span></span><span class="line"><span class="cl"><span class="nx">name</span> <span class="p">=</span> <span class="s2">&#34;pr_reviewer&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="nx">description</span> <span class="p">=</span> <span class="s2">&#34;只读 PR 审查员，关注正确性、安全风险和缺失测试。&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="nx">model_reasoning_effort</span> <span class="p">=</span> <span class="s2">&#34;high&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="nx">sandbox_mode</span> <span class="p">=</span> <span class="s2">&#34;read-only&#34;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">developer_instructions</span> <span class="p">=</span> <span class="s2">&#34;&#34;&#34;
+</span></span></span><span class="line"><span class="cl"><span class="s2">审查当前改动中可证明的行为回归、安全问题和测试缺口。
+</span></span></span><span class="line"><span class="cl"><span class="s2">每项发现必须包含文件位置、影响说明和复现或推理依据。
+</span></span></span><span class="line"><span class="cl"><span class="s2">忽略纯风格偏好；不要修改文件，不要执行有外部副作用的操作。
+</span></span></span><span class="line"><span class="cl"><span class="s2">&#34;&#34;&#34;</span>
+</span></span></code></pre></div><p>随后可以用清楚的角色名委派：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">审查这个分支：让 pr_reviewer 寻找真实风险，让 explorer 绘制受影响的调用链。
+</span></span><span class="line"><span class="cl">等待两者完成后，按严重程度整理结果；不要修复。
+</span></span></code></pre></div><p>自定义 Agent 的价值不在于给模型换一个响亮称号，而在于固定<strong>职责、工具面、权限和输出标准</strong>。越窄、越可验证的 Agent，通常越容易调度和维护。</p>
+<h2 id="七模型与推理强度怎样搭配">七、模型与推理强度怎样搭配</h2>
+<p>不要让所有子智能体都使用同样昂贵的配置。工作负载不同，适合的速度、深度和成本也不同。</p>
+<table>
+  <thead>
+      <tr>
+          <th>子任务类型</th>
+          <th>常见选择思路</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>大范围搜索、文件盘点、日志筛选</td>
+          <td>选更快、较低成本的模型和中低推理强度</td>
+      </tr>
+      <tr>
+          <td>安全审查、复杂逻辑追踪、竞态分析</td>
+          <td>选更强模型与较高推理强度</td>
+      </tr>
+      <tr>
+          <td>格式检查、固定模板转换、批量摘要</td>
+          <td>选较轻量的模型与低推理强度</td>
+      </tr>
+      <tr>
+          <td>主 Agent 的最终整合</td>
+          <td>保留足够推理能力，负责处理冲突和缺失证据</td>
+      </tr>
+  </tbody>
+</table>
+<p>官方文档将更高推理强度与更高耗时、token 使用相关联。实务上可以先用少量轻量只读 Agent 收集证据，再让主 Agent 或一个高强度审查 Agent 对关键风险复核，而不是在所有地方都堆满最大配置。</p>
+<h2 id="八权限审批与写入冲突">八、权限、审批与写入冲突</h2>
+<p>子智能体继承父任务当前的沙箱和审批策略，也会继承父 Agent 可用的工具。它们不能因为“是子线程”就绕过用户批准；非交互流程中，如果新动作需要审批却无法展示请求，操作会失败并把错误返回主工作流。</p>
+<p>因此，开始委派前先在主任务确定权限模式。对于探索、审查、核对和日志分析，优先设置只读；对于实施修改，最好指定单一写入负责人，并让其他 Agent 只提供证据。下面这种分工比四个 Agent 同时改一个目录可靠得多：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">并行：explorer 定位调用链，test_auditor 找测试缺口，docs_researcher 核对 API。
+</span></span><span class="line"><span class="cl">汇总后：仅 worker 根据已经确认的结论实施最小修复并运行相关验证。
+</span></span></code></pre></div><p>多智能体不会替你解决代码冲突、需求冲突或权限冲突。它只会更快地把这些冲突暴露出来。这个事实并不浪漫，但相当有用。</p>
+<h2 id="九一套可直接复用的工作模板">九、一套可直接复用的工作模板</h2>
+<p>对中等规模的修复或审查任务，可以从下面模板开始：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">目标：&lt;要解决或审查的问题&gt;。
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">请并行委派下列独立子任务：
+</span></span><span class="line"><span class="cl">1. &lt;角色 A&gt;：输入 &lt;范围&gt;，输出 &lt;证据和结论&gt;，不修改文件。
+</span></span><span class="line"><span class="cl">2. &lt;角色 B&gt;：输入 &lt;范围&gt;，输出 &lt;证据和结论&gt;，不修改文件。
+</span></span><span class="line"><span class="cl">3. &lt;角色 C&gt;：输入 &lt;范围&gt;，输出 &lt;证据和结论&gt;，不修改文件。
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">等待全部结果后：
+</span></span><span class="line"><span class="cl">- 合并重复发现，说明相互矛盾的结论；
+</span></span><span class="line"><span class="cl">- 按严重程度输出，附文件位置和验证依据；
+</span></span><span class="line"><span class="cl">- 仅在证据足够时提出修复方案；
+</span></span><span class="line"><span class="cl">- &lt;是否允许写入、测试、提交、部署等边界&gt;。
+</span></span></code></pre></div><p>这里最值得保留的是“输入、输出、边界、等待与收口”五项。没有收口要求时，子智能体可能各自完成得不错，主 Agent 却没有把结果组织成你真正需要的结论。</p>
+<h2 id="十落地检查清单">十、落地检查清单</h2>
+<ul>
+<li>子任务是否真的互不依赖，能否并行？</li>
+<li>每个 Agent 是否有清晰的输入范围、职责边界与可验收输出？</li>
+<li>是否优先让并行 Agent 做只读工作？</li>
+<li>是否限制了并发数量，避免无意义地增加 token 与工具开销？</li>
+<li>父任务的沙箱、审批和外部工具权限是否合适？</li>
+<li>谁负责最终整合，谁拥有实际写入权？</li>
+<li>是否要求返回文件引用、命令结果或其他可复核证据？</li>
+</ul>
+<p>多智能体的重点从来不是“Agent 数量”，而是<strong>可并行的工作划分与可靠的汇总机制</strong>。先让一个主 Agent 把任务边界理清，再让多个子智能体处理互不阻塞的部分；这比让一群 Agent 同时奔向同一处模糊目标，更接近真正的协作。</p>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

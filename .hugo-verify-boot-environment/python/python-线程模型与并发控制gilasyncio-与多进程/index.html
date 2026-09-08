@@ -1,0 +1,1451 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Python 线程模型与并发控制：GIL、asyncio 与多进程 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="Python 的并发讨论常被一句“有 GIL，所以不用锁”带偏。那句话既不完整，也不适合当作设计依据：GIL 是 CPython 的实现机制，不是整个 Python 语言的同步模型；即使在常规 CPython 中，它也不能把多个 Python 语句组成的业务操作变成原子的；而从 Python 3.13 起，CPython 还提供了可禁用 GIL 的自由线程构建。
+选择并发模型前，先回答任务在等待什么：等待网络、磁盘、数据库等 I/O，还是持续占用 CPU 计算？随后再决定使用线程、asyncio 协程、多进程，或它们的组合。正确的同步工具取决于共享的是什么、谁拥有它，而不是取决于 API 名字里是否带有 “async”。
+一、三个概念：并发、并行与执行单元 并发表示多个任务的执行期重叠，它们可以在一个 CPU 核上轮流推进。并行表示多个任务在不同核心上同一时刻计算。Python 常见的执行单元有三种：
+执行单元 调度者 内存关系 典型用途 OS 线程（threading） 操作系统 同一进程内共享对象 阻塞 I/O、调用阻塞库 协程/任务（asyncio.Task） 事件循环 通常同一线程内共享对象 大量异步 I/O 进程（multiprocessing） 操作系统 默认隔离，需要序列化或显式共享 CPU 密集型计算、隔离 一个进程 ├─ 线程 A ─┬─ asyncio 事件循环 ─ Task 1 / Task 2 / Task 3 │ └─ Python 对象、文件句柄、连接池等进程资源 └─ 线程 B ─── 可访问同一批 Python 对象 另一个进程 ─── 独立解释器与地址空间 协程不是线程，await 也不是把工作丢给新线程。默认事件循环通常在一个线程中运行；协程只有在 await 一个能挂起的对象、或主动把控制权交回事件循环时，其他任务才有机会运行。
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/python/python-%E7%BA%BF%E7%A8%8B%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%B9%B6%E5%8F%91%E6%8E%A7%E5%88%B6gilasyncio-%E4%B8%8E%E5%A4%9A%E8%BF%9B%E7%A8%8B/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/python/python-%E7%BA%BF%E7%A8%8B%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%B9%B6%E5%8F%91%E6%8E%A7%E5%88%B6gilasyncio-%E4%B8%8E%E5%A4%9A%E8%BF%9B%E7%A8%8B/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="Python 线程模型与并发控制：GIL、asyncio 与多进程">
+  <meta property="og:description" content="Python 的并发讨论常被一句“有 GIL，所以不用锁”带偏。那句话既不完整，也不适合当作设计依据：GIL 是 CPython 的实现机制，不是整个 Python 语言的同步模型；即使在常规 CPython 中，它也不能把多个 Python 语句组成的业务操作变成原子的；而从 Python 3.13 起，CPython 还提供了可禁用 GIL 的自由线程构建。
+选择并发模型前，先回答任务在等待什么：等待网络、磁盘、数据库等 I/O，还是持续占用 CPU 计算？随后再决定使用线程、asyncio 协程、多进程，或它们的组合。正确的同步工具取决于共享的是什么、谁拥有它，而不是取决于 API 名字里是否带有 “async”。
+一、三个概念：并发、并行与执行单元 并发表示多个任务的执行期重叠，它们可以在一个 CPU 核上轮流推进。并行表示多个任务在不同核心上同一时刻计算。Python 常见的执行单元有三种：
+执行单元 调度者 内存关系 典型用途 OS 线程（threading） 操作系统 同一进程内共享对象 阻塞 I/O、调用阻塞库 协程/任务（asyncio.Task） 事件循环 通常同一线程内共享对象 大量异步 I/O 进程（multiprocessing） 操作系统 默认隔离，需要序列化或显式共享 CPU 密集型计算、隔离 一个进程 ├─ 线程 A ─┬─ asyncio 事件循环 ─ Task 1 / Task 2 / Task 3 │ └─ Python 对象、文件句柄、连接池等进程资源 └─ 线程 B ─── 可访问同一批 Python 对象 另一个进程 ─── 独立解释器与地址空间 协程不是线程，await 也不是把工作丢给新线程。默认事件循环通常在一个线程中运行；协程只有在 await 一个能挂起的对象、或主动把控制权交回事件循环时，其他任务才有机会运行。">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="python">
+    <meta property="article:published_time" content="2026-08-31T16:30:00+08:00">
+    <meta property="article:modified_time" content="2026-08-31T16:30:00+08:00">
+
+  
+  <meta itemprop="name" content="Python 线程模型与并发控制：GIL、asyncio 与多进程">
+  <meta itemprop="description" content="Python 的并发讨论常被一句“有 GIL，所以不用锁”带偏。那句话既不完整，也不适合当作设计依据：GIL 是 CPython 的实现机制，不是整个 Python 语言的同步模型；即使在常规 CPython 中，它也不能把多个 Python 语句组成的业务操作变成原子的；而从 Python 3.13 起，CPython 还提供了可禁用 GIL 的自由线程构建。
+选择并发模型前，先回答任务在等待什么：等待网络、磁盘、数据库等 I/O，还是持续占用 CPU 计算？随后再决定使用线程、asyncio 协程、多进程，或它们的组合。正确的同步工具取决于共享的是什么、谁拥有它，而不是取决于 API 名字里是否带有 “async”。
+一、三个概念：并发、并行与执行单元 并发表示多个任务的执行期重叠，它们可以在一个 CPU 核上轮流推进。并行表示多个任务在不同核心上同一时刻计算。Python 常见的执行单元有三种：
+执行单元 调度者 内存关系 典型用途 OS 线程（threading） 操作系统 同一进程内共享对象 阻塞 I/O、调用阻塞库 协程/任务（asyncio.Task） 事件循环 通常同一线程内共享对象 大量异步 I/O 进程（multiprocessing） 操作系统 默认隔离，需要序列化或显式共享 CPU 密集型计算、隔离 一个进程 ├─ 线程 A ─┬─ asyncio 事件循环 ─ Task 1 / Task 2 / Task 3 │ └─ Python 对象、文件句柄、连接池等进程资源 └─ 线程 B ─── 可访问同一批 Python 对象 另一个进程 ─── 独立解释器与地址空间 协程不是线程，await 也不是把工作丢给新线程。默认事件循环通常在一个线程中运行；协程只有在 await 一个能挂起的对象、或主动把控制权交回事件循环时，其他任务才有机会运行。">
+  <meta itemprop="datePublished" content="2026-08-31T16:30:00+08:00">
+  <meta itemprop="dateModified" content="2026-08-31T16:30:00+08:00">
+  <meta itemprop="wordCount" content="808">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Python 线程模型与并发控制：GIL、asyncio 与多进程">
+  <meta name="twitter:description" content="Python 的并发讨论常被一句“有 GIL，所以不用锁”带偏。那句话既不完整，也不适合当作设计依据：GIL 是 CPython 的实现机制，不是整个 Python 语言的同步模型；即使在常规 CPython 中，它也不能把多个 Python 语句组成的业务操作变成原子的；而从 Python 3.13 起，CPython 还提供了可禁用 GIL 的自由线程构建。
+选择并发模型前，先回答任务在等待什么：等待网络、磁盘、数据库等 I/O，还是持续占用 CPU 计算？随后再决定使用线程、asyncio 协程、多进程，或它们的组合。正确的同步工具取决于共享的是什么、谁拥有它，而不是取决于 API 名字里是否带有 “async”。
+一、三个概念：并发、并行与执行单元 并发表示多个任务的执行期重叠，它们可以在一个 CPU 核上轮流推进。并行表示多个任务在不同核心上同一时刻计算。Python 常见的执行单元有三种：
+执行单元 调度者 内存关系 典型用途 OS 线程（threading） 操作系统 同一进程内共享对象 阻塞 I/O、调用阻塞库 协程/任务（asyncio.Task） 事件循环 通常同一线程内共享对象 大量异步 I/O 进程（multiprocessing） 操作系统 默认隔离，需要序列化或显式共享 CPU 密集型计算、隔离 一个进程 ├─ 线程 A ─┬─ asyncio 事件循环 ─ Task 1 / Task 2 / Task 3 │ └─ Python 对象、文件句柄、连接池等进程资源 └─ 线程 B ─── 可访问同一批 Python 对象 另一个进程 ─── 独立解释器与地址空间 协程不是线程，await 也不是把工作丢给新线程。默认事件循环通常在一个线程中运行；协程只有在 await 一个能挂起的对象、或主动把控制权交回事件循环时，其他任务才有机会运行。">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">Python 线程模型与并发控制：GIL、asyncio 与多进程</h1>
+
+    
+      <div class="post-date">August 31, 2026</div>
+    
+
+    <div class="post-content">
+      <p>Python 的并发讨论常被一句“有 GIL，所以不用锁”带偏。那句话既不完整，也不适合当作设计依据：GIL 是 <strong>CPython</strong> 的实现机制，不是整个 Python 语言的同步模型；即使在常规 CPython 中，它也不能把多个 Python 语句组成的业务操作变成原子的；而从 Python 3.13 起，CPython 还提供了可禁用 GIL 的自由线程构建。</p>
+<p>选择并发模型前，先回答任务在等待什么：等待网络、磁盘、数据库等 I/O，还是持续占用 CPU 计算？随后再决定使用线程、<code>asyncio</code> 协程、多进程，或它们的组合。正确的同步工具取决于共享的是什么、谁拥有它，而不是取决于 API 名字里是否带有 “async”。</p>
+<h2 id="一三个概念并发并行与执行单元">一、三个概念：并发、并行与执行单元</h2>
+<p><strong>并发</strong>表示多个任务的执行期重叠，它们可以在一个 CPU 核上轮流推进。<strong>并行</strong>表示多个任务在不同核心上同一时刻计算。Python 常见的执行单元有三种：</p>
+<table>
+  <thead>
+      <tr>
+          <th>执行单元</th>
+          <th>调度者</th>
+          <th>内存关系</th>
+          <th>典型用途</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>OS 线程（<code>threading</code>）</td>
+          <td>操作系统</td>
+          <td>同一进程内共享对象</td>
+          <td>阻塞 I/O、调用阻塞库</td>
+      </tr>
+      <tr>
+          <td>协程/任务（<code>asyncio.Task</code>）</td>
+          <td>事件循环</td>
+          <td>通常同一线程内共享对象</td>
+          <td>大量异步 I/O</td>
+      </tr>
+      <tr>
+          <td>进程（<code>multiprocessing</code>）</td>
+          <td>操作系统</td>
+          <td>默认隔离，需要序列化或显式共享</td>
+          <td>CPU 密集型计算、隔离</td>
+      </tr>
+  </tbody>
+</table>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">一个进程
+</span></span><span class="line"><span class="cl">├─ 线程 A ─┬─ asyncio 事件循环 ─ Task 1 / Task 2 / Task 3
+</span></span><span class="line"><span class="cl">│          └─ Python 对象、文件句柄、连接池等进程资源
+</span></span><span class="line"><span class="cl">└─ 线程 B ─── 可访问同一批 Python 对象
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">另一个进程 ─── 独立解释器与地址空间
+</span></span></code></pre></div><p>协程不是线程，<code>await</code> 也不是把工作丢给新线程。默认事件循环通常在一个线程中运行；协程只有在 <code>await</code> 一个能挂起的对象、或主动把控制权交回事件循环时，其他任务才有机会运行。</p>
+<h2 id="二python-语言实现与-gil">二、Python 语言、实现与 GIL</h2>
+<h3 id="1-gil-到底限制了什么">1. GIL 到底限制了什么</h3>
+<p>在常规 CPython 中，全局解释器锁（GIL）让同一进程中的线程不能在同一时刻执行 Python 字节码。因此，用纯 Python 编写的 CPU 密集循环通常不能随着 <code>threading.Thread</code> 数量增加而在多核上等比例加速。</p>
+<p>这不意味着线程毫无价值：阻塞 I/O 时，CPython 和许多扩展会释放 GIL，其他线程可以继续运行。一个线程在等待 socket、文件、数据库驱动或子进程时，其他线程仍能取得进展，所以线程很适合将已有的同步阻塞 I/O 并发化。</p>
+<p>还要注意两点：</p>
+<ul>
+<li>GIL 是 CPython 的实现细节。PyPy、Jython 等实现不能用“CPython 现在恰好怎样做”替代其文档与契约。</li>
+<li>GIL 只是在解释器内部序列化一部分执行，并不替你表达业务层面的互斥、顺序、事务边界或对象所有权。</li>
+</ul>
+<h3 id="2-gil-不是应用程序锁">2. GIL 不是应用程序锁</h3>
+<p>下面的“先检查、后修改”跨越多个操作。即使每一个简单操作看似不会被撕裂，线程切换仍可发生在它们之间：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="k">if</span> <span class="n">user_id</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">active_users</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">active_users</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">user_id</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="n">charge_for_registration</span><span class="p">(</span><span class="n">user_id</span><span class="p">)</span>
+</span></span></code></pre></div><p>两个线程可能同时观察到 <code>user_id</code> 不在集合中，随后重复收费。不要依赖某版本 CPython 对某个内置操作的偶然原子性；用锁把“检查 + 修改 + 必须一起成立的副作用”保护为一个逻辑临界区，或者更好地把这项决定交给单一所有者/数据库的唯一约束。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="kn">import</span> <span class="nn">threading</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">active_users</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="n">users_lock</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Lock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">def</span> <span class="nf">register_once</span><span class="p">(</span><span class="n">user_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="k">with</span> <span class="n">users_lock</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="k">if</span> <span class="n">user_id</span> <span class="ow">in</span> <span class="n">active_users</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">            <span class="k">return</span> <span class="kc">False</span>
+</span></span><span class="line"><span class="cl">        <span class="n">active_users</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">user_id</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1"># 耗时或可能重入的外部调用应放在锁外；实际业务还需处理失败补偿。</span>
+</span></span><span class="line"><span class="cl">    <span class="n">charge_for_registration</span><span class="p">(</span><span class="n">user_id</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="kc">True</span>
+</span></span></code></pre></div><p>这段代码也刻意留下一个设计问题：若收费失败，集合状态如何回滚？锁只保证并发访问的互斥，不自动替你定义业务事务。并发安全与业务一致性不是同义词，混在一起只会让两个问题都更难处理。</p>
+<h3 id="3-python-313-的自由线程-cpython">3. Python 3.13+ 的自由线程 CPython</h3>
+<p>CPython 从 3.13 开始提供自由线程（free-threaded）构建，可在运行时禁用 GIL，使多个线程能够并行执行 Python 代码。它不是常规构建的默认模式；不支持自由线程的 C 扩展被导入时还可能重新启用 GIL。可通过 <code>sysconfig.get_config_var(&quot;Py_GIL_DISABLED&quot;)</code> 判断构建是否支持，Python 3.14 还可用 <code>sys._is_gil_enabled()</code> 检查当前运行时状态。</p>
+<p>这带来的结论并不浪漫：原本依赖 GIL 偶然工作起来的代码会更早暴露问题。自由线程构建为部分内置容器提供内部保护，但官方建议仍是：跨多个操作的不变量、可变共享状态和需要可移植行为的代码，应使用显式同步或避免共享。把锁写成正确的协议，才能同时适应常规 CPython、自由线程 CPython 和其他实现。</p>
+<h2 id="三threading操作系统线程与共享内存">三、<code>threading</code>：操作系统线程与共享内存</h2>
+<h3 id="1-创建会合与异常">1. 创建、会合与异常</h3>
+<p>线程对象在 <code>start()</code> 后才开始运行；<code>join()</code> 等待它结束。线程内未捕获的异常不会自动在创建者线程重新抛出，而是经 <code>threading.excepthook</code> 处理。因此，涉及结果或异常的任务通常更适合 <code>concurrent.futures</code>。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="kn">import</span> <span class="nn">threading</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">def</span> <span class="nf">download</span><span class="p">(</span><span class="n">url</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="c1"># 调用一个阻塞的 HTTP 客户端</span>
+</span></span><span class="line"><span class="cl">    <span class="n">fetch_and_store</span><span class="p">(</span><span class="n">url</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">thread</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">(</span><span class="n">target</span><span class="o">=</span><span class="n">download</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="p">(</span><span class="s2">&#34;https://example.test/data&#34;</span><span class="p">,))</span>
+</span></span><span class="line"><span class="cl"><span class="n">thread</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="n">thread</span><span class="o">.</span><span class="n">join</span><span class="p">()</span>
+</span></span></code></pre></div><p>守护线程（<code>daemon=True</code>）会在仅剩守护线程时被解释器直接终止；它们的 <code>finally</code>、文件刷新和网络清理不应被依赖。需要可靠完成或清理的工作应使用非守护线程，并显式发送停止信号后 <code>join()</code>。</p>
+<h3 id="2-lock默认的互斥工具">2. <code>Lock</code>：默认的互斥工具</h3>
+<p><code>threading.Lock</code> 保护一段临界区。用 <code>with</code> 获取锁可以确保异常或 <code>return</code> 时释放锁：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="kn">import</span> <span class="nn">threading</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">Counter</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="bp">self</span><span class="o">.</span><span class="n">_value</span> <span class="o">=</span> <span class="mi">0</span>
+</span></span><span class="line"><span class="cl">        <span class="bp">self</span><span class="o">.</span><span class="n">_lock</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Lock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">def</span> <span class="nf">increment</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_lock</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">            <span class="bp">self</span><span class="o">.</span><span class="n">_value</span> <span class="o">+=</span> <span class="mi">1</span>
+</span></span><span class="line"><span class="cl">            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_value</span>
+</span></span></code></pre></div><p>锁应该保护一个<strong>不变量</strong>，而不是机械地保护单个变量。若订单状态、库存和审计记录必须一同更新，应让它们遵从同一个同步协议。锁内避免执行网络 I/O、长时间计算、未知回调或再次获取其他锁的代码；这些操作会扩大竞争范围，并为死锁埋下条件。</p>
+<p><code>threading.RLock</code> 允许同一线程重复获取同一把锁，适合少数必须重入的封装边界，但不能修复不同线程间的死锁。看到它时，更应该审视调用结构是否绕得太远。</p>
+<h3 id="3-条件变量事件与信号量">3. 条件变量、事件与信号量</h3>
+<table>
+  <thead>
+      <tr>
+          <th>原语</th>
+          <th>表达的问题</th>
+          <th>使用要点</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>Condition</code></td>
+          <td>“队列是否非空”“状态是否满足”</td>
+          <td>必须在循环/<code>wait_for</code> 中重新检查谓词</td>
+      </tr>
+      <tr>
+          <td><code>Event</code></td>
+          <td>一个可保持的开/关信号</td>
+          <td><code>set()</code> 后的等待者可立即通过，适合启动/停止通知</td>
+      </tr>
+      <tr>
+          <td><code>Semaphore</code></td>
+          <td>最多允许多少个执行者</td>
+          <td>用于连接数、并发请求数等容量限制</td>
+      </tr>
+      <tr>
+          <td><code>Barrier</code></td>
+          <td>一组线程都到达某个阶段</td>
+          <td>适合阶段性算法，需处理参与者失败</td>
+      </tr>
+  </tbody>
+</table>
+<p>条件变量等待的是<strong>共享状态表达的条件</strong>，不是一次通知。<code>wait()</code> 可能伪唤醒，通知也不保存历史，因此应把状态和检查放在锁的保护下：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="kn">import</span> <span class="nn">collections</span>
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="nn">threading</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">jobs</span><span class="p">:</span> <span class="n">collections</span><span class="o">.</span><span class="n">deque</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">collections</span><span class="o">.</span><span class="n">deque</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="n">closed</span> <span class="o">=</span> <span class="kc">False</span>
+</span></span><span class="line"><span class="cl"><span class="n">condition</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Condition</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">def</span> <span class="nf">take_job</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="k">with</span> <span class="n">condition</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="n">condition</span><span class="o">.</span><span class="n">wait_for</span><span class="p">(</span><span class="k">lambda</span><span class="p">:</span> <span class="n">closed</span> <span class="ow">or</span> <span class="n">jobs</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="k">if</span> <span class="ow">not</span> <span class="n">jobs</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">            <span class="k">return</span> <span class="kc">None</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="n">jobs</span><span class="o">.</span><span class="n">popleft</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">def</span> <span class="nf">put_job</span><span class="p">(</span><span class="n">job</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="k">with</span> <span class="n">condition</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="n">jobs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">job</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="n">condition</span><span class="o">.</span><span class="n">notify</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">def</span> <span class="nf">close_queue</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="k">global</span> <span class="n">closed</span>
+</span></span><span class="line"><span class="cl">    <span class="k">with</span> <span class="n">condition</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="n">closed</span> <span class="o">=</span> <span class="kc">True</span>
+</span></span><span class="line"><span class="cl">        <span class="n">condition</span><span class="o">.</span><span class="n">notify_all</span><span class="p">()</span>
+</span></span></code></pre></div><h3 id="4-用-queuequeue-实现生产者消费者">4. 用 <code>queue.Queue</code> 实现生产者—消费者</h3>
+<p>自己维护队列、锁和条件变量很容易遗漏关闭、异常或任务完成计数。普通生产者—消费者场景优先使用 <code>queue.Queue</code>：它本身是线程安全的，并可通过 <code>maxsize</code> 形成<strong>背压</strong>，避免生产者无限堆积任务占满内存。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="kn">from</span> <span class="nn">queue</span> <span class="kn">import</span> <span class="n">Queue</span>
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="nn">threading</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">STOP</span> <span class="o">=</span> <span class="nb">object</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="n">jobs</span><span class="p">:</span> <span class="n">Queue</span><span class="p">[</span><span class="nb">str</span> <span class="o">|</span> <span class="nb">object</span><span class="p">]</span> <span class="o">=</span> <span class="n">Queue</span><span class="p">(</span><span class="n">maxsize</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">def</span> <span class="nf">worker</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="n">job</span> <span class="o">=</span> <span class="n">jobs</span><span class="o">.</span><span class="n">get</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">        <span class="k">try</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">            <span class="k">if</span> <span class="n">job</span> <span class="ow">is</span> <span class="n">STOP</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">                <span class="k">return</span>
+</span></span><span class="line"><span class="cl">            <span class="n">process</span><span class="p">(</span><span class="n">job</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="k">finally</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">            <span class="n">jobs</span><span class="o">.</span><span class="n">task_done</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">workers</span> <span class="o">=</span> <span class="p">[</span><span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">(</span><span class="n">target</span><span class="o">=</span><span class="n">worker</span><span class="p">)</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">4</span><span class="p">)]</span>
+</span></span><span class="line"><span class="cl"><span class="k">for</span> <span class="n">thread</span> <span class="ow">in</span> <span class="n">workers</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">thread</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">load_jobs</span><span class="p">():</span>
+</span></span><span class="line"><span class="cl">    <span class="n">jobs</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">item</span><span class="p">)</span>  <span class="c1"># 队列满时阻塞，向上游施加背压</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">workers</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">jobs</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">STOP</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">jobs</span><span class="o">.</span><span class="n">join</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="k">for</span> <span class="n">thread</span> <span class="ow">in</span> <span class="n">workers</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">thread</span><span class="o">.</span><span class="n">join</span><span class="p">()</span>
+</span></span></code></pre></div><p>这里的哨兵数量与工作线程数相同；每个工作线程取到一个哨兵后退出。若 <code>process</code> 会抛异常，生产环境应把异常传回协调者、记录失败或触发停止，而不是静静让工作线程消失。</p>
+<h3 id="5-用-threadpoolexecutor-管理任务">5. 用 <code>ThreadPoolExecutor</code> 管理任务</h3>
+<p>线程池避免重复创建线程，并以 <code>Future</code> 传回返回值和异常。它适合一批独立的阻塞 I/O 任务；线程数需要与外部服务容量、连接池和背压一起规划，并非越多越好。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="kn">from</span> <span class="nn">concurrent.futures</span> <span class="kn">import</span> <span class="n">ThreadPoolExecutor</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">def</span> <span class="nf">fetch</span><span class="p">(</span><span class="n">url</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bytes</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="n">blocking_http_get</span><span class="p">(</span><span class="n">url</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">with</span> <span class="n">ThreadPoolExecutor</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">16</span><span class="p">)</span> <span class="k">as</span> <span class="n">executor</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">futures</span> <span class="o">=</span> <span class="p">[</span><span class="n">executor</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span><span class="n">fetch</span><span class="p">,</span> <span class="n">url</span><span class="p">)</span> <span class="k">for</span> <span class="n">url</span> <span class="ow">in</span> <span class="n">urls</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">    <span class="n">pages</span> <span class="o">=</span> <span class="p">[</span><span class="n">future</span><span class="o">.</span><span class="n">result</span><span class="p">()</span> <span class="k">for</span> <span class="n">future</span> <span class="ow">in</span> <span class="n">futures</span><span class="p">]</span>  <span class="c1"># 在这里重新抛出任务异常</span>
+</span></span></code></pre></div><h2 id="四asyncio协作式并发而不是隐式多线程">四、<code>asyncio</code>：协作式并发，而不是隐式多线程</h2>
+<h3 id="1-事件循环与调度点">1. 事件循环与调度点</h3>
+<p>协程函数由 <code>async def</code> 定义；调用它只得到协程对象，只有被 <code>await</code>、封装为任务或交给事件循环运行后才会执行。事件循环在任务可等待 I/O 时切换到别的任务。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="kn">import</span> <span class="nn">asyncio</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">async</span> <span class="k">def</span> <span class="nf">fetch</span><span class="p">(</span><span class="n">url</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">response</span> <span class="o">=</span> <span class="k">await</span> <span class="n">async_http_get</span><span class="p">(</span><span class="n">url</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="n">response</span><span class="o">.</span><span class="n">text</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">async</span> <span class="k">def</span> <span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="k">async</span> <span class="k">with</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">TaskGroup</span><span class="p">()</span> <span class="k">as</span> <span class="n">group</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="n">tasks</span> <span class="o">=</span> <span class="p">[</span><span class="n">group</span><span class="o">.</span><span class="n">create_task</span><span class="p">(</span><span class="n">fetch</span><span class="p">(</span><span class="n">url</span><span class="p">))</span> <span class="k">for</span> <span class="n">url</span> <span class="ow">in</span> <span class="n">urls</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">pages</span> <span class="o">=</span> <span class="p">[</span><span class="n">task</span><span class="o">.</span><span class="n">result</span><span class="p">()</span> <span class="k">for</span> <span class="n">task</span> <span class="ow">in</span> <span class="n">tasks</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">asyncio</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">main</span><span class="p">())</span>
+</span></span></code></pre></div><p><code>TaskGroup</code>（Python 3.11+）是结构化并发工具：离开 <code>async with</code> 时会等待组内任务；若其中任务失败，它会取消尚未完成的同组任务，并以异常组向外报告。相比创建“无人管理的后台任务”，任务的生命周期、异常和取消边界都更清楚。</p>
+<p>不要在事件循环线程中调用 <code>time.sleep()</code>、同步 HTTP 客户端或耗时 CPU 循环；它们会卡住整个事件循环。使用异步库，或将不可避免的阻塞调用转移出去：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">to_thread</span><span class="p">(</span><span class="n">blocking_function</span><span class="p">,</span> <span class="n">argument</span><span class="p">)</span>
+</span></span></code></pre></div><p><code>to_thread</code> 只是把阻塞函数交给线程运行；对常规 CPython 的纯 Python CPU 计算，它通常不能绕过 GIL。CPU 密集型任务仍应考虑进程池或释放 GIL 的原生扩展。</p>
+<h3 id="2-协程也会发生竞态条件">2. 协程也会发生竞态条件</h3>
+<p>协程通常只在 <code>await</code> 处让出控制权，因此下面的纯同步片段执行时不会被另一个 asyncio 任务插入：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">total</span> <span class="o">+=</span> <span class="mi">1</span>
+</span></span></code></pre></div><p>但只要“读取—等待—写回”之间有 <code>await</code>，竞态条件马上出现：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">balance</span> <span class="o">=</span> <span class="mi">0</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">async</span> <span class="k">def</span> <span class="nf">add_one</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="k">global</span> <span class="n">balance</span>
+</span></span><span class="line"><span class="cl">    <span class="n">current</span> <span class="o">=</span> <span class="n">balance</span>
+</span></span><span class="line"><span class="cl">    <span class="k">await</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>  <span class="c1"># 此处可能切换到另一个任务</span>
+</span></span><span class="line"><span class="cl">    <span class="n">balance</span> <span class="o">=</span> <span class="n">current</span> <span class="o">+</span> <span class="mi">1</span>
+</span></span></code></pre></div><p>使用 <code>asyncio.Lock</code> 保护跨 <code>await</code> 的共享不变量：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="kn">import</span> <span class="nn">asyncio</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">balance</span> <span class="o">=</span> <span class="mi">0</span>
+</span></span><span class="line"><span class="cl"><span class="n">balance_lock</span> <span class="o">=</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">Lock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">async</span> <span class="k">def</span> <span class="nf">add_one</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="k">global</span> <span class="n">balance</span>
+</span></span><span class="line"><span class="cl">    <span class="k">async</span> <span class="k">with</span> <span class="n">balance_lock</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="n">balance</span> <span class="o">+=</span> <span class="mi">1</span>
+</span></span></code></pre></div><p><code>asyncio</code> 的 <code>Lock</code>、<code>Event</code>、<code>Condition</code>、<code>Semaphore</code> 等原语<strong>不是线程安全的</strong>，只能协调同一事件循环中的任务；不要拿它们给 OS 线程同步。线程之间使用 <code>threading</code> 原语，跨进程则使用 <code>multiprocessing</code> 原语、队列或外部服务。</p>
+<h3 id="3-取消超时和限流">3. 取消、超时和限流</h3>
+<p>取消在协程中通常以 <code>asyncio.CancelledError</code> 的形式在下一次可取消的等待点送达。除非确实要清理后重新抛出，否则不要粗暴地吞掉它；否则上层认为任务已取消，任务却可能继续运行。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="kn">import</span> <span class="nn">asyncio</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">async</span> <span class="k">def</span> <span class="nf">fetch_with_limit</span><span class="p">(</span><span class="n">url</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">limit</span><span class="p">:</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">Semaphore</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="k">async</span> <span class="k">with</span> <span class="n">limit</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="k">async</span> <span class="k">with</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">timeout</span><span class="p">(</span><span class="mi">10</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">            <span class="k">return</span> <span class="k">await</span> <span class="n">async_http_get_text</span><span class="p">(</span><span class="n">url</span><span class="p">)</span>
+</span></span></code></pre></div><p>信号量控制的是并发数量，不等同于速率限制；服务端允许“每秒 10 个请求”时还需要令牌桶等节流策略。超时也不自动停止底层不可取消的阻塞 I/O，所以要确认所用客户端对取消和超时的语义。</p>
+<h2 id="五multiprocessing用进程换取并行与隔离">五、<code>multiprocessing</code>：用进程换取并行与隔离</h2>
+<p>进程有独立地址空间和各自的 Python 解释器，因此常规 CPython 下 CPU 密集型工作可使用多个 CPU 核。代价是创建进程、序列化参数与结果、进程间通信（IPC）和内存占用。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="kn">from</span> <span class="nn">concurrent.futures</span> <span class="kn">import</span> <span class="n">ProcessPoolExecutor</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">def</span> <span class="nf">count_primes</span><span class="p">(</span><span class="n">limit</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="c1"># 纯 CPU 计算；必须在模块顶层，便于子进程导入</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nb">sum</span><span class="p">(</span><span class="n">is_prime</span><span class="p">(</span><span class="n">n</span><span class="p">)</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">limit</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&#34;__main__&#34;</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="k">with</span> <span class="n">ProcessPoolExecutor</span><span class="p">()</span> <span class="k">as</span> <span class="n">executor</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="n">results</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">executor</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">count_primes</span><span class="p">,</span> <span class="p">[</span><span class="mi">500_000</span><span class="p">,</span> <span class="mi">600_000</span><span class="p">]))</span>
+</span></span><span class="line"><span class="cl">    <span class="nb">print</span><span class="p">(</span><span class="n">results</span><span class="p">)</span>
+</span></span></code></pre></div><p>在 Windows 以及采用 <code>spawn</code> 启动方式的平台，子进程会重新导入主模块；因此创建进程池的顶层入口必须由 <code>if __name__ == &quot;__main__&quot;:</code> 保护。传给进程池的函数和参数通常需要可 pickle；大型数据反复复制时，进程池可能得不偿失，应评估批处理、共享内存或改用原生计算库。</p>
+<p><code>multiprocessing.Queue</code>、<code>Pipe</code>、共享内存和 <code>Manager</code> 可用于 IPC。优先让进程通过消息传递协作；<code>Manager</code> 提供的代理对象方便，但会引入 IPC 开销，不能当作普通 dict/list 的无代价替代品。</p>
+<h2 id="六选择模型先按工作负载再按边界">六、选择模型：先按工作负载，再按边界</h2>
+<table>
+  <thead>
+      <tr>
+          <th>场景</th>
+          <th>首选</th>
+          <th>关键控制点</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>少量已有阻塞 I/O</td>
+          <td><code>ThreadPoolExecutor</code> / <code>threading</code></td>
+          <td>队列上限、超时、连接池容量</td>
+      </tr>
+      <tr>
+          <td>大量异步网络 I/O</td>
+          <td><code>asyncio</code> + 异步客户端</td>
+          <td>不阻塞事件循环、限流、取消传播</td>
+      </tr>
+      <tr>
+          <td>纯 Python CPU 计算（常规 CPython）</td>
+          <td><code>ProcessPoolExecutor</code> / <code>multiprocessing</code></td>
+          <td>序列化成本、数据分片、入口保护</td>
+      </tr>
+      <tr>
+          <td>原生库计算且释放 GIL</td>
+          <td>线程池可能有效</td>
+          <td>查库文档、控制原生线程数</td>
+      </tr>
+      <tr>
+          <td>多线程共享复杂可变状态</td>
+          <td>尽量改成队列/单一所有者</td>
+          <td><code>Lock</code> 保护不变量、明确关闭协议</td>
+      </tr>
+      <tr>
+          <td>跨机器或需要持久可靠任务</td>
+          <td>外部队列、数据库或任务系统</td>
+          <td>幂等、重试、事务、可观测性</td>
+      </tr>
+  </tbody>
+</table>
+<p>自由线程 CPython 可以改变“纯 Python CPU 任务是否适合线程”的性能结论，却不改变同步设计的原则。即使没有 GIL，线程仍共享内存；即使有 GIL，业务操作仍可能跨多个步骤。模型选择应服从测量和所有权，而不是对某个解释器版本的想象。</p>
+<h2 id="七混合模型与跨边界通信">七、混合模型与跨边界通信</h2>
+<p>实际服务常常混合使用模型：事件循环负责网络连接；<code>asyncio.to_thread()</code> 接入少量遗留阻塞 API；进程池完成 CPU 密集计算。边界必须保持清楚：</p>
+<ul>
+<li>从 <code>asyncio</code> 任务交给线程：用 <code>asyncio.to_thread()</code>；不要在事件循环里直接执行阻塞函数。</li>
+<li>从外部线程提交协程：用 <code>asyncio.run_coroutine_threadsafe(coro, loop)</code>，不要直接操作另一个线程正在运行的事件循环对象。</li>
+<li>线程与协程分别使用自己的同步原语；<code>asyncio.Queue</code> 不是线程安全队列，<code>queue.Queue</code> 也不应在协程中用阻塞式 <code>get()</code>。</li>
+<li>进程边界把对象变成消息；把大而可变的对象“共享给所有人”通常只会扩大协调成本。</li>
+</ul>
+<h2 id="八并发代码审查清单">八、并发代码审查清单</h2>
+<ul>
+<li>任务是 I/O 密集还是 CPU 密集？所选模型能否真正提供预期的并发或并行？</li>
+<li>共享可变状态由谁拥有？是否能改为消息传递、不可变数据或单一写者？</li>
+<li>锁保护的是完整不变量吗？是否存在检查后再执行的竞态条件？</li>
+<li>条件等待是否检查状态谓词，而不是只等待一次 <code>notify()</code>？</li>
+<li>队列是否有容量上限、关闭信号、异常传播和任务完成策略？</li>
+<li><code>asyncio</code> 任务中是否误用了阻塞 I/O 或 <code>time.sleep()</code>？</li>
+<li>超时和取消是否会传递到子任务，并正确释放资源？</li>
+<li>线程、任务和进程在退出时是否被等待；守护线程是否被错误地当作可靠后台任务？</li>
+<li>是否把 CPython 当前的 GIL 行为当成了跨版本、跨实现的线程安全保证？</li>
+</ul>
+<h2 id="九总结">九、总结</h2>
+<p>Python 并发没有唯一的“最快方案”，只有与工作负载和状态边界匹配的模型。</p>
+<ul>
+<li><code>threading</code> 共享内存，适合阻塞 I/O；GIL 不取代应用层同步。</li>
+<li><code>asyncio</code> 在协作式调度点切换任务，适合大量异步 I/O；它的同步原语只能用于任务间协调。</li>
+<li><code>multiprocessing</code> 以隔离和序列化成本换取多核并行，适合常规 CPython 中的 CPU 密集工作。</li>
+<li>锁解决互斥，队列解决交接与背压，结构化并发解决任务生命周期；没有一个能代替另一个。</li>
+<li>自由线程 CPython 让多线程并行成为可能，但更要求代码用明确的所有权与同步协议表达正确性。</li>
+</ul>
+<p>先让状态的拥有者唯一、任务的结束路径明确、错误能回到协调者；之后再谈并发度。否则程序也许跑得很快，只是更快地跑向一个难以复现的问题。</p>
+<h2 id="参考资料">参考资料</h2>
+<ul>
+<li><a href="https://docs.python.org/3/library/threading.html">Python <code>threading</code> 官方文档</a>
+</li>
+<li><a href="https://docs.python.org/3/howto/free-threading-python.html">Python 自由线程支持说明</a>
+</li>
+<li><a href="https://docs.python.org/3/library/asyncio-sync.html">Python <code>asyncio</code> 同步原语</a>
+</li>
+<li><a href="https://docs.python.org/3/library/asyncio-task.html">Python <code>asyncio</code> 协程与任务</a>
+</li>
+</ul>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

@@ -1,0 +1,1268 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>操作系统对内存和磁盘的抽象 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="操作系统不会直接把“真实的内存”和“真实的磁盘”暴露给普通程序。它会先做一层抽象：内存被抽象成虚拟地址空间和页，磁盘被抽象成块、文件和目录。
+这两个抽象表面上不一样，但它们可以在 虚拟内存 这里汇合。原因很简单：虚拟内存的管理单位也是 页（Page），而操作系统可以把磁盘上的一块交换区域也按页来管理。
+内存的抽象：页和虚拟地址空间 操作系统会把内存管理拆成两层：
+物理内存：真实的 RAM，会被划分成固定大小的页框（Page Frame）。 虚拟内存：进程看到的地址空间，会被划分成固定大小的页（Page）。 普通程序访问的是虚拟地址，而不是物理地址。每个进程都会以为自己拥有一段连续、独立的地址空间，例如从 0x00000000 到某个很大的地址范围。
+这种抽象带来几个重要能力：
+地址空间隔离：一个进程不能随便访问另一个进程的内存。 连续地址假象：程序看到的地址可以是连续的，底层物理内存却可以是分散的。 按需加载：程序用到哪一页，操作系统再把哪一页真正放进内存。 换入换出：内存紧张时，暂时不用的页可以先放到磁盘。 也就是说，虚拟内存并不等于物理内存。它是操作系统给进程提供的一套地址空间视图。
+磁盘的抽象：块、文件和目录 磁盘硬件最终读写的是扇区或块设备上的固定大小区域。操作系统通常会把磁盘抽象成几层：
+逻辑块（Block）：操作系统和文件系统读写磁盘时常用的固定大小单位。 文件（File）：对用户和程序暴露的数据对象。 目录（Directory）：用来组织文件的层级结构。 用户平时看到的是文件和目录，例如 a.txt、/home/user、D:\Project。但在更底层，文件系统会把文件内容映射到磁盘上的一组逻辑块。
+所以，内存和磁盘的常见抽象确实不同：
+对象 底层管理单位 上层看到的样子 内存 页、页框 虚拟地址空间 磁盘 块 文件、目录 问题就在这里：既然内存按页管理，磁盘按块和文件管理，为什么虚拟内存还能使用磁盘空间？
+虚拟内存为什么能使用磁盘 关键在于：操作系统可以在磁盘上准备一块专门区域，并把这块区域也按页来管理。
+这块区域通常叫：
+交换区（Swap Area）：Linux 等系统常见。 分页文件（Page File）：Windows 等系统常见。 当物理内存不够用时，操作系统可以把暂时不用的内存页写到交换区或分页文件中。这个过程叫 换出（Page Out）。
+等程序再次访问那一页时，操作系统再把它从磁盘读回物理内存。这个过程叫 换入（Page In）。
+可以把过程理解成这样：
+虚拟页 -&gt; 在物理内存中：直接访问 -&gt; 不在物理内存中：触发缺页异常，再从磁盘换入 对程序来说，它看到的仍然是自己的虚拟地址空间。某个虚拟页此刻在物理内存里，还是被换出到了磁盘上，程序本身通常并不知道。
+页表和 MMU 怎么配合 虚拟地址要变成物理地址，需要依靠 页表（Page Table） 和 MMU（Memory Management Unit，内存管理单元）。
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/computerorganization/%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F%E5%AF%B9%E5%86%85%E5%AD%98%E5%92%8C%E7%A3%81%E7%9B%98%E7%9A%84%E6%8A%BD%E8%B1%A1/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/computerorganization/%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F%E5%AF%B9%E5%86%85%E5%AD%98%E5%92%8C%E7%A3%81%E7%9B%98%E7%9A%84%E6%8A%BD%E8%B1%A1/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="操作系统对内存和磁盘的抽象">
+  <meta property="og:description" content="操作系统不会直接把“真实的内存”和“真实的磁盘”暴露给普通程序。它会先做一层抽象：内存被抽象成虚拟地址空间和页，磁盘被抽象成块、文件和目录。
+这两个抽象表面上不一样，但它们可以在 虚拟内存 这里汇合。原因很简单：虚拟内存的管理单位也是 页（Page），而操作系统可以把磁盘上的一块交换区域也按页来管理。
+内存的抽象：页和虚拟地址空间 操作系统会把内存管理拆成两层：
+物理内存：真实的 RAM，会被划分成固定大小的页框（Page Frame）。 虚拟内存：进程看到的地址空间，会被划分成固定大小的页（Page）。 普通程序访问的是虚拟地址，而不是物理地址。每个进程都会以为自己拥有一段连续、独立的地址空间，例如从 0x00000000 到某个很大的地址范围。
+这种抽象带来几个重要能力：
+地址空间隔离：一个进程不能随便访问另一个进程的内存。 连续地址假象：程序看到的地址可以是连续的，底层物理内存却可以是分散的。 按需加载：程序用到哪一页，操作系统再把哪一页真正放进内存。 换入换出：内存紧张时，暂时不用的页可以先放到磁盘。 也就是说，虚拟内存并不等于物理内存。它是操作系统给进程提供的一套地址空间视图。
+磁盘的抽象：块、文件和目录 磁盘硬件最终读写的是扇区或块设备上的固定大小区域。操作系统通常会把磁盘抽象成几层：
+逻辑块（Block）：操作系统和文件系统读写磁盘时常用的固定大小单位。 文件（File）：对用户和程序暴露的数据对象。 目录（Directory）：用来组织文件的层级结构。 用户平时看到的是文件和目录，例如 a.txt、/home/user、D:\Project。但在更底层，文件系统会把文件内容映射到磁盘上的一组逻辑块。
+所以，内存和磁盘的常见抽象确实不同：
+对象 底层管理单位 上层看到的样子 内存 页、页框 虚拟地址空间 磁盘 块 文件、目录 问题就在这里：既然内存按页管理，磁盘按块和文件管理，为什么虚拟内存还能使用磁盘空间？
+虚拟内存为什么能使用磁盘 关键在于：操作系统可以在磁盘上准备一块专门区域，并把这块区域也按页来管理。
+这块区域通常叫：
+交换区（Swap Area）：Linux 等系统常见。 分页文件（Page File）：Windows 等系统常见。 当物理内存不够用时，操作系统可以把暂时不用的内存页写到交换区或分页文件中。这个过程叫 换出（Page Out）。
+等程序再次访问那一页时，操作系统再把它从磁盘读回物理内存。这个过程叫 换入（Page In）。
+可以把过程理解成这样：
+虚拟页 -&gt; 在物理内存中：直接访问 -&gt; 不在物理内存中：触发缺页异常，再从磁盘换入 对程序来说，它看到的仍然是自己的虚拟地址空间。某个虚拟页此刻在物理内存里，还是被换出到了磁盘上，程序本身通常并不知道。
+页表和 MMU 怎么配合 虚拟地址要变成物理地址，需要依靠 页表（Page Table） 和 MMU（Memory Management Unit，内存管理单元）。">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="computerorganization">
+    <meta property="article:published_time" content="2026-03-11T16:15:06+08:00">
+    <meta property="article:modified_time" content="2026-03-11T16:15:06+08:00">
+
+  
+  <meta itemprop="name" content="操作系统对内存和磁盘的抽象">
+  <meta itemprop="description" content="操作系统不会直接把“真实的内存”和“真实的磁盘”暴露给普通程序。它会先做一层抽象：内存被抽象成虚拟地址空间和页，磁盘被抽象成块、文件和目录。
+这两个抽象表面上不一样，但它们可以在 虚拟内存 这里汇合。原因很简单：虚拟内存的管理单位也是 页（Page），而操作系统可以把磁盘上的一块交换区域也按页来管理。
+内存的抽象：页和虚拟地址空间 操作系统会把内存管理拆成两层：
+物理内存：真实的 RAM，会被划分成固定大小的页框（Page Frame）。 虚拟内存：进程看到的地址空间，会被划分成固定大小的页（Page）。 普通程序访问的是虚拟地址，而不是物理地址。每个进程都会以为自己拥有一段连续、独立的地址空间，例如从 0x00000000 到某个很大的地址范围。
+这种抽象带来几个重要能力：
+地址空间隔离：一个进程不能随便访问另一个进程的内存。 连续地址假象：程序看到的地址可以是连续的，底层物理内存却可以是分散的。 按需加载：程序用到哪一页，操作系统再把哪一页真正放进内存。 换入换出：内存紧张时，暂时不用的页可以先放到磁盘。 也就是说，虚拟内存并不等于物理内存。它是操作系统给进程提供的一套地址空间视图。
+磁盘的抽象：块、文件和目录 磁盘硬件最终读写的是扇区或块设备上的固定大小区域。操作系统通常会把磁盘抽象成几层：
+逻辑块（Block）：操作系统和文件系统读写磁盘时常用的固定大小单位。 文件（File）：对用户和程序暴露的数据对象。 目录（Directory）：用来组织文件的层级结构。 用户平时看到的是文件和目录，例如 a.txt、/home/user、D:\Project。但在更底层，文件系统会把文件内容映射到磁盘上的一组逻辑块。
+所以，内存和磁盘的常见抽象确实不同：
+对象 底层管理单位 上层看到的样子 内存 页、页框 虚拟地址空间 磁盘 块 文件、目录 问题就在这里：既然内存按页管理，磁盘按块和文件管理，为什么虚拟内存还能使用磁盘空间？
+虚拟内存为什么能使用磁盘 关键在于：操作系统可以在磁盘上准备一块专门区域，并把这块区域也按页来管理。
+这块区域通常叫：
+交换区（Swap Area）：Linux 等系统常见。 分页文件（Page File）：Windows 等系统常见。 当物理内存不够用时，操作系统可以把暂时不用的内存页写到交换区或分页文件中。这个过程叫 换出（Page Out）。
+等程序再次访问那一页时，操作系统再把它从磁盘读回物理内存。这个过程叫 换入（Page In）。
+可以把过程理解成这样：
+虚拟页 -&gt; 在物理内存中：直接访问 -&gt; 不在物理内存中：触发缺页异常，再从磁盘换入 对程序来说，它看到的仍然是自己的虚拟地址空间。某个虚拟页此刻在物理内存里，还是被换出到了磁盘上，程序本身通常并不知道。
+页表和 MMU 怎么配合 虚拟地址要变成物理地址，需要依靠 页表（Page Table） 和 MMU（Memory Management Unit，内存管理单元）。">
+  <meta itemprop="datePublished" content="2026-03-11T16:15:06+08:00">
+  <meta itemprop="dateModified" content="2026-03-11T16:15:06+08:00">
+  <meta itemprop="wordCount" content="123">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="操作系统对内存和磁盘的抽象">
+  <meta name="twitter:description" content="操作系统不会直接把“真实的内存”和“真实的磁盘”暴露给普通程序。它会先做一层抽象：内存被抽象成虚拟地址空间和页，磁盘被抽象成块、文件和目录。
+这两个抽象表面上不一样，但它们可以在 虚拟内存 这里汇合。原因很简单：虚拟内存的管理单位也是 页（Page），而操作系统可以把磁盘上的一块交换区域也按页来管理。
+内存的抽象：页和虚拟地址空间 操作系统会把内存管理拆成两层：
+物理内存：真实的 RAM，会被划分成固定大小的页框（Page Frame）。 虚拟内存：进程看到的地址空间，会被划分成固定大小的页（Page）。 普通程序访问的是虚拟地址，而不是物理地址。每个进程都会以为自己拥有一段连续、独立的地址空间，例如从 0x00000000 到某个很大的地址范围。
+这种抽象带来几个重要能力：
+地址空间隔离：一个进程不能随便访问另一个进程的内存。 连续地址假象：程序看到的地址可以是连续的，底层物理内存却可以是分散的。 按需加载：程序用到哪一页，操作系统再把哪一页真正放进内存。 换入换出：内存紧张时，暂时不用的页可以先放到磁盘。 也就是说，虚拟内存并不等于物理内存。它是操作系统给进程提供的一套地址空间视图。
+磁盘的抽象：块、文件和目录 磁盘硬件最终读写的是扇区或块设备上的固定大小区域。操作系统通常会把磁盘抽象成几层：
+逻辑块（Block）：操作系统和文件系统读写磁盘时常用的固定大小单位。 文件（File）：对用户和程序暴露的数据对象。 目录（Directory）：用来组织文件的层级结构。 用户平时看到的是文件和目录，例如 a.txt、/home/user、D:\Project。但在更底层，文件系统会把文件内容映射到磁盘上的一组逻辑块。
+所以，内存和磁盘的常见抽象确实不同：
+对象 底层管理单位 上层看到的样子 内存 页、页框 虚拟地址空间 磁盘 块 文件、目录 问题就在这里：既然内存按页管理，磁盘按块和文件管理，为什么虚拟内存还能使用磁盘空间？
+虚拟内存为什么能使用磁盘 关键在于：操作系统可以在磁盘上准备一块专门区域，并把这块区域也按页来管理。
+这块区域通常叫：
+交换区（Swap Area）：Linux 等系统常见。 分页文件（Page File）：Windows 等系统常见。 当物理内存不够用时，操作系统可以把暂时不用的内存页写到交换区或分页文件中。这个过程叫 换出（Page Out）。
+等程序再次访问那一页时，操作系统再把它从磁盘读回物理内存。这个过程叫 换入（Page In）。
+可以把过程理解成这样：
+虚拟页 -&gt; 在物理内存中：直接访问 -&gt; 不在物理内存中：触发缺页异常，再从磁盘换入 对程序来说，它看到的仍然是自己的虚拟地址空间。某个虚拟页此刻在物理内存里，还是被换出到了磁盘上，程序本身通常并不知道。
+页表和 MMU 怎么配合 虚拟地址要变成物理地址，需要依靠 页表（Page Table） 和 MMU（Memory Management Unit，内存管理单元）。">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">操作系统对内存和磁盘的抽象</h1>
+
+    
+      <div class="post-date">March 11, 2026</div>
+    
+
+    <div class="post-content">
+      <p>操作系统不会直接把“真实的内存”和“真实的磁盘”暴露给普通程序。它会先做一层抽象：内存被抽象成虚拟地址空间和页，磁盘被抽象成块、文件和目录。</p>
+<p>这两个抽象表面上不一样，但它们可以在 <strong>虚拟内存</strong> 这里汇合。原因很简单：虚拟内存的管理单位也是 <strong>页（Page）</strong>，而操作系统可以把磁盘上的一块交换区域也按页来管理。</p>
+<h2 id="内存的抽象页和虚拟地址空间">内存的抽象：页和虚拟地址空间</h2>
+<p>操作系统会把内存管理拆成两层：</p>
+<ul>
+<li><strong>物理内存</strong>：真实的 RAM，会被划分成固定大小的页框（Page Frame）。</li>
+<li><strong>虚拟内存</strong>：进程看到的地址空间，会被划分成固定大小的页（Page）。</li>
+</ul>
+<p>普通程序访问的是虚拟地址，而不是物理地址。每个进程都会以为自己拥有一段连续、独立的地址空间，例如从 <code>0x00000000</code> 到某个很大的地址范围。</p>
+<p>这种抽象带来几个重要能力：</p>
+<ul>
+<li><strong>地址空间隔离</strong>：一个进程不能随便访问另一个进程的内存。</li>
+<li><strong>连续地址假象</strong>：程序看到的地址可以是连续的，底层物理内存却可以是分散的。</li>
+<li><strong>按需加载</strong>：程序用到哪一页，操作系统再把哪一页真正放进内存。</li>
+<li><strong>换入换出</strong>：内存紧张时，暂时不用的页可以先放到磁盘。</li>
+</ul>
+<p>也就是说，虚拟内存并不等于物理内存。它是操作系统给进程提供的一套地址空间视图。</p>
+<h2 id="磁盘的抽象块文件和目录">磁盘的抽象：块、文件和目录</h2>
+<p>磁盘硬件最终读写的是扇区或块设备上的固定大小区域。操作系统通常会把磁盘抽象成几层：</p>
+<ul>
+<li><strong>逻辑块（Block）</strong>：操作系统和文件系统读写磁盘时常用的固定大小单位。</li>
+<li><strong>文件（File）</strong>：对用户和程序暴露的数据对象。</li>
+<li><strong>目录（Directory）</strong>：用来组织文件的层级结构。</li>
+</ul>
+<p>用户平时看到的是文件和目录，例如 <code>a.txt</code>、<code>/home/user</code>、<code>D:\Project</code>。但在更底层，文件系统会把文件内容映射到磁盘上的一组逻辑块。</p>
+<p>所以，内存和磁盘的常见抽象确实不同：</p>
+<table>
+  <thead>
+      <tr>
+          <th>对象</th>
+          <th>底层管理单位</th>
+          <th>上层看到的样子</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>内存</td>
+          <td>页、页框</td>
+          <td>虚拟地址空间</td>
+      </tr>
+      <tr>
+          <td>磁盘</td>
+          <td>块</td>
+          <td>文件、目录</td>
+      </tr>
+  </tbody>
+</table>
+<p>问题就在这里：既然内存按页管理，磁盘按块和文件管理，为什么虚拟内存还能使用磁盘空间？</p>
+<h2 id="虚拟内存为什么能使用磁盘">虚拟内存为什么能使用磁盘</h2>
+<p>关键在于：<strong>操作系统可以在磁盘上准备一块专门区域，并把这块区域也按页来管理</strong>。</p>
+<p>这块区域通常叫：</p>
+<ul>
+<li><strong>交换区（Swap Area）</strong>：Linux 等系统常见。</li>
+<li><strong>分页文件（Page File）</strong>：Windows 等系统常见。</li>
+</ul>
+<p>当物理内存不够用时，操作系统可以把暂时不用的内存页写到交换区或分页文件中。这个过程叫 <strong>换出（Page Out）</strong>。</p>
+<p>等程序再次访问那一页时，操作系统再把它从磁盘读回物理内存。这个过程叫 <strong>换入（Page In）</strong>。</p>
+<p>可以把过程理解成这样：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">虚拟页
+</span></span><span class="line"><span class="cl">  -&gt; 在物理内存中：直接访问
+</span></span><span class="line"><span class="cl">  -&gt; 不在物理内存中：触发缺页异常，再从磁盘换入
+</span></span></code></pre></div><p>对程序来说，它看到的仍然是自己的虚拟地址空间。某个虚拟页此刻在物理内存里，还是被换出到了磁盘上，程序本身通常并不知道。</p>
+<h2 id="页表和-mmu-怎么配合">页表和 MMU 怎么配合</h2>
+<p>虚拟地址要变成物理地址，需要依靠 <strong>页表（Page Table）</strong> 和 <strong>MMU（Memory Management Unit，内存管理单元）</strong>。</p>
+<p>MMU 是 CPU 中负责地址转换的硬件单元。程序发出的虚拟地址会先交给 MMU，MMU 根据页表查找这个虚拟地址对应的物理位置。</p>
+<p>页表可以理解成一张映射表。每个进程都有自己的页表，里面记录了虚拟页和真实位置之间的关系：</p>
+<ul>
+<li>这个虚拟页是否在物理内存中。</li>
+<li>如果在内存中，它对应哪个物理页框。</li>
+<li>如果不在内存中，它是否在磁盘交换区或分页文件中。</li>
+<li>这个页是否可读、可写、可执行。</li>
+</ul>
+<p>一次普通内存访问大致是这样发生的：</p>
+<ol>
+<li>程序访问一个虚拟地址。</li>
+<li>CPU 把虚拟地址交给 MMU。</li>
+<li>MMU 查询当前进程的页表。</li>
+<li>如果这一页在物理内存中，MMU 得到物理地址，CPU 直接读写内存。</li>
+<li>如果这一页不在物理内存中，MMU 触发 <strong>缺页异常（Page Fault）</strong>。</li>
+<li>操作系统接管异常处理，把需要的页从磁盘读回内存。</li>
+<li>操作系统更新页表，然后让程序继续执行。</li>
+</ol>
+<p>这里有一个容易误解的点：缺页异常不是程序崩溃。它更像是操作系统发现“这一页暂时不在内存里”，于是暂停一下，把页准备好，再让程序继续运行。</p>
+<h2 id="什么时候会发生缺页">什么时候会发生缺页</h2>
+<p>缺页发生的直接原因是：<strong>程序访问的虚拟页当前没有映射到可用的物理页框</strong>。</p>
+<p>常见情况有三种：</p>
+<ol>
+<li>
+<p><strong>页面曾经在内存中，后来被换出到磁盘</strong></p>
+<p>内存紧张时，操作系统会选择一些暂时不活跃的页，把它们写到交换区或分页文件。程序再次访问这些页时，就会触发缺页，操作系统再把页换回来。</p>
+</li>
+<li>
+<p><strong>页面还没有真正加载进内存</strong></p>
+<p>很多系统会使用按需分页。程序启动或申请内存时，操作系统不一定立刻把所有页面都放入物理内存，而是等程序第一次访问时再加载。</p>
+</li>
+<li>
+<p><strong>访问了非法地址</strong></p>
+<p>如果程序访问的地址根本不属于它的虚拟地址空间，或者权限不允许访问，例如向只读页面写入数据，也会触发缺页异常。不过这种缺页通常无法被正常修复，最终可能变成段错误、访问违规等运行时错误。</p>
+</li>
+</ol>
+<p>所以，缺页不一定意味着出错。它可能是虚拟内存机制的正常工作流程，也可能代表程序访问了不该访问的地址。</p>
+<h2 id="什么时候会用到交换区">什么时候会用到交换区</h2>
+<p>交换区通常在物理内存压力较大时使用，但它不是“内存满了才突然启用”的简单开关。</p>
+<p>操作系统会根据页面活跃程度、内存压力、缓存策略等因素，选择一部分暂时不常用的页换出到磁盘。这样可以把物理内存腾出来，用给当前更需要的页面、文件缓存或其他内核数据结构。</p>
+<p>需要注意的是，被换出的不是“空闲页”。空闲页本来就没有有效数据，不需要写到磁盘。真正会被换出的，是那些当前不常用、但以后可能还要恢复的页。</p>
+<h2 id="总结">总结</h2>
+<p>内存和磁盘在操作系统里的抽象层次不同：</p>
+<ul>
+<li>内存主要被抽象成 <strong>虚拟地址空间、页、页框</strong>。</li>
+<li>磁盘主要被抽象成 <strong>块、文件、目录</strong>。</li>
+<li>虚拟内存能使用磁盘，是因为操作系统把磁盘上的交换区或分页文件也按页来管理。</li>
+<li>页表记录虚拟页当前在哪里，MMU 根据页表完成地址转换。</li>
+<li>如果虚拟页不在物理内存中，就会触发缺页异常，由操作系统负责把页面换入。</li>
+</ul>
+<p>一句话概括：<strong>虚拟内存不是简单地把内存和磁盘相加，而是操作系统用“页”这套机制，把物理内存和磁盘交换空间统一纳入同一个地址空间管理模型。</strong></p>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

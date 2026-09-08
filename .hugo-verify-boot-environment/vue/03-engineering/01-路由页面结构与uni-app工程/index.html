@@ -1,0 +1,2521 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>路由、页面结构与 uni-app 工程：从单页到跨端应用 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="Vue 应用最终会被组织成一个个页面。组件解决局部展示和交互，页面解决业务流程，路由则负责把“用户要去哪里”翻译成“应用应该渲染哪个页面、携带哪些参数、允许不允许进入、进入之后如何回退”。
+Web 项目常用 Vue Router。uni-app 项目通过 pages.json 声明页面，并使用 uni.navigateTo、uni.redirectTo、uni.switchTab 等 API 管理页面跳转。两者写法不同，但工程问题很相似：
+页面入口在哪里。 URL 或页面路径如何映射到页面文件。 参数从哪里来，应该传给谁。 页面能不能刷新、分享、回退。 权限、登录态、标题、布局这些页面级信息放在哪里。 页面和组件、API、store、组合函数之间的边界怎么划分。 如果这些问题没有想清楚，项目一开始也许能跑，后面就会出现很熟悉的场景：参数到处读，跳转到处写，权限判断散落在按钮、页面和接口回调里。到那时再说“重构一下”当然也可以，只是会比较辛苦。辛苦本身并不高贵，能避免就避免。
+一、先建立路由的工程视角 路由不是简单的“地址对应组件”。在前端工程里，路由至少承担四类职责：
+职责 Web Vue Router uni-app 页面声明 routes 配置 pages.json 页面渲染入口 &lt;RouterView /&gt; 框架根据页面路径加载 页面跳转 router.push、router.replace uni.navigateTo、uni.redirectTo、uni.switchTab 参数传递 params、query、state URL query、事件通道、store、本地缓存 页面级控制 路由守卫、meta 生命周期、拦截封装、页面栈判断 路由设计的关键不是把配置写出来，而是确定页面边界。一个判断方式是：这个状态是否应该被用户刷新、复制链接、浏览器回退、页面分享感知到？
+应该感知：放进路由，例如详情页 id、搜索页 keyword、分页页码、筛选条件。 不应该感知：放组件状态或页面状态，例如弹窗是否打开、某个输入框正在输入但还未提交。 多个页面都要用：考虑 store，例如登录用户信息、购物车数量、全局草稿。 跨端页面进入后才产生：uni-app 中可以考虑事件通道或 store，例如从列表页带一个完整对象到创建页预填。 URL 是应用状态的一部分。把该进 URL 的东西藏在组件里，用户一刷新就丢；把不该进 URL 的东西都塞进 URL，又会让路由变得又长又脆弱。能分清这两者，路由才算真正开始被你掌握。
+二、Web 路由基本配置 Vue Router 的最小配置通常是这样：
+import { createRouter, createWebHistory } from &#39;vue-router&#39; export const router = createRouter({ history: createWebHistory(), routes: [ { path: &#39;/&#39;, component: () =&gt; import(&#39;@/pages/home/index.vue&#39;) }, { path: &#39;/posts/:id&#39;, component: () =&gt; import(&#39;@/pages/post-detail/index.vue&#39;) } ] }) 这里有几个值得注意的点。
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/vue/03-engineering/01-%E8%B7%AF%E7%94%B1%E9%A1%B5%E9%9D%A2%E7%BB%93%E6%9E%84%E4%B8%8Euni-app%E5%B7%A5%E7%A8%8B/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/vue/03-engineering/01-%E8%B7%AF%E7%94%B1%E9%A1%B5%E9%9D%A2%E7%BB%93%E6%9E%84%E4%B8%8Euni-app%E5%B7%A5%E7%A8%8B/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="路由、页面结构与 uni-app 工程：从单页到跨端应用">
+  <meta property="og:description" content="Vue 应用最终会被组织成一个个页面。组件解决局部展示和交互，页面解决业务流程，路由则负责把“用户要去哪里”翻译成“应用应该渲染哪个页面、携带哪些参数、允许不允许进入、进入之后如何回退”。
+Web 项目常用 Vue Router。uni-app 项目通过 pages.json 声明页面，并使用 uni.navigateTo、uni.redirectTo、uni.switchTab 等 API 管理页面跳转。两者写法不同，但工程问题很相似：
+页面入口在哪里。 URL 或页面路径如何映射到页面文件。 参数从哪里来，应该传给谁。 页面能不能刷新、分享、回退。 权限、登录态、标题、布局这些页面级信息放在哪里。 页面和组件、API、store、组合函数之间的边界怎么划分。 如果这些问题没有想清楚，项目一开始也许能跑，后面就会出现很熟悉的场景：参数到处读，跳转到处写，权限判断散落在按钮、页面和接口回调里。到那时再说“重构一下”当然也可以，只是会比较辛苦。辛苦本身并不高贵，能避免就避免。
+一、先建立路由的工程视角 路由不是简单的“地址对应组件”。在前端工程里，路由至少承担四类职责：
+职责 Web Vue Router uni-app 页面声明 routes 配置 pages.json 页面渲染入口 &lt;RouterView /&gt; 框架根据页面路径加载 页面跳转 router.push、router.replace uni.navigateTo、uni.redirectTo、uni.switchTab 参数传递 params、query、state URL query、事件通道、store、本地缓存 页面级控制 路由守卫、meta 生命周期、拦截封装、页面栈判断 路由设计的关键不是把配置写出来，而是确定页面边界。一个判断方式是：这个状态是否应该被用户刷新、复制链接、浏览器回退、页面分享感知到？
+应该感知：放进路由，例如详情页 id、搜索页 keyword、分页页码、筛选条件。 不应该感知：放组件状态或页面状态，例如弹窗是否打开、某个输入框正在输入但还未提交。 多个页面都要用：考虑 store，例如登录用户信息、购物车数量、全局草稿。 跨端页面进入后才产生：uni-app 中可以考虑事件通道或 store，例如从列表页带一个完整对象到创建页预填。 URL 是应用状态的一部分。把该进 URL 的东西藏在组件里，用户一刷新就丢；把不该进 URL 的东西都塞进 URL，又会让路由变得又长又脆弱。能分清这两者，路由才算真正开始被你掌握。
+二、Web 路由基本配置 Vue Router 的最小配置通常是这样：
+import { createRouter, createWebHistory } from &#39;vue-router&#39; export const router = createRouter({ history: createWebHistory(), routes: [ { path: &#39;/&#39;, component: () =&gt; import(&#39;@/pages/home/index.vue&#39;) }, { path: &#39;/posts/:id&#39;, component: () =&gt; import(&#39;@/pages/post-detail/index.vue&#39;) } ] }) 这里有几个值得注意的点。">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="vue">
+    <meta property="article:published_time" content="2026-08-19T18:14:00+08:00">
+    <meta property="article:modified_time" content="2026-08-19T18:14:00+08:00">
+
+  
+  <meta itemprop="name" content="路由、页面结构与 uni-app 工程：从单页到跨端应用">
+  <meta itemprop="description" content="Vue 应用最终会被组织成一个个页面。组件解决局部展示和交互，页面解决业务流程，路由则负责把“用户要去哪里”翻译成“应用应该渲染哪个页面、携带哪些参数、允许不允许进入、进入之后如何回退”。
+Web 项目常用 Vue Router。uni-app 项目通过 pages.json 声明页面，并使用 uni.navigateTo、uni.redirectTo、uni.switchTab 等 API 管理页面跳转。两者写法不同，但工程问题很相似：
+页面入口在哪里。 URL 或页面路径如何映射到页面文件。 参数从哪里来，应该传给谁。 页面能不能刷新、分享、回退。 权限、登录态、标题、布局这些页面级信息放在哪里。 页面和组件、API、store、组合函数之间的边界怎么划分。 如果这些问题没有想清楚，项目一开始也许能跑，后面就会出现很熟悉的场景：参数到处读，跳转到处写，权限判断散落在按钮、页面和接口回调里。到那时再说“重构一下”当然也可以，只是会比较辛苦。辛苦本身并不高贵，能避免就避免。
+一、先建立路由的工程视角 路由不是简单的“地址对应组件”。在前端工程里，路由至少承担四类职责：
+职责 Web Vue Router uni-app 页面声明 routes 配置 pages.json 页面渲染入口 &lt;RouterView /&gt; 框架根据页面路径加载 页面跳转 router.push、router.replace uni.navigateTo、uni.redirectTo、uni.switchTab 参数传递 params、query、state URL query、事件通道、store、本地缓存 页面级控制 路由守卫、meta 生命周期、拦截封装、页面栈判断 路由设计的关键不是把配置写出来，而是确定页面边界。一个判断方式是：这个状态是否应该被用户刷新、复制链接、浏览器回退、页面分享感知到？
+应该感知：放进路由，例如详情页 id、搜索页 keyword、分页页码、筛选条件。 不应该感知：放组件状态或页面状态，例如弹窗是否打开、某个输入框正在输入但还未提交。 多个页面都要用：考虑 store，例如登录用户信息、购物车数量、全局草稿。 跨端页面进入后才产生：uni-app 中可以考虑事件通道或 store，例如从列表页带一个完整对象到创建页预填。 URL 是应用状态的一部分。把该进 URL 的东西藏在组件里，用户一刷新就丢；把不该进 URL 的东西都塞进 URL，又会让路由变得又长又脆弱。能分清这两者，路由才算真正开始被你掌握。
+二、Web 路由基本配置 Vue Router 的最小配置通常是这样：
+import { createRouter, createWebHistory } from &#39;vue-router&#39; export const router = createRouter({ history: createWebHistory(), routes: [ { path: &#39;/&#39;, component: () =&gt; import(&#39;@/pages/home/index.vue&#39;) }, { path: &#39;/posts/:id&#39;, component: () =&gt; import(&#39;@/pages/post-detail/index.vue&#39;) } ] }) 这里有几个值得注意的点。">
+  <meta itemprop="datePublished" content="2026-08-19T18:14:00+08:00">
+  <meta itemprop="dateModified" content="2026-08-19T18:14:00+08:00">
+  <meta itemprop="wordCount" content="2679">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="路由、页面结构与 uni-app 工程：从单页到跨端应用">
+  <meta name="twitter:description" content="Vue 应用最终会被组织成一个个页面。组件解决局部展示和交互，页面解决业务流程，路由则负责把“用户要去哪里”翻译成“应用应该渲染哪个页面、携带哪些参数、允许不允许进入、进入之后如何回退”。
+Web 项目常用 Vue Router。uni-app 项目通过 pages.json 声明页面，并使用 uni.navigateTo、uni.redirectTo、uni.switchTab 等 API 管理页面跳转。两者写法不同，但工程问题很相似：
+页面入口在哪里。 URL 或页面路径如何映射到页面文件。 参数从哪里来，应该传给谁。 页面能不能刷新、分享、回退。 权限、登录态、标题、布局这些页面级信息放在哪里。 页面和组件、API、store、组合函数之间的边界怎么划分。 如果这些问题没有想清楚，项目一开始也许能跑，后面就会出现很熟悉的场景：参数到处读，跳转到处写，权限判断散落在按钮、页面和接口回调里。到那时再说“重构一下”当然也可以，只是会比较辛苦。辛苦本身并不高贵，能避免就避免。
+一、先建立路由的工程视角 路由不是简单的“地址对应组件”。在前端工程里，路由至少承担四类职责：
+职责 Web Vue Router uni-app 页面声明 routes 配置 pages.json 页面渲染入口 &lt;RouterView /&gt; 框架根据页面路径加载 页面跳转 router.push、router.replace uni.navigateTo、uni.redirectTo、uni.switchTab 参数传递 params、query、state URL query、事件通道、store、本地缓存 页面级控制 路由守卫、meta 生命周期、拦截封装、页面栈判断 路由设计的关键不是把配置写出来，而是确定页面边界。一个判断方式是：这个状态是否应该被用户刷新、复制链接、浏览器回退、页面分享感知到？
+应该感知：放进路由，例如详情页 id、搜索页 keyword、分页页码、筛选条件。 不应该感知：放组件状态或页面状态，例如弹窗是否打开、某个输入框正在输入但还未提交。 多个页面都要用：考虑 store，例如登录用户信息、购物车数量、全局草稿。 跨端页面进入后才产生：uni-app 中可以考虑事件通道或 store，例如从列表页带一个完整对象到创建页预填。 URL 是应用状态的一部分。把该进 URL 的东西藏在组件里，用户一刷新就丢；把不该进 URL 的东西都塞进 URL，又会让路由变得又长又脆弱。能分清这两者，路由才算真正开始被你掌握。
+二、Web 路由基本配置 Vue Router 的最小配置通常是这样：
+import { createRouter, createWebHistory } from &#39;vue-router&#39; export const router = createRouter({ history: createWebHistory(), routes: [ { path: &#39;/&#39;, component: () =&gt; import(&#39;@/pages/home/index.vue&#39;) }, { path: &#39;/posts/:id&#39;, component: () =&gt; import(&#39;@/pages/post-detail/index.vue&#39;) } ] }) 这里有几个值得注意的点。">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">路由、页面结构与 uni-app 工程：从单页到跨端应用</h1>
+
+    
+      <div class="post-date">August 19, 2026</div>
+    
+
+    <div class="post-content">
+      <p>Vue 应用最终会被组织成一个个页面。组件解决局部展示和交互，页面解决业务流程，路由则负责把“用户要去哪里”翻译成“应用应该渲染哪个页面、携带哪些参数、允许不允许进入、进入之后如何回退”。</p>
+<p>Web 项目常用 Vue Router。uni-app 项目通过 <code>pages.json</code> 声明页面，并使用 <code>uni.navigateTo</code>、<code>uni.redirectTo</code>、<code>uni.switchTab</code> 等 API 管理页面跳转。两者写法不同，但工程问题很相似：</p>
+<ul>
+<li>页面入口在哪里。</li>
+<li>URL 或页面路径如何映射到页面文件。</li>
+<li>参数从哪里来，应该传给谁。</li>
+<li>页面能不能刷新、分享、回退。</li>
+<li>权限、登录态、标题、布局这些页面级信息放在哪里。</li>
+<li>页面和组件、API、store、组合函数之间的边界怎么划分。</li>
+</ul>
+<p>如果这些问题没有想清楚，项目一开始也许能跑，后面就会出现很熟悉的场景：参数到处读，跳转到处写，权限判断散落在按钮、页面和接口回调里。到那时再说“重构一下”当然也可以，只是会比较辛苦。辛苦本身并不高贵，能避免就避免。</p>
+<h2 id="一先建立路由的工程视角">一、先建立路由的工程视角</h2>
+<p>路由不是简单的“地址对应组件”。在前端工程里，路由至少承担四类职责：</p>
+<table>
+  <thead>
+      <tr>
+          <th>职责</th>
+          <th>Web Vue Router</th>
+          <th>uni-app</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>页面声明</td>
+          <td><code>routes</code> 配置</td>
+          <td><code>pages.json</code></td>
+      </tr>
+      <tr>
+          <td>页面渲染入口</td>
+          <td><code>&lt;RouterView /&gt;</code></td>
+          <td>框架根据页面路径加载</td>
+      </tr>
+      <tr>
+          <td>页面跳转</td>
+          <td><code>router.push</code>、<code>router.replace</code></td>
+          <td><code>uni.navigateTo</code>、<code>uni.redirectTo</code>、<code>uni.switchTab</code></td>
+      </tr>
+      <tr>
+          <td>参数传递</td>
+          <td><code>params</code>、<code>query</code>、<code>state</code></td>
+          <td>URL query、事件通道、store、本地缓存</td>
+      </tr>
+      <tr>
+          <td>页面级控制</td>
+          <td>路由守卫、<code>meta</code></td>
+          <td>生命周期、拦截封装、页面栈判断</td>
+      </tr>
+  </tbody>
+</table>
+<p>路由设计的关键不是把配置写出来，而是确定页面边界。一个判断方式是：这个状态是否应该被用户刷新、复制链接、浏览器回退、页面分享感知到？</p>
+<ul>
+<li>应该感知：放进路由，例如详情页 <code>id</code>、搜索页 <code>keyword</code>、分页页码、筛选条件。</li>
+<li>不应该感知：放组件状态或页面状态，例如弹窗是否打开、某个输入框正在输入但还未提交。</li>
+<li>多个页面都要用：考虑 store，例如登录用户信息、购物车数量、全局草稿。</li>
+<li>跨端页面进入后才产生：uni-app 中可以考虑事件通道或 store，例如从列表页带一个完整对象到创建页预填。</li>
+</ul>
+<p>URL 是应用状态的一部分。把该进 URL 的东西藏在组件里，用户一刷新就丢；把不该进 URL 的东西都塞进 URL，又会让路由变得又长又脆弱。能分清这两者，路由才算真正开始被你掌握。</p>
+<h2 id="二web-路由基本配置">二、Web 路由基本配置</h2>
+<p>Vue Router 的最小配置通常是这样：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">createRouter</span><span class="p">,</span> <span class="nx">createWebHistory</span> <span class="p">}</span> <span class="kr">from</span> <span class="s1">&#39;vue-router&#39;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">export</span> <span class="kr">const</span> <span class="nx">router</span> <span class="o">=</span> <span class="nx">createRouter</span><span class="p">({</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">history</span>: <span class="kt">createWebHistory</span><span class="p">(),</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">routes</span><span class="o">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">path</span><span class="o">:</span> <span class="s1">&#39;/&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">component</span><span class="o">:</span> <span class="p">()</span> <span class="o">=&gt;</span> <span class="kr">import</span><span class="p">(</span><span class="s1">&#39;@/pages/home/index.vue&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">},</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">path</span><span class="o">:</span> <span class="s1">&#39;/posts/:id&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">component</span><span class="o">:</span> <span class="p">()</span> <span class="o">=&gt;</span> <span class="kr">import</span><span class="p">(</span><span class="s1">&#39;@/pages/post-detail/index.vue&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">]</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span></code></pre></div><p>这里有几个值得注意的点。</p>
+<p>第一，<code>path</code> 描述 URL 结构，<code>component</code> 描述这个地址命中的页面组件。页面组件通常放在 <code>pages</code> 或 <code>views</code> 目录，不建议和普通业务组件混在一起。</p>
+<p>第二，<code>component: () =&gt; import(...)</code> 是懒加载写法。用户访问到对应页面时才加载这段页面代码。页面越多，这个写法越重要。否则首屏会把很多暂时用不到的页面一起打进入口包。</p>
+<p>第三，路由表是一份页面协议。它应该稳定、清楚、可读，而不是临时拼凑出来的路径列表。路径一旦被用户收藏、被运营投放、被外部系统引用，就不只是前端内部实现了。</p>
+<p>在 <code>main.ts</code> 中注册路由：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">createApp</span> <span class="p">}</span> <span class="kr">from</span> <span class="s1">&#39;vue&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">router</span> <span class="p">}</span> <span class="kr">from</span> <span class="s1">&#39;./router&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">import</span> <span class="nx">App</span> <span class="kr">from</span> <span class="s1">&#39;./App.vue&#39;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">createApp</span><span class="p">(</span><span class="nx">App</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="p">.</span><span class="nx">use</span><span class="p">(</span><span class="nx">router</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="p">.</span><span class="nx">mount</span><span class="p">(</span><span class="s1">&#39;#app&#39;</span><span class="p">)</span>
+</span></span></code></pre></div><p>在 <code>App.vue</code> 或布局组件中提供渲染出口：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">template</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">&lt;</span><span class="nt">RouterView</span> <span class="p">/&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="p">&lt;/</span><span class="nt">template</span><span class="p">&gt;</span>
+</span></span></code></pre></div><p><code>RouterView</code> 的含义是：当前 URL 命中的页面组件渲染在这里。没有它，路由配置只是配置，页面没有地方出现。</p>
+<h2 id="三路由匹配顺序与动态路由">三、路由匹配顺序与动态路由</h2>
+<p>动态路由用于描述一类页面。例如文章详情页不是为每篇文章写一条路由，而是写成：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">path</span><span class="o">:</span> <span class="s1">&#39;/posts/:id&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">name</span><span class="o">:</span> <span class="s1">&#39;post-detail&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">component</span><span class="o">:</span> <span class="p">()</span> <span class="o">=&gt;</span> <span class="kr">import</span><span class="p">(</span><span class="s1">&#39;@/pages/post/detail.vue&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>访问 <code>/posts/1</code> 时，<code>id</code> 是 <code>1</code>。访问 <code>/posts/200</code> 时，<code>id</code> 是 <code>200</code>。页面结构相同，数据不同。</p>
+<p>在页面中读取：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">computed</span> <span class="p">}</span> <span class="kr">from</span> <span class="s1">&#39;vue&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">useRoute</span> <span class="p">}</span> <span class="kr">from</span> <span class="s1">&#39;vue-router&#39;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">route</span> <span class="o">=</span> <span class="nx">useRoute</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">postId</span> <span class="o">=</span> <span class="nx">computed</span><span class="p">(()</span> <span class="o">=&gt;</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">const</span> <span class="nx">value</span> <span class="o">=</span> <span class="nb">Number</span><span class="p">(</span><span class="nx">route</span><span class="p">.</span><span class="nx">params</span><span class="p">.</span><span class="nx">id</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="k">return</span> <span class="nb">Number</span><span class="p">.</span><span class="nb">isFinite</span><span class="p">(</span><span class="nx">value</span><span class="p">)</span> <span class="o">?</span> <span class="nx">value</span> : <span class="kt">0</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span></code></pre></div><p>不要急着把 <code>route.params.id</code> 直接丢给 API。路由参数本质上来自 URL，是字符串，而且可能非法。页面层应该先做基本转换和校验，再把明确的业务参数传给 API：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nx">postId</span><span class="p">.</span><span class="nx">value</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="c1">// 可以显示错误页，也可以跳回列表页
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">post</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">fetchPostDetail</span><span class="p">(</span><span class="nx">postId</span><span class="p">.</span><span class="nx">value</span><span class="p">)</span>
+</span></span></code></pre></div><p>还要注意匹配顺序。下面这个例子有问题：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">routes</span> <span class="o">=</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">  <span class="p">{</span> <span class="nx">path</span><span class="o">:</span> <span class="s1">&#39;/posts/:id&#39;</span><span class="p">,</span> <span class="nx">component</span><span class="o">:</span> <span class="p">()</span> <span class="o">=&gt;</span> <span class="kr">import</span><span class="p">(</span><span class="s1">&#39;@/pages/post/detail.vue&#39;</span><span class="p">)</span> <span class="p">},</span>
+</span></span><span class="line"><span class="cl">  <span class="p">{</span> <span class="nx">path</span><span class="o">:</span> <span class="s1">&#39;/posts/create&#39;</span><span class="p">,</span> <span class="nx">component</span><span class="o">:</span> <span class="p">()</span> <span class="o">=&gt;</span> <span class="kr">import</span><span class="p">(</span><span class="s1">&#39;@/pages/post/create.vue&#39;</span><span class="p">)</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">]</span>
+</span></span></code></pre></div><p>如果路由器先匹配 <code>/posts/:id</code>，<code>/posts/create</code> 可能会被当成详情页，<code>id</code> 变成字符串 <code>create</code>。更稳妥的写法是把更具体的路由放在前面：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">routes</span> <span class="o">=</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">  <span class="p">{</span> <span class="nx">path</span><span class="o">:</span> <span class="s1">&#39;/posts/create&#39;</span><span class="p">,</span> <span class="nx">component</span><span class="o">:</span> <span class="p">()</span> <span class="o">=&gt;</span> <span class="kr">import</span><span class="p">(</span><span class="s1">&#39;@/pages/post/create.vue&#39;</span><span class="p">)</span> <span class="p">},</span>
+</span></span><span class="line"><span class="cl">  <span class="p">{</span> <span class="nx">path</span><span class="o">:</span> <span class="s1">&#39;/posts/:id&#39;</span><span class="p">,</span> <span class="nx">component</span><span class="o">:</span> <span class="p">()</span> <span class="o">=&gt;</span> <span class="kr">import</span><span class="p">(</span><span class="s1">&#39;@/pages/post/detail.vue&#39;</span><span class="p">)</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">]</span>
+</span></span></code></pre></div><p>Vue Router 会对路径做自己的排序和评分，但工程上仍然建议把静态、具体的路由写在动态、宽泛的路由前面。让人一眼看懂，比事后解释框架规则更可靠。</p>
+<h2 id="四paramsquery-和页面状态">四、params、query 和页面状态</h2>
+<p>路由参数主要有三类。</p>
+<p><code>params</code> 适合表达路径本身的一部分：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">/posts/42
+</span></span></code></pre></div><p>对应：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">id</span> <span class="o">=</span> <span class="nb">Number</span><span class="p">(</span><span class="nx">route</span><span class="p">.</span><span class="nx">params</span><span class="p">.</span><span class="nx">id</span><span class="p">)</span>
+</span></span></code></pre></div><p><code>query</code> 适合表达筛选、搜索、排序、分页这类可选状态：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">/posts?keyword=vue&amp;page=2
+</span></span></code></pre></div><p>读取方式：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">computed</span> <span class="p">}</span> <span class="kr">from</span> <span class="s1">&#39;vue&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">useRoute</span> <span class="p">}</span> <span class="kr">from</span> <span class="s1">&#39;vue-router&#39;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">route</span> <span class="o">=</span> <span class="nx">useRoute</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">keyword</span> <span class="o">=</span> <span class="nx">computed</span><span class="p">(()</span> <span class="o">=&gt;</span> <span class="nb">String</span><span class="p">(</span><span class="nx">route</span><span class="p">.</span><span class="nx">query</span><span class="p">.</span><span class="nx">keyword</span> <span class="o">??</span> <span class="s1">&#39;&#39;</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">page</span> <span class="o">=</span> <span class="nx">computed</span><span class="p">(()</span> <span class="o">=&gt;</span> <span class="nb">Number</span><span class="p">(</span><span class="nx">route</span><span class="p">.</span><span class="nx">query</span><span class="p">.</span><span class="nx">page</span> <span class="o">??</span> <span class="mi">1</span><span class="p">))</span>
+</span></span></code></pre></div><p>更新查询条件时，可以使用 <code>router.push</code> 或 <code>router.replace</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">useRouter</span><span class="p">,</span> <span class="nx">useRoute</span> <span class="p">}</span> <span class="kr">from</span> <span class="s1">&#39;vue-router&#39;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">router</span> <span class="o">=</span> <span class="nx">useRouter</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">route</span> <span class="o">=</span> <span class="nx">useRoute</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">function</span> <span class="nx">search</span><span class="p">(</span><span class="nx">keyword</span>: <span class="kt">string</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">router</span><span class="p">.</span><span class="nx">push</span><span class="p">({</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">path</span><span class="o">:</span> <span class="s1">&#39;/posts&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">query</span><span class="o">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="p">...</span><span class="nx">route</span><span class="p">.</span><span class="nx">query</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">keyword</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">page</span>: <span class="kt">1</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">})</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>如果用户每输入一个字都同步到 URL，更适合用 <code>replace</code>，避免浏览器历史记录塞满每次输入：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kd">function</span> <span class="nx">syncKeyword</span><span class="p">(</span><span class="nx">keyword</span>: <span class="kt">string</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">router</span><span class="p">.</span><span class="nx">replace</span><span class="p">({</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">query</span><span class="o">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="p">...</span><span class="nx">route</span><span class="p">.</span><span class="nx">query</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">keyword</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">})</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p><code>state</code> 则适合临时跳转数据，但它不应该成为关键业务数据的唯一来源。因为刷新、分享、跨端打开时，这类状态往往不可依赖。详情页需要 <code>id</code>，就把 <code>id</code> 放到路径里；需要展示的数据由页面进入后再请求。这样页面才是可恢复的。</p>
+<p>一个简单判断：</p>
+<ul>
+<li>详情页主键：用 <code>params</code>。</li>
+<li>搜索条件、tab、排序、分页：用 <code>query</code>。</li>
+<li>页面内弹窗、输入中状态：用组件状态。</li>
+<li>登录用户、全局配置：用 store。</li>
+<li>临时动画、局部展开折叠：不要放路由。</li>
+</ul>
+<h2 id="五命名路由与跳转">五、命名路由与跳转</h2>
+<p>直接写路径可以：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="nx">router</span><span class="p">.</span><span class="nx">push</span><span class="p">(</span><span class="sb">`/posts/</span><span class="si">${</span><span class="nx">post</span><span class="p">.</span><span class="nx">id</span><span class="si">}</span><span class="sb">`</span><span class="p">)</span>
+</span></span></code></pre></div><p>但业务复杂后，命名路由会更稳：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">routes</span> <span class="o">=</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">  <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">path</span><span class="o">:</span> <span class="s1">&#39;/posts/:id&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">name</span><span class="o">:</span> <span class="s1">&#39;post-detail&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">component</span><span class="o">:</span> <span class="p">()</span> <span class="o">=&gt;</span> <span class="kr">import</span><span class="p">(</span><span class="s1">&#39;@/pages/post/detail.vue&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">]</span>
+</span></span></code></pre></div><p>跳转时：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="nx">router</span><span class="p">.</span><span class="nx">push</span><span class="p">({</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">name</span><span class="o">:</span> <span class="s1">&#39;post-detail&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">params</span><span class="o">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">id</span>: <span class="kt">post.id</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span></code></pre></div><p>命名路由的好处是路径结构变化时，调用方不必到处拼字符串。例如你把 <code>/posts/:id</code> 改成 <code>/articles/:id</code>，很多跳转代码仍然可以保持不变。</p>
+<p>模板中也可以使用：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">RouterLink</span>
+</span></span><span class="line"><span class="cl">  <span class="o">:</span><span class="na">to</span><span class="o">=</span><span class="s">&#34;{ name: &#39;post-detail&#39;, params: { id: post.id } }&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">{{</span> <span class="nx">post</span><span class="p">.</span><span class="nx">title</span> <span class="p">}}</span>
+</span></span><span class="line"><span class="cl"><span class="p">&lt;/</span><span class="nt">RouterLink</span><span class="p">&gt;</span>
+</span></span></code></pre></div><p><code>RouterLink</code> 适合普通导航，因为它会生成真实链接，也更利于浏览器行为、右键打开和可访问性。按钮适合提交、删除、打开弹窗这类命令。链接就是链接，按钮就是按钮，混用久了，页面行为会变得含糊。</p>
+<h2 id="六嵌套路由与布局">六、嵌套路由与布局</h2>
+<p>很多后台系统会有共同布局：侧边栏、顶部栏、内容区。此时可以用嵌套路由：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">routes</span> <span class="o">=</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">  <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">path</span><span class="o">:</span> <span class="s1">&#39;/admin&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">component</span><span class="o">:</span> <span class="p">()</span> <span class="o">=&gt;</span> <span class="kr">import</span><span class="p">(</span><span class="s1">&#39;@/layouts/AdminLayout.vue&#39;</span><span class="p">),</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">children</span><span class="o">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">      <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">path</span><span class="o">:</span> <span class="s1">&#39;&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">redirect</span><span class="o">:</span> <span class="s1">&#39;/admin/dashboard&#39;</span>
+</span></span><span class="line"><span class="cl">      <span class="p">},</span>
+</span></span><span class="line"><span class="cl">      <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">path</span><span class="o">:</span> <span class="s1">&#39;dashboard&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">component</span><span class="o">:</span> <span class="p">()</span> <span class="o">=&gt;</span> <span class="kr">import</span><span class="p">(</span><span class="s1">&#39;@/pages/admin/dashboard.vue&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">      <span class="p">},</span>
+</span></span><span class="line"><span class="cl">      <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">path</span><span class="o">:</span> <span class="s1">&#39;posts&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">component</span><span class="o">:</span> <span class="p">()</span> <span class="o">=&gt;</span> <span class="kr">import</span><span class="p">(</span><span class="s1">&#39;@/pages/admin/posts.vue&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">      <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">]</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">]</span>
+</span></span></code></pre></div><p><code>AdminLayout.vue</code> 中放二级出口：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">template</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">&lt;</span><span class="nt">div</span> <span class="na">class</span><span class="o">=</span><span class="s">&#34;admin-layout&#34;</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">&lt;</span><span class="nt">aside</span><span class="p">&gt;...&lt;/</span><span class="nt">aside</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">&lt;</span><span class="nt">main</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">      <span class="p">&lt;</span><span class="nt">RouterView</span> <span class="p">/&gt;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">&lt;/</span><span class="nt">main</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">&lt;/</span><span class="nt">div</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="p">&lt;/</span><span class="nt">template</span><span class="p">&gt;</span>
+</span></span></code></pre></div><p>这表示 <code>/admin</code> 这一层负责布局，<code>/admin/dashboard</code>、<code>/admin/posts</code> 这些子页面只负责内容区。</p>
+<p>嵌套路由不是为了显得高级，而是为了避免每个页面重复写布局。判断是否需要嵌套，可以问三个问题：</p>
+<ul>
+<li>这些页面是否共享同一个外壳。</li>
+<li>切换子页面时外壳是否应该保持。</li>
+<li>权限、导航菜单、面包屑是否属于同一个区域。</li>
+</ul>
+<p>如果答案基本是肯定的，就适合嵌套路由。如果只是两个页面恰好长得像，先用组件复用即可，不必急着引入路由层级。</p>
+<h2 id="七路由-meta-与页面级信息">七、路由 meta 与页面级信息</h2>
+<p>路由 <code>meta</code> 适合放页面级静态信息：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">routes</span> <span class="o">=</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">  <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">path</span><span class="o">:</span> <span class="s1">&#39;/posts/create&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">name</span><span class="o">:</span> <span class="s1">&#39;post-create&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">component</span><span class="o">:</span> <span class="p">()</span> <span class="o">=&gt;</span> <span class="kr">import</span><span class="p">(</span><span class="s1">&#39;@/pages/post/create.vue&#39;</span><span class="p">),</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">meta</span><span class="o">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">title</span><span class="o">:</span> <span class="s1">&#39;发布文章&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">requiresAuth</span>: <span class="kt">true</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">roles</span><span class="o">:</span> <span class="p">[</span><span class="s1">&#39;editor&#39;</span><span class="p">,</span> <span class="s1">&#39;admin&#39;</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">]</span>
+</span></span></code></pre></div><p>常见用途：</p>
+<ul>
+<li>页面标题。</li>
+<li>是否需要登录。</li>
+<li>需要哪些角色。</li>
+<li>使用哪个布局。</li>
+<li>是否缓存页面。</li>
+<li>是否在菜单中展示。</li>
+</ul>
+<p>例如统一设置页面标题：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="nx">router</span><span class="p">.</span><span class="nx">afterEach</span><span class="p">((</span><span class="nx">to</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">const</span> <span class="nx">title</span> <span class="o">=</span> <span class="k">typeof</span> <span class="nx">to</span><span class="p">.</span><span class="nx">meta</span><span class="p">.</span><span class="nx">title</span> <span class="o">===</span> <span class="s1">&#39;string&#39;</span> <span class="o">?</span> <span class="nx">to</span><span class="p">.</span><span class="nx">meta</span><span class="p">.</span><span class="nx">title</span> <span class="o">:</span> <span class="s1">&#39;默认标题&#39;</span>
+</span></span><span class="line"><span class="cl">  <span class="nb">document</span><span class="p">.</span><span class="nx">title</span> <span class="o">=</span> <span class="nx">title</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span></code></pre></div><p><code>meta</code> 不适合放会频繁变化的业务数据。它是路由记录的附加说明，不是状态管理工具。把文章详情数据塞进 <code>meta</code>，就像把饭菜倒进抽屉里，倒也不是完全放不进去，只是后果会比较明显。</p>
+<h2 id="八路由守卫怎么写才克制">八、路由守卫怎么写才克制</h2>
+<p>登录校验通常写在全局前置守卫：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="nx">router</span><span class="p">.</span><span class="nx">beforeEach</span><span class="p">((</span><span class="nx">to</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">const</span> <span class="nx">authStore</span> <span class="o">=</span> <span class="nx">useAuthStore</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="p">(</span><span class="nx">to</span><span class="p">.</span><span class="nx">meta</span><span class="p">.</span><span class="nx">requiresAuth</span> <span class="o">&amp;&amp;</span> <span class="o">!</span><span class="nx">authStore</span><span class="p">.</span><span class="nx">loggedIn</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">path</span><span class="o">:</span> <span class="s1">&#39;/login&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">query</span><span class="o">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">redirect</span>: <span class="kt">to.fullPath</span>
+</span></span><span class="line"><span class="cl">      <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span></code></pre></div><p>角色校验可以继续放在守卫里：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="nx">router</span><span class="p">.</span><span class="nx">beforeEach</span><span class="p">((</span><span class="nx">to</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">const</span> <span class="nx">authStore</span> <span class="o">=</span> <span class="nx">useAuthStore</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">const</span> <span class="nx">roles</span> <span class="o">=</span> <span class="nb">Array</span><span class="p">.</span><span class="nx">isArray</span><span class="p">(</span><span class="nx">to</span><span class="p">.</span><span class="nx">meta</span><span class="p">.</span><span class="nx">roles</span><span class="p">)</span> <span class="o">?</span> <span class="nx">to</span><span class="p">.</span><span class="nx">meta</span><span class="p">.</span><span class="nx">roles</span> <span class="o">:</span> <span class="p">[]</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nx">roles</span><span class="p">.</span><span class="nx">length</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kr">const</span> <span class="nx">allowed</span> <span class="o">=</span> <span class="nx">roles</span><span class="p">.</span><span class="nx">some</span><span class="p">((</span><span class="nx">role</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="nx">authStore</span><span class="p">.</span><span class="nx">roles</span><span class="p">.</span><span class="nx">includes</span><span class="p">(</span><span class="nx">role</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nx">allowed</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="s1">&#39;/403&#39;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span></code></pre></div><p>但守卫要克制。它适合处理页面级准入，不适合写大量业务流程。</p>
+<p>适合放守卫：</p>
+<ul>
+<li>未登录不能进入。</li>
+<li>没有角色不能进入。</li>
+<li>页面标题、埋点这类页面级副作用。</li>
+<li>某些页面进入前必须确认全局配置已加载。</li>
+</ul>
+<p>不适合放守卫：</p>
+<ul>
+<li>文章详情数据请求。</li>
+<li>表单草稿保存。</li>
+<li>页面内部 tab 切换。</li>
+<li>按钮权限的细粒度展示。</li>
+<li>复杂业务审批逻辑。</li>
+</ul>
+<p>一个实用原则：守卫决定“能不能进这个页面”，页面决定“进来后做什么”。如果把“进来后做什么”全塞进守卫，调试时你会发现页面还没出现，逻辑已经绕了半天。那不是深奥，是麻烦。</p>
+<h2 id="九刷新404-与-history-模式">九、刷新、404 与 history 模式</h2>
+<p>Vue Router 常见两种 history：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="nx">createWebHistory</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="nx">createWebHashHistory</span><span class="p">()</span>
+</span></span></code></pre></div><p><code>createWebHistory()</code> 的 URL 更自然：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">https://example.com/posts/1
+</span></span></code></pre></div><p>但服务器需要把前端路由回退到 <code>index.html</code>。否则用户刷新 <code>/posts/1</code> 时，服务器会以为你真的要访问 <code>/posts/1</code> 这个静态文件，结果返回 404。</p>
+<p>Nginx 常见配置：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">location / {
+</span></span><span class="line"><span class="cl">  try_files $uri $uri/ /index.html;
+</span></span><span class="line"><span class="cl">}
+</span></span></code></pre></div><p><code>createWebHashHistory()</code> 的 URL 会带 <code>#</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">https://example.com/#/posts/1
+</span></span></code></pre></div><p>它对服务器要求低，因为 <code>#</code> 后面的内容不会发给服务器。但 URL 可读性差一些。后台系统、内网工具、静态托管限制较多时可以考虑 hash；面向用户的 Web 应用一般优先 history，并配好服务端回退。</p>
+<p>404 页面也应该显式配置：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">path</span><span class="o">:</span> <span class="s1">&#39;/:pathMatch(.*)*&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">name</span><span class="o">:</span> <span class="s1">&#39;not-found&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">component</span><span class="o">:</span> <span class="p">()</span> <span class="o">=&gt;</span> <span class="kr">import</span><span class="p">(</span><span class="s1">&#39;@/pages/error/not-found.vue&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>把它放在路由表最后。未知路径应该有明确兜底，不应该落到一个莫名其妙的页面里。</p>
+<h2 id="十页面组件应该做什么">十、页面组件应该做什么</h2>
+<p>页面组件是路由命中的入口，它不应该只是大号组件，也不应该变成所有逻辑的仓库。</p>
+<p>页面适合负责：</p>
+<ul>
+<li>读取并校验路由参数。</li>
+<li>调用组合函数组织页面状态。</li>
+<li>调用 API 或 store action 加载数据。</li>
+<li>处理 loading、empty、error。</li>
+<li>组织页面布局和业务流程。</li>
+<li>把数据传给展示组件。</li>
+</ul>
+<p>页面不适合负责：</p>
+<ul>
+<li>直接拼很多底层请求细节。</li>
+<li>写大量纯数据格式化逻辑。</li>
+<li>管理跨页面共享状态的全部细节。</li>
+<li>承担多个不相关业务模块。</li>
+</ul>
+<p>一个详情页可以这样组织：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">script</span> <span class="na">setup</span> <span class="na">lang</span><span class="o">=</span><span class="s">&#34;ts&#34;</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">computed</span><span class="p">,</span> <span class="nx">onMounted</span><span class="p">,</span> <span class="nx">ref</span> <span class="p">}</span> <span class="nx">from</span> <span class="s1">&#39;vue&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">useRoute</span><span class="p">,</span> <span class="nx">useRouter</span> <span class="p">}</span> <span class="nx">from</span> <span class="s1">&#39;vue-router&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">fetchPostDetail</span> <span class="p">}</span> <span class="nx">from</span> <span class="s1">&#39;@/api/post&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">import</span> <span class="nx">type</span> <span class="p">{</span> <span class="nx">PostDetail</span> <span class="p">}</span> <span class="nx">from</span> <span class="s1">&#39;@/models/post&#39;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">route</span> <span class="o">=</span> <span class="nx">useRoute</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">router</span> <span class="o">=</span> <span class="nx">useRouter</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">post</span> <span class="o">=</span> <span class="nx">ref</span><span class="p">&lt;</span><span class="nt">PostDetail</span> <span class="err">|</span> <span class="na">null</span><span class="p">&gt;(</span><span class="kc">null</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">loading</span> <span class="o">=</span> <span class="nx">ref</span><span class="p">(</span><span class="kc">false</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">errorMessage</span> <span class="o">=</span> <span class="nx">ref</span><span class="p">(</span><span class="s1">&#39;&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">postId</span> <span class="o">=</span> <span class="nx">computed</span><span class="p">(()</span> <span class="p">=&gt;</span> <span class="nb">Number</span><span class="p">(</span><span class="nx">route</span><span class="p">.</span><span class="nx">params</span><span class="p">.</span><span class="nx">id</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">async</span> <span class="kd">function</span> <span class="nx">loadPost</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nb">Number</span><span class="p">.</span><span class="nb">isFinite</span><span class="p">(</span><span class="nx">postId</span><span class="p">.</span><span class="nx">value</span><span class="p">))</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">router</span><span class="p">.</span><span class="nx">replace</span><span class="p">(</span><span class="s1">&#39;/404&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="nx">loading</span><span class="p">.</span><span class="nx">value</span> <span class="o">=</span> <span class="kc">true</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">errorMessage</span><span class="p">.</span><span class="nx">value</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">try</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">post</span><span class="p">.</span><span class="nx">value</span> <span class="o">=</span> <span class="nx">await</span> <span class="nx">fetchPostDetail</span><span class="p">(</span><span class="nx">postId</span><span class="p">.</span><span class="nx">value</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span> <span class="k">catch</span> <span class="p">(</span><span class="nx">error</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">errorMessage</span><span class="p">.</span><span class="nx">value</span> <span class="o">=</span> <span class="nx">error</span> <span class="k">instanceof</span> <span class="nb">Error</span> <span class="o">?</span> <span class="nx">error</span><span class="p">.</span><span class="nx">message</span> <span class="o">:</span> <span class="s1">&#39;加载失败&#39;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span> <span class="k">finally</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">loading</span><span class="p">.</span><span class="nx">value</span> <span class="o">=</span> <span class="kc">false</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">onMounted</span><span class="p">(</span><span class="nx">loadPost</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">&lt;/</span><span class="nt">script</span><span class="p">&gt;</span>
+</span></span></code></pre></div><p>这里的边界很清楚：页面读取路由，API 接收 <code>id</code>，展示组件接收 <code>post</code>。API 不知道路由是什么，组件也不需要知道页面参数从哪里来。</p>
+<h2 id="十一uni-app-的页面配置">十一、uni-app 的页面配置</h2>
+<p>uni-app 不使用 Vue Router 作为页面路由核心，而是通过 <code>pages.json</code> 声明页面：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;pages&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;path&#34;</span><span class="p">:</span> <span class="s2">&#34;pages/index/index&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;style&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&#34;navigationBarTitleText&#34;</span><span class="p">:</span> <span class="s2">&#34;首页&#34;</span>
+</span></span><span class="line"><span class="cl">      <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">},</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;path&#34;</span><span class="p">:</span> <span class="s2">&#34;pages/post/detail&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;style&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&#34;navigationBarTitleText&#34;</span><span class="p">:</span> <span class="s2">&#34;详情&#34;</span>
+</span></span><span class="line"><span class="cl">      <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">]</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>对应文件通常是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">pages/
+</span></span><span class="line"><span class="cl">  index/
+</span></span><span class="line"><span class="cl">    index.vue
+</span></span><span class="line"><span class="cl">  post/
+</span></span><span class="line"><span class="cl">    detail.vue
+</span></span></code></pre></div><p><code>pages</code> 数组里的第一项通常是应用入口页。这个顺序很重要，不要随便调整。入口页变了，应用打开后的第一屏也会变。</p>
+<p>页面路径不带 <code>.vue</code> 后缀，路径开头也通常不写 <code>/</code>。跳转时则经常写成：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="nx">uni</span><span class="p">.</span><span class="nx">navigateTo</span><span class="p">({</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">url</span><span class="o">:</span> <span class="s1">&#39;/pages/post/detail?id=1&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span></code></pre></div><p>注意这里有一点容易混淆：</p>
+<ul>
+<li><code>pages.json</code> 里写 <code>&quot;path&quot;: &quot;pages/post/detail&quot;</code>。</li>
+<li>跳转 API 里写 <code>url: &quot;/pages/post/detail?id=1&quot;</code>。</li>
+</ul>
+<p>配置是声明页面，跳转是访问页面。两者形式略有差异，记住即可，不必假装它很优雅。工程里有些东西就是这样，朴素地记住比强行解释更省事。</p>
+<h2 id="十二uni-app-的-tabbar分包和页面结构">十二、uni-app 的 tabBar、分包和页面结构</h2>
+<p>小程序和 App 常见底部 tab，需要在 <code>pages.json</code> 里配置 <code>tabBar</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;pages&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;path&#34;</span><span class="p">:</span> <span class="s2">&#34;pages/index/index&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;style&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&#34;navigationBarTitleText&#34;</span><span class="p">:</span> <span class="s2">&#34;首页&#34;</span>
+</span></span><span class="line"><span class="cl">      <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">},</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;path&#34;</span><span class="p">:</span> <span class="s2">&#34;pages/profile/index&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;style&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&#34;navigationBarTitleText&#34;</span><span class="p">:</span> <span class="s2">&#34;我的&#34;</span>
+</span></span><span class="line"><span class="cl">      <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">],</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;tabBar&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;list&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">      <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&#34;pagePath&#34;</span><span class="p">:</span> <span class="s2">&#34;pages/index/index&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&#34;text&#34;</span><span class="p">:</span> <span class="s2">&#34;首页&#34;</span>
+</span></span><span class="line"><span class="cl">      <span class="p">},</span>
+</span></span><span class="line"><span class="cl">      <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&#34;pagePath&#34;</span><span class="p">:</span> <span class="s2">&#34;pages/profile/index&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&#34;text&#34;</span><span class="p">:</span> <span class="s2">&#34;我的&#34;</span>
+</span></span><span class="line"><span class="cl">      <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">]</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>tab 页面只能用 <code>uni.switchTab</code> 跳转：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="nx">uni</span><span class="p">.</span><span class="nx">switchTab</span><span class="p">({</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">url</span><span class="o">:</span> <span class="s1">&#39;/pages/profile/index&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span></code></pre></div><p>普通 <code>navigateTo</code> 不能跳到 tabBar 页面。这是很多人第一次写 uni-app 时会踩的坑。不是你的代码玄学，是 API 规则如此。</p>
+<p>页面多了以后，可以使用分包：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;pages&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;path&#34;</span><span class="p">:</span> <span class="s2">&#34;pages/index/index&#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">],</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;subPackages&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;root&#34;</span><span class="p">:</span> <span class="s2">&#34;packages/post&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;pages&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">        <span class="p">{</span>
+</span></span><span class="line"><span class="cl">          <span class="nt">&#34;path&#34;</span><span class="p">:</span> <span class="s2">&#34;detail&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">          <span class="nt">&#34;style&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="nt">&#34;navigationBarTitleText&#34;</span><span class="p">:</span> <span class="s2">&#34;文章详情&#34;</span>
+</span></span><span class="line"><span class="cl">          <span class="p">}</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">      <span class="p">]</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">]</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>分包页面路径：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="nx">uni</span><span class="p">.</span><span class="nx">navigateTo</span><span class="p">({</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">url</span><span class="o">:</span> <span class="s1">&#39;/packages/post/detail?id=1&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span></code></pre></div><p>分包的目的主要是控制小程序首包体积。首页、登录、核心 tab 放主包；低频页面、复杂模块、活动页可以放分包。不要为了“看起来架构复杂”而分包，分包也是有维护成本的。</p>
+<h2 id="十三uni-app-页面生命周期">十三、uni-app 页面生命周期</h2>
+<p>uni-app 页面有自己的生命周期：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">onLoad</span><span class="p">,</span> <span class="nx">onShow</span><span class="p">,</span> <span class="nx">onPullDownRefresh</span><span class="p">,</span> <span class="nx">onReachBottom</span> <span class="p">}</span> <span class="kr">from</span> <span class="s1">&#39;@dcloudio/uni-app&#39;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">onLoad</span><span class="p">((</span><span class="nx">query</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">postId</span><span class="p">.</span><span class="nx">value</span> <span class="o">=</span> <span class="nb">Number</span><span class="p">(</span><span class="nx">query</span><span class="p">.</span><span class="nx">id</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">loadPost</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">onShow</span><span class="p">(()</span> <span class="o">=&gt;</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">refreshIfNeeded</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">onPullDownRefresh</span><span class="p">(</span><span class="kr">async</span> <span class="p">()</span> <span class="o">=&gt;</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="k">await</span> <span class="nx">loadPost</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">uni</span><span class="p">.</span><span class="nx">stopPullDownRefresh</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">onReachBottom</span><span class="p">(()</span> <span class="o">=&gt;</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">loadMoreComments</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span></code></pre></div><p>常见含义：</p>
+<table>
+  <thead>
+      <tr>
+          <th>生命周期</th>
+          <th>触发时机</th>
+          <th>常见用途</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>onLoad</code></td>
+          <td>页面首次加载</td>
+          <td>读取参数、初始化请求</td>
+      </tr>
+      <tr>
+          <td><code>onShow</code></td>
+          <td>页面显示</td>
+          <td>返回页面后刷新、恢复状态</td>
+      </tr>
+      <tr>
+          <td><code>onHide</code></td>
+          <td>页面隐藏</td>
+          <td>暂停计时、停止轮询</td>
+      </tr>
+      <tr>
+          <td><code>onUnload</code></td>
+          <td>页面销毁</td>
+          <td>清理资源</td>
+      </tr>
+      <tr>
+          <td><code>onPullDownRefresh</code></td>
+          <td>下拉刷新</td>
+          <td>重新加载列表或详情</td>
+      </tr>
+      <tr>
+          <td><code>onReachBottom</code></td>
+          <td>滚动到底部</td>
+          <td>分页加载</td>
+      </tr>
+  </tbody>
+</table>
+<p>Vue 的 <code>onMounted</code> 关注组件挂载，uni-app 的 <code>onLoad</code> 关注页面进入。两者可以同时存在，但语义不同。</p>
+<p>一个常见做法是：</p>
+<ul>
+<li>页面参数读取放 <code>onLoad</code>。</li>
+<li>需要每次显示都刷新的轻量逻辑放 <code>onShow</code>。</li>
+<li>组件内部 DOM 相关逻辑放 Vue 生命周期。</li>
+<li>下拉刷新和触底加载放 uni-app 页面生命周期。</li>
+</ul>
+<p>不要把所有请求都放 <code>onShow</code>。从详情页返回列表时刷新当然合理，但页面每显示一次都重刷重请求，可能会造成闪烁、重复请求和滚动位置丢失。刷新策略要看业务，不要把生命周期当成万能按钮。</p>
+<h2 id="十四uni-app-跳转方式与页面栈">十四、uni-app 跳转方式与页面栈</h2>
+<p>uni-app 常见跳转 API：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="nx">uni</span><span class="p">.</span><span class="nx">navigateTo</span><span class="p">({</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">url</span><span class="o">:</span> <span class="s1">&#39;/pages/post/detail?id=1&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span></code></pre></div><p><code>navigateTo</code> 会保留当前页面，打开新页面。适合列表进入详情、详情进入编辑这类需要返回的场景。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="nx">uni</span><span class="p">.</span><span class="nx">redirectTo</span><span class="p">({</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">url</span><span class="o">:</span> <span class="s1">&#39;/pages/login/index&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span></code></pre></div><p><code>redirectTo</code> 会关闭当前页面并跳转。适合提交成功后不希望用户回到提交页，或者登录流程中替换中间页。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="nx">uni</span><span class="p">.</span><span class="nx">reLaunch</span><span class="p">({</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">url</span><span class="o">:</span> <span class="s1">&#39;/pages/index/index&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span></code></pre></div><p><code>reLaunch</code> 会关闭所有页面并打开某个页面。适合退出登录、切换租户、初始化失败后回首页这类重置应用栈的场景。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="nx">uni</span><span class="p">.</span><span class="nx">navigateBack</span><span class="p">({</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">delta</span>: <span class="kt">1</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span></code></pre></div><p><code>navigateBack</code> 返回上一页。<code>delta</code> 表示返回几层。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="nx">uni</span><span class="p">.</span><span class="nx">switchTab</span><span class="p">({</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">url</span><span class="o">:</span> <span class="s1">&#39;/pages/index/index&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span></code></pre></div><p><code>switchTab</code> 用于 tabBar 页面。</p>
+<p>简单对比：</p>
+<table>
+  <thead>
+      <tr>
+          <th>API</th>
+          <th>是否保留当前页</th>
+          <th>能否跳 tabBar</th>
+          <th>常见场景</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>navigateTo</code></td>
+          <td>是</td>
+          <td>否</td>
+          <td>列表到详情</td>
+      </tr>
+      <tr>
+          <td><code>redirectTo</code></td>
+          <td>否</td>
+          <td>否</td>
+          <td>表单提交后替换页面</td>
+      </tr>
+      <tr>
+          <td><code>reLaunch</code></td>
+          <td>清空全部</td>
+          <td>可以</td>
+          <td>退出登录、重置首页</td>
+      </tr>
+      <tr>
+          <td><code>navigateBack</code></td>
+          <td>返回已有页面</td>
+          <td>不涉及</td>
+          <td>返回上一页</td>
+      </tr>
+      <tr>
+          <td><code>switchTab</code></td>
+          <td>切换 tab</td>
+          <td>是</td>
+          <td>首页、我的、消息</td>
+      </tr>
+  </tbody>
+</table>
+<p>uni-app 有页面栈概念。页面一层层 <code>navigateTo</code> 会进入栈中，返回时从栈顶退出。小程序平台通常有页面栈层数限制，所以不要无限 <code>navigateTo</code>。比如从列表页进入详情页，再从详情页进入另一个详情页，如果没有控制，很容易堆出很深的页面栈。</p>
+<p>可以查看当前页面栈：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">pages</span> <span class="o">=</span> <span class="nx">getCurrentPages</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">currentPage</span> <span class="o">=</span> <span class="nx">pages</span><span class="p">[</span><span class="nx">pages</span><span class="p">.</span><span class="nx">length</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">currentPage</span><span class="o">?</span><span class="p">.</span><span class="nx">route</span><span class="p">)</span>
+</span></span></code></pre></div><p>页面栈 API 可以用于调试或少量兜底判断，但不要让业务流程过度依赖它。页面路径和跳转策略应该尽量清楚，而不是靠“猜当前栈里有什么”来决定。</p>
+<h2 id="十五uni-app-参数传递">十五、uni-app 参数传递</h2>
+<p>最常见的是 query：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="nx">uni</span><span class="p">.</span><span class="nx">navigateTo</span><span class="p">({</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">url</span><span class="o">:</span> <span class="sb">`/pages/post/detail?id=</span><span class="si">${</span><span class="nx">post</span><span class="p">.</span><span class="nx">id</span><span class="si">}</span><span class="sb">`</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span></code></pre></div><p>接收：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="nx">onLoad</span><span class="p">((</span><span class="nx">query</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">const</span> <span class="nx">id</span> <span class="o">=</span> <span class="nb">Number</span><span class="p">(</span><span class="nx">query</span><span class="p">.</span><span class="nx">id</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span></code></pre></div><p>参数包含中文、空格、特殊符号时要编码：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">keyword</span> <span class="o">=</span> <span class="nb">encodeURIComponent</span><span class="p">(</span><span class="nx">searchText</span><span class="p">.</span><span class="nx">value</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">uni</span><span class="p">.</span><span class="nx">navigateTo</span><span class="p">({</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">url</span><span class="o">:</span> <span class="sb">`/pages/search/index?keyword=</span><span class="si">${</span><span class="nx">keyword</span><span class="si">}</span><span class="sb">`</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span></code></pre></div><p>接收时解码：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="nx">onLoad</span><span class="p">((</span><span class="nx">query</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">const</span> <span class="nx">keyword</span> <span class="o">=</span> <span class="nb">decodeURIComponent</span><span class="p">(</span><span class="nb">String</span><span class="p">(</span><span class="nx">query</span><span class="p">.</span><span class="nx">keyword</span> <span class="o">??</span> <span class="s1">&#39;&#39;</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span></code></pre></div><p>不要在 URL 里传复杂对象：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="c1">// 不推荐
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">uni</span><span class="p">.</span><span class="nx">navigateTo</span><span class="p">({</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">url</span><span class="o">:</span> <span class="sb">`/pages/post/detail?post=</span><span class="si">${</span><span class="nx">JSON</span><span class="p">.</span><span class="nx">stringify</span><span class="p">(</span><span class="nx">post</span><span class="p">)</span><span class="si">}</span><span class="sb">`</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span></code></pre></div><p>对象一大，URL 会变长；对象里有特殊字符，还要处理编码；数据过期时，也不容易保证一致性。详情页通常只传 <code>id</code>，然后进入页面后请求详情。</p>
+<p>如果确实需要传比较复杂的临时数据，可以考虑：</p>
+<ul>
+<li>用 store 暂存，目标页进入后读取。</li>
+<li>用本地缓存临时保存草稿。</li>
+<li>App 和小程序支持的场景下使用事件通道。</li>
+<li>只传必要字段，不传完整后端对象。</li>
+</ul>
+<p>例如用 store 暂存创建页草稿：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">draftStore</span> <span class="o">=</span> <span class="nx">useDraftStore</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">draftStore</span><span class="p">.</span><span class="nx">setPostDraft</span><span class="p">({</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">title</span>: <span class="kt">title.value</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">content</span>: <span class="kt">content.value</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">uni</span><span class="p">.</span><span class="nx">navigateTo</span><span class="p">({</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">url</span><span class="o">:</span> <span class="s1">&#39;/pages/post/preview&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span></code></pre></div><p>目标页读取 store：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">draftStore</span> <span class="o">=</span> <span class="nx">useDraftStore</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">draft</span> <span class="o">=</span> <span class="nx">computed</span><span class="p">(()</span> <span class="o">=&gt;</span> <span class="nx">draftStore</span><span class="p">.</span><span class="nx">postDraft</span><span class="p">)</span>
+</span></span></code></pre></div><p>这种方式不能替代关键业务参数。预览草稿可以这么做，文章详情主键就不该这么做。</p>
+<h2 id="十六封装跳转别让路径散落">十六、封装跳转，别让路径散落</h2>
+<p>小项目里直接写跳转路径没有问题：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="nx">uni</span><span class="p">.</span><span class="nx">navigateTo</span><span class="p">({</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">url</span><span class="o">:</span> <span class="sb">`/pages/post/detail?id=</span><span class="si">${</span><span class="nx">id</span><span class="si">}</span><span class="sb">`</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span></code></pre></div><p>但项目变大后，同一个页面路径可能出现在很多文件里。一旦路径调整，就要全项目搜索替换。更稳的方式是集中封装：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">export</span> <span class="kr">const</span> <span class="nx">pages</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">postDetail</span><span class="p">(</span><span class="nx">id</span>: <span class="kt">number</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="sb">`/pages/post/detail?id=</span><span class="si">${</span><span class="nx">id</span><span class="si">}</span><span class="sb">`</span>
+</span></span><span class="line"><span class="cl">  <span class="p">},</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">postCreate() {</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="s1">&#39;/pages/post/create&#39;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">},</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">home() {</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="s1">&#39;/pages/index/index&#39;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>使用：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="nx">uni</span><span class="p">.</span><span class="nx">navigateTo</span><span class="p">({</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">url</span>: <span class="kt">pages.postDetail</span><span class="p">(</span><span class="nx">post</span><span class="p">.</span><span class="nx">id</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span></code></pre></div><p>也可以继续封装跳转动作：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">export</span> <span class="kd">function</span> <span class="nx">openPostDetail</span><span class="p">(</span><span class="nx">id</span>: <span class="kt">number</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="k">return</span> <span class="nx">uni</span><span class="p">.</span><span class="nx">navigateTo</span><span class="p">({</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">url</span>: <span class="kt">pages.postDetail</span><span class="p">(</span><span class="nx">id</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="p">})</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>封装到哪一层取决于项目规模。路径常量解决“路径散落”，动作函数解决“跳转方式散落”。如果一个页面有固定跳转方式，例如详情页永远 <code>navigateTo</code>，封装动作会很清晰。如果某个路径有时 <code>redirectTo</code>、有时 <code>navigateTo</code>，只封装路径更灵活。</p>
+<h2 id="十七uni-app-中的登录拦截">十七、uni-app 中的登录拦截</h2>
+<p>uni-app 没有完全等同于 Vue Router <code>beforeEach</code> 的统一页面守卫。常见做法是封装跳转函数，在跳转前做登录判断：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">authPages</span> <span class="o">=</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">  <span class="s1">&#39;/pages/post/create&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="s1">&#39;/pages/profile/index&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="p">]</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">function</span> <span class="nx">isAuthPage</span><span class="p">(</span><span class="nx">url</span>: <span class="kt">string</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="k">return</span> <span class="nx">authPages</span><span class="p">.</span><span class="nx">some</span><span class="p">((</span><span class="nx">page</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="nx">url</span><span class="p">.</span><span class="nx">startsWith</span><span class="p">(</span><span class="nx">page</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">export</span> <span class="kd">function</span> <span class="nx">navigateTo</span><span class="p">(</span><span class="nx">url</span>: <span class="kt">string</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">const</span> <span class="nx">authStore</span> <span class="o">=</span> <span class="nx">useAuthStore</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="p">(</span><span class="nx">isAuthPage</span><span class="p">(</span><span class="nx">url</span><span class="p">)</span> <span class="o">&amp;&amp;</span> <span class="o">!</span><span class="nx">authStore</span><span class="p">.</span><span class="nx">loggedIn</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nx">uni</span><span class="p">.</span><span class="nx">navigateTo</span><span class="p">({</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">url</span><span class="o">:</span> <span class="sb">`/pages/login/index?redirect=</span><span class="si">${</span><span class="nb">encodeURIComponent</span><span class="p">(</span><span class="nx">url</span><span class="p">)</span><span class="si">}</span><span class="sb">`</span>
+</span></span><span class="line"><span class="cl">    <span class="p">})</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">return</span> <span class="nx">uni</span><span class="p">.</span><span class="nx">navigateTo</span><span class="p">({</span> <span class="nx">url</span> <span class="p">})</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>登录成功后：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="nx">onLoad</span><span class="p">((</span><span class="nx">query</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">redirectUrl</span><span class="p">.</span><span class="nx">value</span> <span class="o">=</span> <span class="nb">decodeURIComponent</span><span class="p">(</span><span class="nb">String</span><span class="p">(</span><span class="nx">query</span><span class="p">.</span><span class="nx">redirect</span> <span class="o">??</span> <span class="s1">&#39;&#39;</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">function</span> <span class="nx">afterLogin() {</span>
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="p">(</span><span class="nx">redirectUrl</span><span class="p">.</span><span class="nx">value</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">uni</span><span class="p">.</span><span class="nx">redirectTo</span><span class="p">({</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">url</span>: <span class="kt">redirectUrl.value</span>
+</span></span><span class="line"><span class="cl">    <span class="p">})</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="nx">uni</span><span class="p">.</span><span class="nx">switchTab</span><span class="p">({</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">url</span><span class="o">:</span> <span class="s1">&#39;/pages/index/index&#39;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">})</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>这个封装只能管住通过你封装函数发起的跳转。对于用户直接打开某个页面、小程序分享进入、扫码进入等场景，目标页面自身也要做必要校验：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="nx">onLoad</span><span class="p">(()</span> <span class="o">=&gt;</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">const</span> <span class="nx">authStore</span> <span class="o">=</span> <span class="nx">useAuthStore</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nx">authStore</span><span class="p">.</span><span class="nx">loggedIn</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">uni</span><span class="p">.</span><span class="nx">redirectTo</span><span class="p">({</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">url</span><span class="o">:</span> <span class="s1">&#39;/pages/login/index&#39;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">})</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span></code></pre></div><p>也就是说，封装跳转负责体验，页面校验负责兜底。只做前者会漏，只有后者体验会生硬。两者配合，才像一个认真写过的应用。</p>
+<h2 id="十八目录结构怎么设计">十八、目录结构怎么设计</h2>
+<p>小到中型项目可以使用技术分层：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">src/
+</span></span><span class="line"><span class="cl">  pages/
+</span></span><span class="line"><span class="cl">  components/
+</span></span><span class="line"><span class="cl">  api/
+</span></span><span class="line"><span class="cl">  models/
+</span></span><span class="line"><span class="cl">  stores/
+</span></span><span class="line"><span class="cl">  composables/
+</span></span><span class="line"><span class="cl">  utils/
+</span></span><span class="line"><span class="cl">  styles/
+</span></span></code></pre></div><p>职责：</p>
+<ul>
+<li><code>pages</code>：页面入口，接收路由参数，组织业务流程。</li>
+<li><code>components</code>：可复用组件，关注展示和局部交互。</li>
+<li><code>api</code>：接口请求，输入业务参数，返回业务数据。</li>
+<li><code>models</code>：类型定义，表达前后端数据契约。</li>
+<li><code>stores</code>：跨页面共享状态。</li>
+<li><code>composables</code>：可复用组合逻辑。</li>
+<li><code>utils</code>：无状态工具函数。</li>
+<li><code>styles</code>：全局样式、变量和混入。</li>
+</ul>
+<p>当业务模块变多，可以按 feature 收拢：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">src/
+</span></span><span class="line"><span class="cl">  pages/
+</span></span><span class="line"><span class="cl">    post/
+</span></span><span class="line"><span class="cl">      list.vue
+</span></span><span class="line"><span class="cl">      detail.vue
+</span></span><span class="line"><span class="cl">      create.vue
+</span></span><span class="line"><span class="cl">  features/
+</span></span><span class="line"><span class="cl">    post/
+</span></span><span class="line"><span class="cl">      api.ts
+</span></span><span class="line"><span class="cl">      model.ts
+</span></span><span class="line"><span class="cl">      store.ts
+</span></span><span class="line"><span class="cl">      composables/
+</span></span><span class="line"><span class="cl">        usePostList.ts
+</span></span><span class="line"><span class="cl">      components/
+</span></span><span class="line"><span class="cl">        PostCard.vue
+</span></span><span class="line"><span class="cl">      index.ts
+</span></span><span class="line"><span class="cl">  shared/
+</span></span><span class="line"><span class="cl">    components/
+</span></span><span class="line"><span class="cl">    utils/
+</span></span><span class="line"><span class="cl">    styles/
+</span></span></code></pre></div><p><code>pages/post/detail.vue</code> 是路由入口，<code>features/post</code> 是文章业务能力，<code>shared</code> 是跨业务复用代码。</p>
+<p>页面可以依赖 feature：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">fetchPostDetail</span><span class="p">,</span> <span class="nx">PostCard</span> <span class="p">}</span> <span class="kr">from</span> <span class="s1">&#39;@/features/post&#39;</span>
+</span></span></code></pre></div><p>但 feature 内部不应该反过来依赖某个具体页面。否则业务模块会被页面绑死，复用和测试都会变困难。</p>
+<p>当你不知道代码放哪里时，先问：</p>
+<ul>
+<li>它是否直接依赖路由参数或页面生命周期？是的话，多半在页面。</li>
+<li>它是否只是展示一块 UI？是的话，多半在组件。</li>
+<li>它是否跨页面共享？是的话，考虑 store。</li>
+<li>它是否是某个业务领域的请求或类型？是的话，放到对应 feature。</li>
+<li>它是否和任何业务都无关？是的话，放 shared 或 utils。</li>
+</ul>
+<p>目录结构不是为了让项目看起来整齐，而是为了让修改时少猜。工程的尊严大概就在这里，不华丽，但有用。</p>
+<h2 id="十九easycom-自动导入">十九、easycom 自动导入</h2>
+<p>uni-app 支持 easycom 自动导入组件。配置后，符合规则的组件可以直接在模板里使用。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;easycom&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;autoscan&#34;</span><span class="p">:</span> <span class="kc">true</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;custom&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;^Base(.*)&#34;</span><span class="p">:</span> <span class="s2">&#34;@/components/base/Base$1.vue&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;^Post(.*)&#34;</span><span class="p">:</span> <span class="s2">&#34;@/features/post/components/Post$1.vue&#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>例如组件文件：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">components/
+</span></span><span class="line"><span class="cl">  base/
+</span></span><span class="line"><span class="cl">    BaseButton.vue
+</span></span><span class="line"><span class="cl">features/
+</span></span><span class="line"><span class="cl">  post/
+</span></span><span class="line"><span class="cl">    components/
+</span></span><span class="line"><span class="cl">      PostCard.vue
+</span></span></code></pre></div><p>模板中可以直接写：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">template</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">&lt;</span><span class="nt">PostCard</span> <span class="nt">:post</span><span class="o">=</span><span class="s">&#34;post&#34;</span> <span class="p">/&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="p">&lt;/</span><span class="nt">template</span><span class="p">&gt;</span>
+</span></span></code></pre></div><p>easycom 能减少导入样板，但前提是命名规则清楚。组件名混乱时，自动导入只会自动制造混乱。</p>
+<p>建议：</p>
+<ul>
+<li>基础组件统一前缀，例如 <code>BaseButton</code>、<code>BaseEmpty</code>。</li>
+<li>业务组件带业务名，例如 <code>PostCard</code>、<code>UserAvatar</code>。</li>
+<li>不要让两个目录里出现同名组件。</li>
+<li>自动导入规则写少一点，稳定一点。</li>
+</ul>
+<p>组件不显式 import 以后，读代码的人更依赖命名判断来源。命名如果不可靠，维护体验会下降得很快。</p>
+<h2 id="二十跨端条件编译">二十、跨端条件编译</h2>
+<p>uni-app 支持条件编译：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="c1">// #ifdef H5
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;仅 H5 执行&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="c1">// #endif
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="c1">// #ifdef MP-WEIXIN
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;仅微信小程序执行&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="c1">// #endif
+</span></span></span></code></pre></div><p>也可以用于模板：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">template</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">  <span class="c">&lt;!--</span> <span class="err">#</span><span class="nx">ifdef</span> <span class="nx">H5</span> <span class="o">--&gt;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">&lt;</span><span class="nt">button</span> <span class="nt">@click</span><span class="s">=&#34;shareToBrowser&#34;</span><span class="p">&gt;</span><span class="na">复制链接</span><span class="p">&lt;/</span><span class="nt">button</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">  <span class="err">&lt;!--</span> <span class="err">#</span><span class="na">endif</span> <span class="err">--</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="c">&lt;!--</span> <span class="err">#</span><span class="nx">ifdef</span> <span class="nx">MP</span><span class="o">-</span><span class="nx">WEIXIN</span> <span class="o">--&gt;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">&lt;</span><span class="nt">button</span> <span class="na">open</span><span class="nt">-type</span><span class="err">=&#34;</span><span class="na">share</span><span class="err">&#34;</span><span class="p">&gt;</span><span class="nx">分享给好友</span><span class="p">&lt;/</span><span class="nt">button</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">  <span class="c">&lt;!--</span> <span class="err">#</span><span class="nx">endif</span> <span class="o">--&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="p">&lt;/</span><span class="nt">template</span><span class="p">&gt;</span>
+</span></span></code></pre></div><p>条件编译应该集中、克制。到处散落平台判断，会让代码很难维护。</p>
+<p>推荐做法是把平台差异包在少数适配函数里：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">export</span> <span class="kd">function</span> <span class="nx">getRuntimePlatform() {</span>
+</span></span><span class="line"><span class="cl">  <span class="c1">// #ifdef H5
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="k">return</span> <span class="s1">&#39;h5&#39;</span>
+</span></span><span class="line"><span class="cl">  <span class="c1">// #endif
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">  <span class="c1">// #ifdef MP-WEIXIN
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="k">return</span> <span class="s1">&#39;mp-weixin&#39;</span>
+</span></span><span class="line"><span class="cl">  <span class="c1">// #endif
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">  <span class="c1">// #ifdef APP-PLUS
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="k">return</span> <span class="s1">&#39;app&#39;</span>
+</span></span><span class="line"><span class="cl">  <span class="c1">// #endif
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">  <span class="k">return</span> <span class="s1">&#39;unknown&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>页面中使用：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">platform</span> <span class="o">=</span> <span class="nx">getRuntimePlatform</span><span class="p">()</span>
+</span></span></code></pre></div><p>对于 API、登录、分享、支付、上传这类平台差异明显的能力，尽量建立适配层：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">src/
+</span></span><span class="line"><span class="cl">  platform/
+</span></span><span class="line"><span class="cl">    share.ts
+</span></span><span class="line"><span class="cl">    upload.ts
+</span></span><span class="line"><span class="cl">    auth.ts
+</span></span></code></pre></div><p>跨端不是“一套代码到处完美运行”，而是“一套代码在差异中尽量复用”。承认差异，然后控制差异的扩散范围，这才是跨端工程里比较实际的态度。</p>
+<h2 id="二十一页面设计原则">二十一、页面设计原则</h2>
+<p>页面、组件、API、store、组合函数之间的边界可以概括为：</p>
+<ul>
+<li>页面负责组织业务流程。</li>
+<li>组件负责展示和局部交互。</li>
+<li>API 模块负责请求。</li>
+<li>Store 负责跨页面状态。</li>
+<li>组合函数负责复用逻辑。</li>
+<li>工具函数负责纯数据处理。</li>
+<li>路由配置负责页面入口和页面级元信息。</li>
+</ul>
+<p>再具体一点：</p>
+<table>
+  <thead>
+      <tr>
+          <th>逻辑</th>
+          <th>推荐位置</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>从 URL 读取文章 <code>id</code></td>
+          <td>页面</td>
+      </tr>
+      <tr>
+          <td>根据 <code>id</code> 请求文章详情</td>
+          <td>页面调用 API，或页面调用 store action</td>
+      </tr>
+      <tr>
+          <td>请求函数如何拼接口地址</td>
+          <td>API</td>
+      </tr>
+      <tr>
+          <td>文章卡片怎么展示标题和摘要</td>
+          <td>组件</td>
+      </tr>
+      <tr>
+          <td>搜索关键词如何过滤列表</td>
+          <td>组合函数或页面 computed</td>
+      </tr>
+      <tr>
+          <td>登录用户信息</td>
+          <td>store</td>
+      </tr>
+      <tr>
+          <td>数字格式化</td>
+          <td>utils</td>
+      </tr>
+      <tr>
+          <td>是否允许进入发布页</td>
+          <td>路由守卫或跳转封装加页面兜底</td>
+      </tr>
+  </tbody>
+</table>
+<p>边界不是死规矩，而是降低理解成本的约定。约定稳定，团队就能少花时间猜代码在哪里。</p>
+<h2 id="二十二常见错误">二十二、常见错误</h2>
+<p>第一，把所有跳转路径散落在组件里。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="nx">uni</span><span class="p">.</span><span class="nx">navigateTo</span><span class="p">({</span> <span class="nx">url</span><span class="o">:</span> <span class="s1">&#39;/pages/post/detail?id=1&#39;</span> <span class="p">})</span>
+</span></span></code></pre></div><p>项目小时没事，项目大了会很难改。可以集中封装页面路径。</p>
+<p>第二，在组件里直接读路由并请求数据。</p>
+<p>普通展示组件如果直接 <code>useRoute()</code>，它就被某个页面绑死了。更好的方式是页面读参数，请求数据，再把数据通过 props 传给组件。</p>
+<p>第三，把所有接口结果都塞进 store。</p>
+<p>store 适合跨页面共享，不是接口缓存垃圾桶。只在当前页面使用的数据，放页面状态即可。</p>
+<p>第四，路由守卫里写太多业务逻辑。</p>
+<p>守卫负责准入，页面负责流程。这个边界破了，调试会变得很不愉快。</p>
+<p>第五，uni-app 里用错跳转 API。</p>
+<p>tabBar 页面用 <code>switchTab</code>，普通页面用 <code>navigateTo</code>，提交后不想回退用 <code>redirectTo</code>，退出登录重置页面栈用 <code>reLaunch</code>。</p>
+<p>第六，复杂对象通过 URL 传递。</p>
+<p>URL 适合传稳定、短小、可恢复的状态。完整对象应该重新请求，或在临时场景中使用 store、缓存、事件通道。</p>
+<h2 id="二十三练习讲解设计并跑通文章模块目录">二十三、练习讲解：设计并跑通文章模块目录</h2>
+<p>这个练习把前面的原则落到一个小项目里：文章列表、文章详情、发布文章。目标不是写一个多漂亮的页面，而是把路由、页面、组件、API、类型、组合函数的边界跑通。</p>
+<h3 id="1-运行步骤">1. 运行步骤</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">npm create vite@latest vue-router-module-demo -- --template vue-ts
+</span></span><span class="line"><span class="cl"><span class="nb">cd</span> vue-router-module-demo
+</span></span><span class="line"><span class="cl">npm install
+</span></span><span class="line"><span class="cl">npm install vue-router@4
+</span></span><span class="line"><span class="cl">npm run dev
+</span></span></code></pre></div><h3 id="2-建议目录">2. 建议目录</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">src/
+</span></span><span class="line"><span class="cl">  api/
+</span></span><span class="line"><span class="cl">    post.ts
+</span></span><span class="line"><span class="cl">  models/
+</span></span><span class="line"><span class="cl">    post.ts
+</span></span><span class="line"><span class="cl">  composables/
+</span></span><span class="line"><span class="cl">    usePostList.ts
+</span></span><span class="line"><span class="cl">  components/
+</span></span><span class="line"><span class="cl">    post/
+</span></span><span class="line"><span class="cl">      PostCard.vue
+</span></span><span class="line"><span class="cl">  pages/
+</span></span><span class="line"><span class="cl">    post/
+</span></span><span class="line"><span class="cl">      list.vue
+</span></span><span class="line"><span class="cl">      detail.vue
+</span></span><span class="line"><span class="cl">      create.vue
+</span></span><span class="line"><span class="cl">    error/
+</span></span><span class="line"><span class="cl">      not-found.vue
+</span></span><span class="line"><span class="cl">  router.ts
+</span></span><span class="line"><span class="cl">  main.ts
+</span></span><span class="line"><span class="cl">  App.vue
+</span></span></code></pre></div><p>这个目录采用技术分层，适合练习和中小项目。页面入口放 <code>pages</code>，文章卡片放 <code>components/post</code>，接口放 <code>api/post.ts</code>，类型放 <code>models/post.ts</code>，列表加载逻辑放 <code>composables/usePostList.ts</code>。</p>
+<h3 id="3-创建-srcmodelspostts">3. 创建 <code>src/models/post.ts</code></h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">export</span> <span class="kr">type</span> <span class="nx">PostCard</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">id</span>: <span class="kt">number</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">title</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">summary</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">export</span> <span class="kr">type</span> <span class="nx">PostDetail</span> <span class="o">=</span> <span class="nx">PostCard</span> <span class="o">&amp;</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">content</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">export</span> <span class="kr">type</span> <span class="nx">CreatePostRequest</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">title</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">content</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>类型文件表达数据契约。列表页只需要 <code>PostCard</code>，详情页需要 <code>PostDetail</code>，创建接口需要 <code>CreatePostRequest</code>。不要所有地方都用一个巨大的 <code>Post</code> 类型，否则字段到底什么时候存在会变得含糊。</p>
+<h3 id="4-创建-srcapipostts">4. 创建 <code>src/api/post.ts</code></h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">import</span> <span class="kr">type</span> <span class="p">{</span> <span class="nx">CreatePostRequest</span><span class="p">,</span> <span class="nx">PostCard</span><span class="p">,</span> <span class="nx">PostDetail</span> <span class="p">}</span> <span class="kr">from</span> <span class="s1">&#39;../models/post&#39;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">let</span> <span class="nx">posts</span>: <span class="kt">PostDetail</span><span class="p">[]</span> <span class="o">=</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">  <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">id</span>: <span class="kt">1</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">title</span><span class="o">:</span> <span class="s1">&#39;路由参数应该在哪里读取&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">summary</span><span class="o">:</span> <span class="s1">&#39;页面读取参数，API 接收明确的业务参数。&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">content</span><span class="o">:</span> <span class="s1">&#39;详情页通过 useRoute 读取 id，然后调用 fetchPostDetail。&#39;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">},</span>
+</span></span><span class="line"><span class="cl">  <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">id</span>: <span class="kt">2</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">title</span><span class="o">:</span> <span class="s1">&#39;页面目录如何组织&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">summary</span><span class="o">:</span> <span class="s1">&#39;页面按业务模块归档，组件按复用边界归档。&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">content</span><span class="o">:</span> <span class="s1">&#39;列表、详情、创建都属于 post 页面模块。&#39;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">]</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">function</span> <span class="nx">wait() {</span>
+</span></span><span class="line"><span class="cl">  <span class="k">return</span> <span class="k">new</span> <span class="nx">Promise</span><span class="p">((</span><span class="nx">resolve</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="nb">window</span><span class="p">.</span><span class="nx">setTimeout</span><span class="p">(</span><span class="nx">resolve</span><span class="p">,</span> <span class="mi">300</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">export</span> <span class="kr">async</span> <span class="kd">function</span> <span class="nx">fetchPostList</span><span class="p">()</span><span class="o">:</span> <span class="nx">Promise</span><span class="p">&lt;</span><span class="nt">PostCard</span><span class="err">[]</span><span class="p">&gt;</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="k">await</span> <span class="nx">wait</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">  <span class="k">return</span> <span class="nx">posts</span><span class="p">.</span><span class="nx">map</span><span class="p">(({</span> <span class="nx">id</span><span class="p">,</span> <span class="nx">title</span><span class="p">,</span> <span class="nx">summary</span> <span class="p">})</span> <span class="o">=&gt;</span> <span class="p">({</span> <span class="nx">id</span><span class="p">,</span> <span class="nx">title</span><span class="p">,</span> <span class="nx">summary</span> <span class="p">}))</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">export</span> <span class="kr">async</span> <span class="kd">function</span> <span class="nx">fetchPostDetail</span><span class="p">(</span><span class="nx">id</span>: <span class="kt">number</span><span class="p">)</span><span class="o">:</span> <span class="nx">Promise</span><span class="p">&lt;</span><span class="nt">PostDetail</span> <span class="err">|</span> <span class="na">null</span><span class="p">&gt;</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="k">await</span> <span class="nx">wait</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">  <span class="k">return</span> <span class="nx">posts</span><span class="p">.</span><span class="nx">find</span><span class="p">((</span><span class="nx">post</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="nx">post</span><span class="p">.</span><span class="nx">id</span> <span class="o">===</span> <span class="nx">id</span><span class="p">)</span> <span class="o">??</span> <span class="kc">null</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">export</span> <span class="kr">async</span> <span class="kd">function</span> <span class="nx">createPost</span><span class="p">(</span><span class="nx">payload</span>: <span class="kt">CreatePostRequest</span><span class="p">)</span><span class="o">:</span> <span class="nx">Promise</span><span class="p">&lt;</span><span class="nt">PostDetail</span><span class="p">&gt;</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="k">await</span> <span class="nx">wait</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kr">const</span> <span class="nx">post</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">id</span>: <span class="kt">Date.now</span><span class="p">(),</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">title</span>: <span class="kt">payload.title</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">summary</span>: <span class="kt">payload.content.slice</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">40</span><span class="p">),</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">content</span>: <span class="kt">payload.content</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="nx">posts</span><span class="p">.</span><span class="nx">unshift</span><span class="p">(</span><span class="nx">post</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="k">return</span> <span class="nx">post</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>这里用内存数组模拟接口。真实项目中，<code>api/post.ts</code> 会调用 <code>request</code> 封装：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">export</span> <span class="kd">function</span> <span class="nx">fetchPostDetail</span><span class="p">(</span><span class="nx">id</span>: <span class="kt">number</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="k">return</span> <span class="nx">request</span><span class="p">&lt;</span><span class="nt">PostDetail</span><span class="p">&gt;(</span><span class="sb">`/api/posts/</span><span class="si">${</span><span class="nx">id</span><span class="si">}</span><span class="sb">`</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>API 层只关心请求和返回，不弹窗、不跳路由、不直接改组件状态。页面或 store 决定错误怎么展示、成功后跳到哪里。</p>
+<h3 id="5-创建-srccomposablesusepostlistts">5. 创建 <code>src/composables/usePostList.ts</code></h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">onMounted</span><span class="p">,</span> <span class="nx">ref</span> <span class="p">}</span> <span class="kr">from</span> <span class="s1">&#39;vue&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">fetchPostList</span> <span class="p">}</span> <span class="kr">from</span> <span class="s1">&#39;../api/post&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">import</span> <span class="kr">type</span> <span class="p">{</span> <span class="nx">PostCard</span> <span class="p">}</span> <span class="kr">from</span> <span class="s1">&#39;../models/post&#39;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">export</span> <span class="kd">function</span> <span class="nx">usePostList() {</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">const</span> <span class="nx">posts</span> <span class="o">=</span> <span class="nx">ref</span><span class="p">&lt;</span><span class="nt">PostCard</span><span class="err">[]</span><span class="p">&gt;([])</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">const</span> <span class="nx">loading</span> <span class="o">=</span> <span class="nx">ref</span><span class="p">(</span><span class="kc">false</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">const</span> <span class="nx">errorMessage</span> <span class="o">=</span> <span class="nx">ref</span><span class="p">(</span><span class="s1">&#39;&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="kr">async</span> <span class="kd">function</span> <span class="nx">loadPosts() {</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">loading</span><span class="p">.</span><span class="nx">value</span> <span class="o">=</span> <span class="kc">true</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">errorMessage</span><span class="p">.</span><span class="nx">value</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">try</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">posts</span><span class="p">.</span><span class="nx">value</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">fetchPostList</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span> <span class="k">catch</span> <span class="p">(</span><span class="nx">error</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">errorMessage</span><span class="p">.</span><span class="nx">value</span> <span class="o">=</span> <span class="nx">error</span> <span class="k">instanceof</span> <span class="nb">Error</span> <span class="o">?</span> <span class="nx">error</span><span class="p">.</span><span class="nx">message</span> <span class="o">:</span> <span class="s1">&#39;加载失败&#39;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span> <span class="k">finally</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">loading</span><span class="p">.</span><span class="nx">value</span> <span class="o">=</span> <span class="kc">false</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="nx">onMounted</span><span class="p">(</span><span class="nx">loadPosts</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">return</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">posts</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">loading</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">errorMessage</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">loadPosts</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>组合函数把列表页的加载状态、错误状态、重试逻辑收拢起来。这样页面模板不需要关心请求细节，只需要渲染这些状态。</p>
+<p>如果这个列表只在一个页面使用，也可以直接写在页面里。抽成组合函数的理由不是“所有逻辑都要抽”，而是它确实形成了一个可复用、可测试、可命名的行为单元。</p>
+<h3 id="6-创建-srccomponentspostpostcardvue">6. 创建 <code>src/components/post/PostCard.vue</code></h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">script</span> <span class="na">setup</span> <span class="na">lang</span><span class="o">=</span><span class="s">&#34;ts&#34;</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">import</span> <span class="nx">type</span> <span class="p">{</span> <span class="nx">PostCard</span> <span class="p">}</span> <span class="nx">from</span> <span class="s1">&#39;../../models/post&#39;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">defineProps</span><span class="o">&lt;</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">post</span><span class="o">:</span> <span class="nx">PostCard</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span><span class="o">&gt;</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="p">&lt;/</span><span class="nt">script</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">template</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">&lt;</span><span class="nt">RouterLink</span> <span class="na">class</span><span class="o">=</span><span class="s">&#34;card&#34;</span> <span class="o">:</span><span class="na">to</span><span class="o">=</span><span class="s">&#34;{ name: &#39;post-detail&#39;, params: { id: post.id } }&#34;</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">&lt;</span><span class="nt">h2</span><span class="p">&gt;{{</span> <span class="nx">post</span><span class="p">.</span><span class="nx">title</span> <span class="p">}}&lt;/</span><span class="nt">h2</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">&lt;</span><span class="nt">p</span><span class="p">&gt;{{</span> <span class="nx">post</span><span class="p">.</span><span class="nx">summary</span> <span class="p">}}&lt;/</span><span class="nt">p</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">&lt;/</span><span class="nt">RouterLink</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="p">&lt;/</span><span class="nt">template</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">style</span> <span class="na">scoped</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="p">.</span><span class="nx">card</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">display</span><span class="o">:</span> <span class="nx">block</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">padding</span><span class="o">:</span> <span class="mi">16</span><span class="nx">px</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">border</span><span class="o">:</span> <span class="mi">1</span><span class="nx">px</span> <span class="nx">solid</span> <span class="err">#</span><span class="nx">e2e8f0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">border</span><span class="o">-</span><span class="nx">radius</span><span class="o">:</span> <span class="mi">8</span><span class="nx">px</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">color</span><span class="o">:</span> <span class="nx">inherit</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">text</span><span class="o">-</span><span class="nx">decoration</span><span class="o">:</span> <span class="nx">none</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">h2</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">margin</span><span class="o">:</span> <span class="mi">0</span> <span class="mi">0</span> <span class="mi">8</span><span class="nx">px</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">font</span><span class="o">-</span><span class="nx">size</span><span class="o">:</span> <span class="mi">18</span><span class="nx">px</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">p</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">margin</span><span class="o">:</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">color</span><span class="o">:</span> <span class="err">#</span><span class="mi">64748</span><span class="nx">b</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">&lt;/</span><span class="nt">style</span><span class="p">&gt;</span>
+</span></span></code></pre></div><p><code>PostCard</code> 只负责展示文章卡片，并提供进入详情页的链接。它不请求列表，也不读取当前路由。这样同一个组件以后也可以放在搜索页、作者主页、推荐列表里。</p>
+<h3 id="7-创建页面文件">7. 创建页面文件</h3>
+<p><code>src/pages/post/list.vue</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">script</span> <span class="na">setup</span> <span class="na">lang</span><span class="o">=</span><span class="s">&#34;ts&#34;</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">import</span> <span class="nx">PostCard</span> <span class="nx">from</span> <span class="s1">&#39;../../components/post/PostCard.vue&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">usePostList</span> <span class="p">}</span> <span class="nx">from</span> <span class="s1">&#39;../../composables/usePostList&#39;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="p">{</span> <span class="nx">posts</span><span class="p">,</span> <span class="nx">loading</span><span class="p">,</span> <span class="nx">errorMessage</span><span class="p">,</span> <span class="nx">loadPosts</span> <span class="p">}</span> <span class="o">=</span> <span class="nx">usePostList</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="p">&lt;/</span><span class="nt">script</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">template</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">&lt;</span><span class="nt">main</span> <span class="na">class</span><span class="o">=</span><span class="s">&#34;page&#34;</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">&lt;</span><span class="nt">header</span> <span class="na">class</span><span class="o">=</span><span class="s">&#34;toolbar&#34;</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">      <span class="p">&lt;</span><span class="nt">h1</span><span class="p">&gt;</span><span class="nx">文章列表</span><span class="p">&lt;/</span><span class="nt">h1</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">      <span class="p">&lt;</span><span class="nt">RouterLink</span> <span class="o">:</span><span class="na">to</span><span class="o">=</span><span class="s">&#34;{ name: &#39;post-create&#39; }&#34;</span><span class="p">&gt;</span><span class="nx">发布文章</span><span class="p">&lt;/</span><span class="nt">RouterLink</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">&lt;/</span><span class="nt">header</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="p">&lt;</span><span class="nt">p</span> <span class="nt">v-if</span><span class="o">=</span><span class="s">&#34;loading&#34;</span><span class="p">&gt;</span><span class="na">加载中...</span><span class="p">&lt;/</span><span class="nt">p</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="p">&lt;</span><span class="nt">p</span> <span class="nt">v-else-if</span><span class="o">=</span><span class="s">&#34;errorMessage&#34;</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">      <span class="p">{{</span> <span class="na">errorMessage</span> <span class="p">}}</span>
+</span></span><span class="line"><span class="cl">      <span class="p">&lt;</span><span class="nt">button</span> <span class="nt">@click</span><span class="s">=&#34;loadPosts&#34;</span><span class="p">&gt;</span><span class="na">重试</span><span class="p">&lt;/</span><span class="nt">button</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">&lt;/</span><span class="nt">p</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="p">&lt;</span><span class="nt">section</span> <span class="nt">v-else-if</span><span class="o">=</span><span class="s">&#34;posts.length&#34; class=&#34;list&#34;</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">      <span class="p">&lt;</span><span class="nt">PostCard</span> <span class="nt">v-for</span><span class="o">=</span><span class="s">&#34;post in posts&#34; :key=&#34;post.id&#34; :post=&#34;post&#34;</span><span class="p"> /&gt;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">&lt;/</span><span class="nt">section</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="p">&lt;</span><span class="nt">p</span> <span class="nt">v-else</span><span class="p">&gt;</span><span class="na">暂无文章</span><span class="p">&lt;/</span><span class="nt">p</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">&lt;/</span><span class="nt">main</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="p">&lt;/</span><span class="nt">template</span><span class="p">&gt;</span>
+</span></span></code></pre></div><p>列表页的职责是组织列表流程：加载、失败、空状态、进入创建页。卡片怎么展示由 <code>PostCard</code> 负责。</p>
+<p><code>src/pages/post/detail.vue</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">script</span> <span class="na">setup</span> <span class="na">lang</span><span class="o">=</span><span class="s">&#34;ts&#34;</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">computed</span><span class="p">,</span> <span class="nx">onMounted</span><span class="p">,</span> <span class="nx">ref</span> <span class="p">}</span> <span class="nx">from</span> <span class="s1">&#39;vue&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">useRoute</span><span class="p">,</span> <span class="nx">useRouter</span> <span class="p">}</span> <span class="nx">from</span> <span class="s1">&#39;vue-router&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">fetchPostDetail</span> <span class="p">}</span> <span class="nx">from</span> <span class="s1">&#39;../../api/post&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">import</span> <span class="nx">type</span> <span class="p">{</span> <span class="nx">PostDetail</span> <span class="p">}</span> <span class="nx">from</span> <span class="s1">&#39;../../models/post&#39;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">route</span> <span class="o">=</span> <span class="nx">useRoute</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">router</span> <span class="o">=</span> <span class="nx">useRouter</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">post</span> <span class="o">=</span> <span class="nx">ref</span><span class="p">&lt;</span><span class="nt">PostDetail</span> <span class="err">|</span> <span class="na">null</span><span class="p">&gt;(</span><span class="kc">null</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">loading</span> <span class="o">=</span> <span class="nx">ref</span><span class="p">(</span><span class="kc">false</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">errorMessage</span> <span class="o">=</span> <span class="nx">ref</span><span class="p">(</span><span class="s1">&#39;&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">postId</span> <span class="o">=</span> <span class="nx">computed</span><span class="p">(()</span> <span class="p">=&gt;</span> <span class="nb">Number</span><span class="p">(</span><span class="nx">route</span><span class="p">.</span><span class="nx">params</span><span class="p">.</span><span class="nx">id</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">async</span> <span class="kd">function</span> <span class="nx">loadPost</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nb">Number</span><span class="p">.</span><span class="nb">isFinite</span><span class="p">(</span><span class="nx">postId</span><span class="p">.</span><span class="nx">value</span><span class="p">))</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">router</span><span class="p">.</span><span class="nx">replace</span><span class="p">({</span> <span class="nx">name</span><span class="o">:</span> <span class="s1">&#39;not-found&#39;</span> <span class="p">})</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="nx">loading</span><span class="p">.</span><span class="nx">value</span> <span class="o">=</span> <span class="kc">true</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">errorMessage</span><span class="p">.</span><span class="nx">value</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">try</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">post</span><span class="p">.</span><span class="nx">value</span> <span class="o">=</span> <span class="nx">await</span> <span class="nx">fetchPostDetail</span><span class="p">(</span><span class="nx">postId</span><span class="p">.</span><span class="nx">value</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span> <span class="k">catch</span> <span class="p">(</span><span class="nx">error</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">errorMessage</span><span class="p">.</span><span class="nx">value</span> <span class="o">=</span> <span class="nx">error</span> <span class="k">instanceof</span> <span class="nb">Error</span> <span class="o">?</span> <span class="nx">error</span><span class="p">.</span><span class="nx">message</span> <span class="o">:</span> <span class="s1">&#39;加载失败&#39;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span> <span class="k">finally</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">loading</span><span class="p">.</span><span class="nx">value</span> <span class="o">=</span> <span class="kc">false</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">onMounted</span><span class="p">(</span><span class="nx">loadPost</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">&lt;/</span><span class="nt">script</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">template</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">&lt;</span><span class="nt">main</span> <span class="na">class</span><span class="o">=</span><span class="s">&#34;page&#34;</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">&lt;</span><span class="nt">RouterLink</span> <span class="o">:</span><span class="na">to</span><span class="o">=</span><span class="s">&#34;{ name: &#39;post-list&#39; }&#34;</span><span class="p">&gt;</span><span class="nx">返回列表</span><span class="p">&lt;/</span><span class="nt">RouterLink</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="p">&lt;</span><span class="nt">p</span> <span class="nt">v-if</span><span class="o">=</span><span class="s">&#34;loading&#34;</span><span class="p">&gt;</span><span class="na">加载中...</span><span class="p">&lt;/</span><span class="nt">p</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">&lt;</span><span class="nt">p</span> <span class="nt">v-else-if</span><span class="o">=</span><span class="s">&#34;errorMessage&#34;</span><span class="p">&gt;{{</span> <span class="na">errorMessage</span> <span class="p">}}&lt;/</span><span class="nt">p</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">&lt;</span><span class="nt">p</span> <span class="nt">v-else-if</span><span class="o">=</span><span class="s">&#34;!post&#34;</span><span class="p">&gt;</span><span class="na">文章不存在</span><span class="p">&lt;/</span><span class="nt">p</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="p">&lt;</span><span class="nt">article</span> <span class="nt">v-else</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">      <span class="p">&lt;</span><span class="nt">h1</span><span class="p">&gt;{{</span> <span class="nx">post</span><span class="p">.</span><span class="nx">title</span> <span class="p">}}&lt;/</span><span class="nt">h1</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">      <span class="p">&lt;</span><span class="nt">p</span><span class="p">&gt;{{</span> <span class="nx">post</span><span class="p">.</span><span class="nx">content</span> <span class="p">}}&lt;/</span><span class="nt">p</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">&lt;/</span><span class="nt">article</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">&lt;/</span><span class="nt">main</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="p">&lt;/</span><span class="nt">template</span><span class="p">&gt;</span>
+</span></span></code></pre></div><p>详情页读取 <code>route.params.id</code>，转换成数字，校验后调用 API。API 不知道 <code>route</code>，这点很重要。路由是页面入口的知识，不应该污染到请求层。</p>
+<p><code>src/pages/post/create.vue</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">script</span> <span class="na">setup</span> <span class="na">lang</span><span class="o">=</span><span class="s">&#34;ts&#34;</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">reactive</span><span class="p">,</span> <span class="nx">ref</span> <span class="p">}</span> <span class="nx">from</span> <span class="s1">&#39;vue&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">useRouter</span> <span class="p">}</span> <span class="nx">from</span> <span class="s1">&#39;vue-router&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">createPost</span> <span class="p">}</span> <span class="nx">from</span> <span class="s1">&#39;../../api/post&#39;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">router</span> <span class="o">=</span> <span class="nx">useRouter</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">submitting</span> <span class="o">=</span> <span class="nx">ref</span><span class="p">(</span><span class="kc">false</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">errorMessage</span> <span class="o">=</span> <span class="nx">ref</span><span class="p">(</span><span class="s1">&#39;&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">form</span> <span class="o">=</span> <span class="nx">reactive</span><span class="p">({</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">title</span><span class="o">:</span> <span class="s1">&#39;&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">content</span><span class="o">:</span> <span class="s1">&#39;&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">async</span> <span class="kd">function</span> <span class="nx">submit</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nx">form</span><span class="p">.</span><span class="nx">title</span><span class="p">.</span><span class="nx">trim</span><span class="p">()</span> <span class="o">||</span> <span class="o">!</span><span class="nx">form</span><span class="p">.</span><span class="nx">content</span><span class="p">.</span><span class="nx">trim</span><span class="p">()</span> <span class="o">||</span> <span class="nx">submitting</span><span class="p">.</span><span class="nx">value</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="nx">submitting</span><span class="p">.</span><span class="nx">value</span> <span class="o">=</span> <span class="kc">true</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">errorMessage</span><span class="p">.</span><span class="nx">value</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">try</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">const</span> <span class="nx">post</span> <span class="o">=</span> <span class="nx">await</span> <span class="nx">createPost</span><span class="p">({</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">title</span><span class="o">:</span> <span class="nx">form</span><span class="p">.</span><span class="nx">title</span><span class="p">.</span><span class="nx">trim</span><span class="p">(),</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">content</span><span class="o">:</span> <span class="nx">form</span><span class="p">.</span><span class="nx">content</span><span class="p">.</span><span class="nx">trim</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="p">})</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">router</span><span class="p">.</span><span class="nx">push</span><span class="p">({</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">name</span><span class="o">:</span> <span class="s1">&#39;post-detail&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">params</span><span class="o">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">id</span><span class="o">:</span> <span class="nx">post</span><span class="p">.</span><span class="nx">id</span>
+</span></span><span class="line"><span class="cl">      <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">})</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span> <span class="k">catch</span> <span class="p">(</span><span class="nx">error</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">errorMessage</span><span class="p">.</span><span class="nx">value</span> <span class="o">=</span> <span class="nx">error</span> <span class="k">instanceof</span> <span class="nb">Error</span> <span class="o">?</span> <span class="nx">error</span><span class="p">.</span><span class="nx">message</span> <span class="o">:</span> <span class="s1">&#39;提交失败&#39;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span> <span class="k">finally</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">submitting</span><span class="p">.</span><span class="nx">value</span> <span class="o">=</span> <span class="kc">false</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">&lt;/</span><span class="nt">script</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">template</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">&lt;</span><span class="nt">main</span> <span class="na">class</span><span class="o">=</span><span class="s">&#34;page&#34;</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">&lt;</span><span class="nt">h1</span><span class="p">&gt;</span><span class="nx">发布文章</span><span class="p">&lt;/</span><span class="nt">h1</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="p">&lt;</span><span class="nt">form</span> <span class="na">class</span><span class="o">=</span><span class="s">&#34;form&#34;</span> <span class="nt">@submit.prevent</span><span class="s">=&#34;submit&#34;</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">      <span class="p">&lt;</span><span class="nt">input</span> <span class="nt">v-model</span><span class="o">=</span><span class="s">&#34;form.title&#34; placeholder=&#34;标题&#34;</span><span class="p"> /&gt;</span>
+</span></span><span class="line"><span class="cl">      <span class="p">&lt;</span><span class="nt">textarea</span> <span class="nt">v-model</span><span class="o">=</span><span class="s">&#34;form.content&#34; placeholder=&#34;内容&#34; rows=&#34;6&#34;</span><span class="p">&gt;&lt;/</span><span class="nt">textarea</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">      <span class="p">&lt;</span><span class="nt">p</span> <span class="nt">v-if</span><span class="o">=</span><span class="s">&#34;errorMessage&#34;</span><span class="p">&gt;{{</span> <span class="na">errorMessage</span> <span class="p">}}&lt;/</span><span class="nt">p</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">      <span class="p">&lt;</span><span class="nt">button</span> <span class="nt">:disabled</span><span class="o">=</span><span class="s">&#34;submitting&#34;</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">        <span class="p">{{</span> <span class="nx">submitting</span> <span class="o">?</span> <span class="s1">&#39;提交中&#39;</span> <span class="o">:</span> <span class="s1">&#39;提交&#39;</span> <span class="p">}}</span>
+</span></span><span class="line"><span class="cl">      <span class="p">&lt;/</span><span class="nt">button</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">&lt;/</span><span class="nt">form</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">&lt;/</span><span class="nt">main</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="p">&lt;/</span><span class="nt">template</span><span class="p">&gt;</span>
+</span></span></code></pre></div><p>创建页提交成功后跳到详情页。这里使用命名路由，避免手写 <code>/posts/${post.id}</code> 这种路径字符串。</p>
+<h3 id="8-创建-srcrouterts">8. 创建 <code>src/router.ts</code></h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">createRouter</span><span class="p">,</span> <span class="nx">createWebHistory</span> <span class="p">}</span> <span class="kr">from</span> <span class="s1">&#39;vue-router&#39;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">export</span> <span class="kr">const</span> <span class="nx">router</span> <span class="o">=</span> <span class="nx">createRouter</span><span class="p">({</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">history</span>: <span class="kt">createWebHistory</span><span class="p">(),</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">routes</span><span class="o">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">path</span><span class="o">:</span> <span class="s1">&#39;/&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">redirect</span><span class="o">:</span> <span class="p">{</span> <span class="nx">name</span><span class="o">:</span> <span class="s1">&#39;post-list&#39;</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">},</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">path</span><span class="o">:</span> <span class="s1">&#39;/posts&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">name</span><span class="o">:</span> <span class="s1">&#39;post-list&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">component</span><span class="o">:</span> <span class="p">()</span> <span class="o">=&gt;</span> <span class="kr">import</span><span class="p">(</span><span class="s1">&#39;./pages/post/list.vue&#39;</span><span class="p">),</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">meta</span><span class="o">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">title</span><span class="o">:</span> <span class="s1">&#39;文章列表&#39;</span>
+</span></span><span class="line"><span class="cl">      <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">},</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">path</span><span class="o">:</span> <span class="s1">&#39;/posts/create&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">name</span><span class="o">:</span> <span class="s1">&#39;post-create&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">component</span><span class="o">:</span> <span class="p">()</span> <span class="o">=&gt;</span> <span class="kr">import</span><span class="p">(</span><span class="s1">&#39;./pages/post/create.vue&#39;</span><span class="p">),</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">meta</span><span class="o">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">title</span><span class="o">:</span> <span class="s1">&#39;发布文章&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">requiresAuth</span>: <span class="kt">true</span>
+</span></span><span class="line"><span class="cl">      <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">},</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">path</span><span class="o">:</span> <span class="s1">&#39;/posts/:id&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">name</span><span class="o">:</span> <span class="s1">&#39;post-detail&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">component</span><span class="o">:</span> <span class="p">()</span> <span class="o">=&gt;</span> <span class="kr">import</span><span class="p">(</span><span class="s1">&#39;./pages/post/detail.vue&#39;</span><span class="p">),</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">meta</span><span class="o">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">title</span><span class="o">:</span> <span class="s1">&#39;文章详情&#39;</span>
+</span></span><span class="line"><span class="cl">      <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">},</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">path</span><span class="o">:</span> <span class="s1">&#39;/:pathMatch(.*)*&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">name</span><span class="o">:</span> <span class="s1">&#39;not-found&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">component</span><span class="o">:</span> <span class="p">()</span> <span class="o">=&gt;</span> <span class="kr">import</span><span class="p">(</span><span class="s1">&#39;./pages/error/not-found.vue&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">]</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">router</span><span class="p">.</span><span class="nx">afterEach</span><span class="p">((</span><span class="nx">to</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nb">document</span><span class="p">.</span><span class="nx">title</span> <span class="o">=</span> <span class="k">typeof</span> <span class="nx">to</span><span class="p">.</span><span class="nx">meta</span><span class="p">.</span><span class="nx">title</span> <span class="o">===</span> <span class="s1">&#39;string&#39;</span> <span class="o">?</span> <span class="nx">to</span><span class="p">.</span><span class="nx">meta</span><span class="p">.</span><span class="nx">title</span> <span class="o">:</span> <span class="s1">&#39;Vue Router Demo&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span></code></pre></div><p>注意 <code>/posts/create</code> 放在 <code>/posts/:id</code> 前面。具体路径先写，动态路径后写，读起来也更清楚。</p>
+<p>如果加了 <code>not-found</code> 页面，还需要创建 <code>src/pages/error/not-found.vue</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">template</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">&lt;</span><span class="nt">main</span> <span class="na">class</span><span class="o">=</span><span class="s">&#34;page&#34;</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">&lt;</span><span class="nt">h1</span><span class="p">&gt;</span><span class="nx">页面不存在</span><span class="p">&lt;/</span><span class="nt">h1</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">&lt;</span><span class="nt">RouterLink</span> <span class="o">:</span><span class="na">to</span><span class="o">=</span><span class="s">&#34;{ name: &#39;post-list&#39; }&#34;</span><span class="p">&gt;</span><span class="nx">返回文章列表</span><span class="p">&lt;/</span><span class="nt">RouterLink</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">&lt;/</span><span class="nt">main</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="p">&lt;/</span><span class="nt">template</span><span class="p">&gt;</span>
+</span></span></code></pre></div><h3 id="9-创建-srcmaints-和-srcappvue">9. 创建 <code>src/main.ts</code> 和 <code>src/App.vue</code></h3>
+<p><code>src/main.ts</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">createApp</span> <span class="p">}</span> <span class="kr">from</span> <span class="s1">&#39;vue&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">router</span> <span class="p">}</span> <span class="kr">from</span> <span class="s1">&#39;./router&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">import</span> <span class="s1">&#39;./style.css&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">import</span> <span class="nx">App</span> <span class="kr">from</span> <span class="s1">&#39;./App.vue&#39;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">createApp</span><span class="p">(</span><span class="nx">App</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="p">.</span><span class="nx">use</span><span class="p">(</span><span class="nx">router</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="p">.</span><span class="nx">mount</span><span class="p">(</span><span class="s1">&#39;#app&#39;</span><span class="p">)</span>
+</span></span></code></pre></div><p><code>src/App.vue</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-vue" data-lang="vue"><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">template</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">&lt;</span><span class="nt">RouterView</span> <span class="p">/&gt;</span>
+</span></span><span class="line"><span class="cl"><span class="p">&lt;/</span><span class="nt">template</span><span class="p">&gt;</span>
+</span></span></code></pre></div><p><code>RouterView</code> 是路由页面出口。当前 URL 命中的页面会渲染到这里。</p>
+<h3 id="10-样式可直接放到-srcstylecss">10. 样式可直接放到 <code>src/style.css</code></h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-css" data-lang="css"><span class="line"><span class="cl"><span class="nt">body</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="k">margin</span><span class="p">:</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="k">font-family</span><span class="p">:</span> <span class="n">system-ui</span><span class="p">,</span> <span class="o">-</span><span class="n">apple-system</span><span class="p">,</span> <span class="n">BlinkMacSystemFont</span><span class="p">,</span> <span class="s2">&#34;Segoe UI&#34;</span><span class="p">,</span> <span class="kc">sans-serif</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="k">background</span><span class="p">:</span> <span class="mh">#f8fafc</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="k">color</span><span class="p">:</span> <span class="mh">#1f2937</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="p">.</span><span class="nc">page</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="k">max-width</span><span class="p">:</span> <span class="mi">820</span><span class="kt">px</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="k">margin</span><span class="p">:</span> <span class="mi">0</span> <span class="kc">auto</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="k">padding</span><span class="p">:</span> <span class="mi">32</span><span class="kt">px</span> <span class="mi">20</span><span class="kt">px</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="p">.</span><span class="nc">toolbar</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="k">display</span><span class="p">:</span> <span class="kc">flex</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="k">justify-content</span><span class="p">:</span> <span class="kc">space-between</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="k">align-items</span><span class="p">:</span> <span class="kc">center</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="k">gap</span><span class="p">:</span> <span class="mi">16</span><span class="kt">px</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="p">.</span><span class="nc">list</span><span class="o">,</span>
+</span></span><span class="line"><span class="cl"><span class="p">.</span><span class="nc">form</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="k">display</span><span class="p">:</span> <span class="k">grid</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="k">gap</span><span class="p">:</span> <span class="mi">12</span><span class="kt">px</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nt">input</span><span class="o">,</span>
+</span></span><span class="line"><span class="cl"><span class="nt">textarea</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="k">padding</span><span class="p">:</span> <span class="mi">10</span><span class="kt">px</span> <span class="mi">12</span><span class="kt">px</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="k">border</span><span class="p">:</span> <span class="mi">1</span><span class="kt">px</span> <span class="kc">solid</span> <span class="mh">#cbd5e1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="k">border-radius</span><span class="p">:</span> <span class="mi">8</span><span class="kt">px</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="k">font</span><span class="p">:</span> <span class="kc">inherit</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nt">button</span><span class="o">,</span>
+</span></span><span class="line"><span class="cl"><span class="nt">a</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="k">color</span><span class="p">:</span> <span class="mh">#2563eb</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><h3 id="11-练习检查点">11. 练习检查点</h3>
+<p>跑通后，逐项检查：</p>
+<ul>
+<li><code>/posts</code> 能显示文章列表。</li>
+<li>点击文章卡片能进入 <code>/posts/:id</code>。</li>
+<li>详情页刷新后仍然能根据 URL 加载文章。</li>
+<li><code>/posts/create</code> 能创建文章，并跳转到详情页。</li>
+<li><code>/posts/create</code> 不会被 <code>/posts/:id</code> 错误匹配。</li>
+<li>随便访问一个不存在的路径，会进入 404 页面。</li>
+<li>API 文件没有读取路由。</li>
+<li>展示组件没有直接请求列表。</li>
+</ul>
+<p>能跑通这些点，说明你不只是写了几个页面，而是理解了页面入口、参数来源、业务边界和路由行为之间的关系。这才是路由这部分真正要学的东西。</p>
+<h2 id="二十四总结">二十四、总结</h2>
+<p>Web 路由和 uni-app 页面配置看起来不同，本质都在解决页面组织问题。</p>
+<p>Vue Router 的重点是 URL、路由表、<code>RouterView</code>、动态参数、query、嵌套路由、守卫和 history 部署。uni-app 的重点是 <code>pages.json</code>、页面生命周期、页面栈、跳转 API、tabBar、分包和跨端条件编译。</p>
+<p>写项目时可以记住这几条：</p>
+<ul>
+<li>页面入口必须清楚。</li>
+<li>参数应该可恢复、可校验。</li>
+<li>详情页主键放路径，搜索筛选放 query。</li>
+<li>页面读路由，API 接收业务参数。</li>
+<li>守卫管准入，页面管流程。</li>
+<li>tabBar 页面用 <code>switchTab</code>。</li>
+<li>uni-app 复杂对象不要硬塞 URL。</li>
+<li>平台差异要收拢，不要散落。</li>
+<li>目录结构服务于边界，不服务于表演。</li>
+</ul>
+<p>路由不是教程里那几行配置。它是应用的骨架之一。骨架歪了，页面写得再热闹也只是暂时热闹；骨架清楚，后面的功能才有地方安放。</p>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

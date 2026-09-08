@@ -1,0 +1,1597 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>模板字符串详解：反引号、变量插值、多行文本与标签模板 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="模板字符串是 JavaScript 里很常用、也很容易被轻视的语法。它用反引号包裹字符串，支持变量插值、多行文本和标签模板。
+看起来只是少写几个加号，但真正的价值不止如此。它让“字符串中混入数据”这件事变得更清楚，也让复杂文本、请求地址、日志、HTML 片段等场景更容易维护。当然，如果用得随意，它也会很安静地制造安全问题。语法本身没有错，错的是人类总觉得自己不会犯错，这一点倒是很稳定。
+一、普通字符串的问题 在模板字符串出现之前，拼接字符串通常使用 &#43;。
+const name = &#39;Yuki&#39; const age = 18 const text = &#39;姓名：&#39; &#43; name &#43; &#39;，年龄：&#39; &#43; age 这段代码能运行，但当变量变多、文本变长后，可读性会迅速下降。
+const message = &#39;用户 &#39; &#43; user.name &#43; &#39; 在 &#39; &#43; formatDate(order.createdAt) &#43; &#39; 创建了订单，订单金额为 &#39; &#43; order.amount &#43; &#39; 元&#39; 问题不在于 &#43; 不能用，而是它把文本内容和拼接符号混在一起，读者需要在引号、变量、加号之间来回跳。代码不是障碍跑，没必要这样训练眼球。
+二、模板字符串基础语法 模板字符串使用反引号：
+const name = &#39;Yuki&#39; const age = 18 const text = `姓名：${name}，年龄：${age}` console.log(text) 输出：
+姓名：Yuki，年龄：18 ${} 里面可以放 JavaScript 表达式。表达式会先计算，再转换成字符串插入当前位置。
+const count = 3 console.log(`你有 ${count} 条消息`) console.log(`下一页是第 ${count &#43; 1} 页`) 模板字符串由两部分组成：
+反引号包住整体文本。 ${表达式} 插入动态内容。 三、插入表达式 ${} 中可以写变量：
+const title = &#39;JavaScript&#39; const text = `正在学习 ${title}` 可以写运算：
+const price = 100 const count = 2 const text = `总价：${price * count} 元` 可以写函数调用：
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/jsandts/01-javascript/08-%E6%A8%A1%E6%9D%BF%E5%AD%97%E7%AC%A6%E4%B8%B2%E8%AF%A6%E8%A7%A3/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/jsandts/01-javascript/08-%E6%A8%A1%E6%9D%BF%E5%AD%97%E7%AC%A6%E4%B8%B2%E8%AF%A6%E8%A7%A3/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="模板字符串详解：反引号、变量插值、多行文本与标签模板">
+  <meta property="og:description" content="模板字符串是 JavaScript 里很常用、也很容易被轻视的语法。它用反引号包裹字符串，支持变量插值、多行文本和标签模板。
+看起来只是少写几个加号，但真正的价值不止如此。它让“字符串中混入数据”这件事变得更清楚，也让复杂文本、请求地址、日志、HTML 片段等场景更容易维护。当然，如果用得随意，它也会很安静地制造安全问题。语法本身没有错，错的是人类总觉得自己不会犯错，这一点倒是很稳定。
+一、普通字符串的问题 在模板字符串出现之前，拼接字符串通常使用 &#43;。
+const name = &#39;Yuki&#39; const age = 18 const text = &#39;姓名：&#39; &#43; name &#43; &#39;，年龄：&#39; &#43; age 这段代码能运行，但当变量变多、文本变长后，可读性会迅速下降。
+const message = &#39;用户 &#39; &#43; user.name &#43; &#39; 在 &#39; &#43; formatDate(order.createdAt) &#43; &#39; 创建了订单，订单金额为 &#39; &#43; order.amount &#43; &#39; 元&#39; 问题不在于 &#43; 不能用，而是它把文本内容和拼接符号混在一起，读者需要在引号、变量、加号之间来回跳。代码不是障碍跑，没必要这样训练眼球。
+二、模板字符串基础语法 模板字符串使用反引号：
+const name = &#39;Yuki&#39; const age = 18 const text = `姓名：${name}，年龄：${age}` console.log(text) 输出：
+姓名：Yuki，年龄：18 ${} 里面可以放 JavaScript 表达式。表达式会先计算，再转换成字符串插入当前位置。
+const count = 3 console.log(`你有 ${count} 条消息`) console.log(`下一页是第 ${count &#43; 1} 页`) 模板字符串由两部分组成：
+反引号包住整体文本。 ${表达式} 插入动态内容。 三、插入表达式 ${} 中可以写变量：
+const title = &#39;JavaScript&#39; const text = `正在学习 ${title}` 可以写运算：
+const price = 100 const count = 2 const text = `总价：${price * count} 元` 可以写函数调用：">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="jsandts">
+    <meta property="article:published_time" content="2026-08-20T18:24:00+08:00">
+    <meta property="article:modified_time" content="2026-08-20T18:24:00+08:00">
+
+  
+  <meta itemprop="name" content="模板字符串详解：反引号、变量插值、多行文本与标签模板">
+  <meta itemprop="description" content="模板字符串是 JavaScript 里很常用、也很容易被轻视的语法。它用反引号包裹字符串，支持变量插值、多行文本和标签模板。
+看起来只是少写几个加号，但真正的价值不止如此。它让“字符串中混入数据”这件事变得更清楚，也让复杂文本、请求地址、日志、HTML 片段等场景更容易维护。当然，如果用得随意，它也会很安静地制造安全问题。语法本身没有错，错的是人类总觉得自己不会犯错，这一点倒是很稳定。
+一、普通字符串的问题 在模板字符串出现之前，拼接字符串通常使用 &#43;。
+const name = &#39;Yuki&#39; const age = 18 const text = &#39;姓名：&#39; &#43; name &#43; &#39;，年龄：&#39; &#43; age 这段代码能运行，但当变量变多、文本变长后，可读性会迅速下降。
+const message = &#39;用户 &#39; &#43; user.name &#43; &#39; 在 &#39; &#43; formatDate(order.createdAt) &#43; &#39; 创建了订单，订单金额为 &#39; &#43; order.amount &#43; &#39; 元&#39; 问题不在于 &#43; 不能用，而是它把文本内容和拼接符号混在一起，读者需要在引号、变量、加号之间来回跳。代码不是障碍跑，没必要这样训练眼球。
+二、模板字符串基础语法 模板字符串使用反引号：
+const name = &#39;Yuki&#39; const age = 18 const text = `姓名：${name}，年龄：${age}` console.log(text) 输出：
+姓名：Yuki，年龄：18 ${} 里面可以放 JavaScript 表达式。表达式会先计算，再转换成字符串插入当前位置。
+const count = 3 console.log(`你有 ${count} 条消息`) console.log(`下一页是第 ${count &#43; 1} 页`) 模板字符串由两部分组成：
+反引号包住整体文本。 ${表达式} 插入动态内容。 三、插入表达式 ${} 中可以写变量：
+const title = &#39;JavaScript&#39; const text = `正在学习 ${title}` 可以写运算：
+const price = 100 const count = 2 const text = `总价：${price * count} 元` 可以写函数调用：">
+  <meta itemprop="datePublished" content="2026-08-20T18:24:00+08:00">
+  <meta itemprop="dateModified" content="2026-08-20T18:24:00+08:00">
+  <meta itemprop="wordCount" content="1013">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="模板字符串详解：反引号、变量插值、多行文本与标签模板">
+  <meta name="twitter:description" content="模板字符串是 JavaScript 里很常用、也很容易被轻视的语法。它用反引号包裹字符串，支持变量插值、多行文本和标签模板。
+看起来只是少写几个加号，但真正的价值不止如此。它让“字符串中混入数据”这件事变得更清楚，也让复杂文本、请求地址、日志、HTML 片段等场景更容易维护。当然，如果用得随意，它也会很安静地制造安全问题。语法本身没有错，错的是人类总觉得自己不会犯错，这一点倒是很稳定。
+一、普通字符串的问题 在模板字符串出现之前，拼接字符串通常使用 &#43;。
+const name = &#39;Yuki&#39; const age = 18 const text = &#39;姓名：&#39; &#43; name &#43; &#39;，年龄：&#39; &#43; age 这段代码能运行，但当变量变多、文本变长后，可读性会迅速下降。
+const message = &#39;用户 &#39; &#43; user.name &#43; &#39; 在 &#39; &#43; formatDate(order.createdAt) &#43; &#39; 创建了订单，订单金额为 &#39; &#43; order.amount &#43; &#39; 元&#39; 问题不在于 &#43; 不能用，而是它把文本内容和拼接符号混在一起，读者需要在引号、变量、加号之间来回跳。代码不是障碍跑，没必要这样训练眼球。
+二、模板字符串基础语法 模板字符串使用反引号：
+const name = &#39;Yuki&#39; const age = 18 const text = `姓名：${name}，年龄：${age}` console.log(text) 输出：
+姓名：Yuki，年龄：18 ${} 里面可以放 JavaScript 表达式。表达式会先计算，再转换成字符串插入当前位置。
+const count = 3 console.log(`你有 ${count} 条消息`) console.log(`下一页是第 ${count &#43; 1} 页`) 模板字符串由两部分组成：
+反引号包住整体文本。 ${表达式} 插入动态内容。 三、插入表达式 ${} 中可以写变量：
+const title = &#39;JavaScript&#39; const text = `正在学习 ${title}` 可以写运算：
+const price = 100 const count = 2 const text = `总价：${price * count} 元` 可以写函数调用：">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">模板字符串详解：反引号、变量插值、多行文本与标签模板</h1>
+
+    
+      <div class="post-date">August 20, 2026</div>
+    
+
+    <div class="post-content">
+      <p>模板字符串是 JavaScript 里很常用、也很容易被轻视的语法。它用反引号包裹字符串，支持变量插值、多行文本和标签模板。</p>
+<p>看起来只是少写几个加号，但真正的价值不止如此。它让“字符串中混入数据”这件事变得更清楚，也让复杂文本、请求地址、日志、HTML 片段等场景更容易维护。当然，如果用得随意，它也会很安静地制造安全问题。语法本身没有错，错的是人类总觉得自己不会犯错，这一点倒是很稳定。</p>
+<h2 id="一普通字符串的问题">一、普通字符串的问题</h2>
+<p>在模板字符串出现之前，拼接字符串通常使用 <code>+</code>。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">name</span> <span class="o">=</span> <span class="s1">&#39;Yuki&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">age</span> <span class="o">=</span> <span class="mi">18</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">text</span> <span class="o">=</span> <span class="s1">&#39;姓名：&#39;</span> <span class="o">+</span> <span class="nx">name</span> <span class="o">+</span> <span class="s1">&#39;，年龄：&#39;</span> <span class="o">+</span> <span class="nx">age</span>
+</span></span></code></pre></div><p>这段代码能运行，但当变量变多、文本变长后，可读性会迅速下降。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">message</span> <span class="o">=</span>
+</span></span><span class="line"><span class="cl">  <span class="s1">&#39;用户 &#39;</span> <span class="o">+</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">user</span><span class="p">.</span><span class="nx">name</span> <span class="o">+</span>
+</span></span><span class="line"><span class="cl">  <span class="s1">&#39; 在 &#39;</span> <span class="o">+</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">formatDate</span><span class="p">(</span><span class="nx">order</span><span class="p">.</span><span class="nx">createdAt</span><span class="p">)</span> <span class="o">+</span>
+</span></span><span class="line"><span class="cl">  <span class="s1">&#39; 创建了订单，订单金额为 &#39;</span> <span class="o">+</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">order</span><span class="p">.</span><span class="nx">amount</span> <span class="o">+</span>
+</span></span><span class="line"><span class="cl">  <span class="s1">&#39; 元&#39;</span>
+</span></span></code></pre></div><p>问题不在于 <code>+</code> 不能用，而是它把文本内容和拼接符号混在一起，读者需要在引号、变量、加号之间来回跳。代码不是障碍跑，没必要这样训练眼球。</p>
+<h2 id="二模板字符串基础语法">二、模板字符串基础语法</h2>
+<p>模板字符串使用反引号：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">name</span> <span class="o">=</span> <span class="s1">&#39;Yuki&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">age</span> <span class="o">=</span> <span class="mi">18</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">text</span> <span class="o">=</span> <span class="sb">`姓名：</span><span class="si">${</span><span class="nx">name</span><span class="si">}</span><span class="sb">，年龄：</span><span class="si">${</span><span class="nx">age</span><span class="si">}</span><span class="sb">`</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">text</span><span class="p">)</span>
+</span></span></code></pre></div><p>输出：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">姓名：Yuki，年龄：18
+</span></span></code></pre></div><p><code>${}</code> 里面可以放 JavaScript 表达式。表达式会先计算，再转换成字符串插入当前位置。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">count</span> <span class="o">=</span> <span class="mi">3</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="sb">`你有 </span><span class="si">${</span><span class="nx">count</span><span class="si">}</span><span class="sb"> 条消息`</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="sb">`下一页是第 </span><span class="si">${</span><span class="nx">count</span> <span class="o">+</span> <span class="mi">1</span><span class="si">}</span><span class="sb"> 页`</span><span class="p">)</span>
+</span></span></code></pre></div><p>模板字符串由两部分组成：</p>
+<ul>
+<li>反引号包住整体文本。</li>
+<li><code>${表达式}</code> 插入动态内容。</li>
+</ul>
+<h2 id="三插入表达式">三、插入表达式</h2>
+<p><code>${}</code> 中可以写变量：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">title</span> <span class="o">=</span> <span class="s1">&#39;JavaScript&#39;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">text</span> <span class="o">=</span> <span class="sb">`正在学习 </span><span class="si">${</span><span class="nx">title</span><span class="si">}</span><span class="sb">`</span>
+</span></span></code></pre></div><p>可以写运算：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">price</span> <span class="o">=</span> <span class="mi">100</span>
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">count</span> <span class="o">=</span> <span class="mi">2</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">text</span> <span class="o">=</span> <span class="sb">`总价：</span><span class="si">${</span><span class="nx">price</span> <span class="o">*</span> <span class="nx">count</span><span class="si">}</span><span class="sb"> 元`</span>
+</span></span></code></pre></div><p>可以写函数调用：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">createdAt</span> <span class="o">=</span> <span class="s1">&#39;2026-08-20T18:24:00+08:00&#39;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">text</span> <span class="o">=</span> <span class="sb">`创建时间：</span><span class="si">${</span><span class="nx">formatDate</span><span class="p">(</span><span class="nx">createdAt</span><span class="p">)</span><span class="si">}</span><span class="sb">`</span>
+</span></span></code></pre></div><p>可以写三元表达式：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">enabled</span> <span class="o">=</span> <span class="kc">true</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">text</span> <span class="o">=</span> <span class="sb">`当前状态：</span><span class="si">${</span><span class="nx">enabled</span> <span class="o">?</span> <span class="s1">&#39;启用&#39;</span> <span class="o">:</span> <span class="s1">&#39;禁用&#39;</span><span class="si">}</span><span class="sb">`</span>
+</span></span></code></pre></div><p>但不要在 <code>${}</code> 里塞太复杂的逻辑。</p>
+<p>不推荐：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">text</span> <span class="o">=</span> <span class="sb">`展示名：</span><span class="si">${</span><span class="nx">user</span><span class="p">.</span><span class="nx">nickname</span><span class="o">?</span><span class="p">.</span><span class="nx">trim</span><span class="p">()</span> <span class="o">?</span> <span class="nx">user</span><span class="p">.</span><span class="nx">nickname</span><span class="p">.</span><span class="nx">trim</span><span class="p">()</span> <span class="o">:</span> <span class="nx">user</span><span class="p">.</span><span class="nx">username</span> <span class="o">?</span> <span class="nx">user</span><span class="p">.</span><span class="nx">username</span> <span class="o">:</span> <span class="s1">&#39;匿名用户&#39;</span><span class="si">}</span><span class="sb">`</span>
+</span></span></code></pre></div><p>推荐：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">displayName</span> <span class="o">=</span> <span class="nx">user</span><span class="p">.</span><span class="nx">nickname</span><span class="o">?</span><span class="p">.</span><span class="nx">trim</span><span class="p">()</span> <span class="o">||</span> <span class="nx">user</span><span class="p">.</span><span class="nx">username</span> <span class="o">||</span> <span class="s1">&#39;匿名用户&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">text</span> <span class="o">=</span> <span class="sb">`展示名：</span><span class="si">${</span><span class="nx">displayName</span><span class="si">}</span><span class="sb">`</span>
+</span></span></code></pre></div><p>模板字符串是为了让字符串更清楚，不是为了把业务逻辑偷偷藏进去。</p>
+<h2 id="四值如何转换成字符串">四、值如何转换成字符串</h2>
+<p>插值表达式的结果会被转换成字符串。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="sb">`</span><span class="si">${</span><span class="mi">123</span><span class="si">}</span><span class="sb">`</span><span class="p">)</span> <span class="c1">// &#39;123&#39;
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="sb">`</span><span class="si">${</span><span class="kc">true</span><span class="si">}</span><span class="sb">`</span><span class="p">)</span> <span class="c1">// &#39;true&#39;
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="sb">`</span><span class="si">${</span><span class="kc">null</span><span class="si">}</span><span class="sb">`</span><span class="p">)</span> <span class="c1">// &#39;null&#39;
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="sb">`</span><span class="si">${</span><span class="kc">undefined</span><span class="si">}</span><span class="sb">`</span><span class="p">)</span> <span class="c1">// &#39;undefined&#39;
+</span></span></span></code></pre></div><p>对象会调用自己的字符串转换逻辑。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">user</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">id</span><span class="o">:</span> <span class="mi">1</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">name</span><span class="o">:</span> <span class="s1">&#39;Yuki&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="sb">`用户：</span><span class="si">${</span><span class="nx">user</span><span class="si">}</span><span class="sb">`</span><span class="p">)</span>
+</span></span></code></pre></div><p>输出：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">用户：[object Object]
+</span></span></code></pre></div><p>如果要展示对象，应该显式序列化：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="sb">`用户：</span><span class="si">${</span><span class="nx">JSON</span><span class="p">.</span><span class="nx">stringify</span><span class="p">(</span><span class="nx">user</span><span class="p">)</span><span class="si">}</span><span class="sb">`</span><span class="p">)</span>
+</span></span></code></pre></div><p>日志里尤其要注意这一点。<code>[object Object]</code> 不是信息，它只是对象在用最简短的方式表示自己拒绝沟通。</p>
+<h2 id="五多行字符串">五、多行字符串</h2>
+<p>模板字符串可以自然书写多行文本。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">message</span> <span class="o">=</span> <span class="sb">`第一行
+</span></span></span><span class="line"><span class="cl"><span class="sb">第二行
+</span></span></span><span class="line"><span class="cl"><span class="sb">第三行`</span>
+</span></span></code></pre></div><p>输出中会保留换行：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">第一行
+</span></span><span class="line"><span class="cl">第二行
+</span></span><span class="line"><span class="cl">第三行
+</span></span></code></pre></div><p>这比普通字符串拼接更直观。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">message</span> <span class="o">=</span>
+</span></span><span class="line"><span class="cl">  <span class="s1">&#39;第一行\n&#39;</span> <span class="o">+</span>
+</span></span><span class="line"><span class="cl">  <span class="s1">&#39;第二行\n&#39;</span> <span class="o">+</span>
+</span></span><span class="line"><span class="cl">  <span class="s1">&#39;第三行&#39;</span>
+</span></span></code></pre></div><p>多行模板适合：</p>
+<ul>
+<li>构造长日志。</li>
+<li>构造邮件正文。</li>
+<li>构造 Markdown 文本。</li>
+<li>构造测试用例中的大段输入。</li>
+<li>构造少量 HTML 片段。</li>
+</ul>
+<h2 id="六多行缩进问题">六、多行缩进问题</h2>
+<p>模板字符串会保留你写下的空格和换行。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kd">function</span> <span class="nx">buildMessage</span><span class="p">(</span><span class="nx">name</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="k">return</span> <span class="sb">`
+</span></span></span><span class="line"><span class="cl"><span class="sb">    你好，</span><span class="si">${</span><span class="nx">name</span><span class="si">}</span><span class="sb">
+</span></span></span><span class="line"><span class="cl"><span class="sb">    欢迎回来
+</span></span></span><span class="line"><span class="cl"><span class="sb">  `</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>这个字符串开头有一个换行，每一行前面也有空格。实际内容不是你肉眼以为的那样干净。</p>
+<p>可以这样写得更明确：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kd">function</span> <span class="nx">buildMessage</span><span class="p">(</span><span class="nx">name</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="k">return</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">    <span class="sb">`你好，</span><span class="si">${</span><span class="nx">name</span><span class="si">}</span><span class="sb">`</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="s1">&#39;欢迎回来&#39;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">].</span><span class="nx">join</span><span class="p">(</span><span class="s1">&#39;\n&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>或者在确实需要多行文本时，把缩进控制好：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">markdown</span> <span class="o">=</span> <span class="sb">`# 标题
+</span></span></span><span class="line"><span class="cl"><span class="sb">
+</span></span></span><span class="line"><span class="cl"><span class="sb">这是第一段。
+</span></span></span><span class="line"><span class="cl"><span class="sb">
+</span></span></span><span class="line"><span class="cl"><span class="sb">这是第二段。`</span>
+</span></span></code></pre></div><p>在代码里写多行文本时，要意识到空白字符也是字符串内容的一部分。它不会因为你觉得它只是排版，就体贴地消失。</p>
+<h2 id="七反引号和特殊字符">七、反引号和特殊字符</h2>
+<p>模板字符串中如果要写反引号，需要转义。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">text</span> <span class="o">=</span> <span class="sb">`这里有一个反引号：\``</span>
+</span></span></code></pre></div><p>如果要写 <code>${</code> 本身，也需要避免被当成插值语法。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">text</span> <span class="o">=</span> <span class="sb">`模板插值写作：\${name}`</span>
+</span></span></code></pre></div><p>输出：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">模板插值写作：${name}
+</span></span></code></pre></div><p>常见转义字符仍然可用：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">text</span> <span class="o">=</span> <span class="sb">`第一行\n第二行`</span>
+</span></span></code></pre></div><p>不过如果你已经使用多行模板字符串，就不一定需要手写 <code>\n</code>。</p>
+<h2 id="八构造-url">八、构造 URL</h2>
+<p>模板字符串常用于构造 URL。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">id</span> <span class="o">=</span> <span class="mi">10</span>
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">url</span> <span class="o">=</span> <span class="sb">`/api/posts/</span><span class="si">${</span><span class="nx">id</span><span class="si">}</span><span class="sb">`</span>
+</span></span></code></pre></div><p>但查询参数不建议直接拼接。</p>
+<p>可以写：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">keyword</span> <span class="o">=</span> <span class="s1">&#39;JavaScript&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">page</span> <span class="o">=</span> <span class="mi">1</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">url</span> <span class="o">=</span> <span class="sb">`/api/posts?keyword=</span><span class="si">${</span><span class="nx">keyword</span><span class="si">}</span><span class="sb">&amp;page=</span><span class="si">${</span><span class="nx">page</span><span class="si">}</span><span class="sb">`</span>
+</span></span></code></pre></div><p>但更稳的写法是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">params</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">URLSearchParams</span><span class="p">({</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">keyword</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">page</span><span class="o">:</span> <span class="nb">String</span><span class="p">(</span><span class="nx">page</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">url</span> <span class="o">=</span> <span class="sb">`/api/posts?</span><span class="si">${</span><span class="nx">params</span><span class="p">.</span><span class="nx">toString</span><span class="p">()</span><span class="si">}</span><span class="sb">`</span>
+</span></span></code></pre></div><p>原因是查询参数可能包含中文、空格、<code>&amp;</code>、<code>?</code> 等特殊字符。<code>URLSearchParams</code> 会处理编码问题。</p>
+<p>如果只拼路径片段，模板字符串很合适；如果拼查询参数，优先用结构化 API。</p>
+<h2 id="九构造日志">九、构造日志</h2>
+<p>模板字符串非常适合让日志更清楚。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kd">function</span> <span class="nx">logRequest</span><span class="p">(</span><span class="nx">method</span><span class="p">,</span> <span class="nx">url</span><span class="p">,</span> <span class="nx">status</span><span class="p">,</span> <span class="nx">duration</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="sb">`[request] </span><span class="si">${</span><span class="nx">method</span><span class="si">}</span><span class="sb"> </span><span class="si">${</span><span class="nx">url</span><span class="si">}</span><span class="sb"> </span><span class="si">${</span><span class="nx">status</span><span class="si">}</span><span class="sb"> </span><span class="si">${</span><span class="nx">duration</span><span class="si">}</span><span class="sb">ms`</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>输出：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">[request] GET /api/posts 200 83ms
+</span></span></code></pre></div><p>如果日志字段较多，可以先整理变量：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">method</span> <span class="o">=</span> <span class="s1">&#39;POST&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">url</span> <span class="o">=</span> <span class="s1">&#39;/api/posts&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">status</span> <span class="o">=</span> <span class="mi">201</span>
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">duration</span> <span class="o">=</span> <span class="mi">126</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="sb">`[api] </span><span class="si">${</span><span class="nx">method</span><span class="si">}</span><span class="sb"> </span><span class="si">${</span><span class="nx">url</span><span class="si">}</span><span class="sb"> -&gt; </span><span class="si">${</span><span class="nx">status</span><span class="si">}</span><span class="sb">, cost=</span><span class="si">${</span><span class="nx">duration</span><span class="si">}</span><span class="sb">ms`</span><span class="p">)</span>
+</span></span></code></pre></div><p>日志的关键是可定位。模板字符串不是为了写得像句子，而是为了让关键信息出现在稳定位置。</p>
+<h2 id="十构造-html-片段">十、构造 HTML 片段</h2>
+<p>模板字符串可以构造 HTML。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kd">function</span> <span class="nx">renderUser</span><span class="p">(</span><span class="nx">user</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="k">return</span> <span class="sb">`
+</span></span></span><span class="line"><span class="cl"><span class="sb">    &lt;article class=&#34;user-card&#34;&gt;
+</span></span></span><span class="line"><span class="cl"><span class="sb">      &lt;h2&gt;</span><span class="si">${</span><span class="nx">user</span><span class="p">.</span><span class="nx">name</span><span class="si">}</span><span class="sb">&lt;/h2&gt;
+</span></span></span><span class="line"><span class="cl"><span class="sb">      &lt;p&gt;</span><span class="si">${</span><span class="nx">user</span><span class="p">.</span><span class="nx">bio</span><span class="si">}</span><span class="sb">&lt;/p&gt;
+</span></span></span><span class="line"><span class="cl"><span class="sb">    &lt;/article&gt;
+</span></span></span><span class="line"><span class="cl"><span class="sb">  `</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>但这里有一个重要风险：<strong>不要直接把不可信用户输入插入 HTML</strong>。</p>
+<p>如果 <code>user.bio</code> 是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-html" data-lang="html"><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">img</span> <span class="na">src</span><span class="o">=</span><span class="s">&#34;x&#34;</span> <span class="na">onerror</span><span class="o">=</span><span class="s">&#34;alert(&#39;xss&#39;)&#34;</span><span class="p">&gt;</span>
+</span></span></code></pre></div><p>直接插入页面可能造成 XSS。</p>
+<p>危险写法：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="nx">container</span><span class="p">.</span><span class="nx">innerHTML</span> <span class="o">=</span> <span class="nx">renderUser</span><span class="p">(</span><span class="nx">user</span><span class="p">)</span>
+</span></span></code></pre></div><p>更稳的写法是使用 DOM API 设置文本：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kd">function</span> <span class="nx">mountUser</span><span class="p">(</span><span class="nx">container</span><span class="p">,</span> <span class="nx">user</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">const</span> <span class="nx">article</span> <span class="o">=</span> <span class="nb">document</span><span class="p">.</span><span class="nx">createElement</span><span class="p">(</span><span class="s1">&#39;article&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">const</span> <span class="nx">title</span> <span class="o">=</span> <span class="nb">document</span><span class="p">.</span><span class="nx">createElement</span><span class="p">(</span><span class="s1">&#39;h2&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">const</span> <span class="nx">bio</span> <span class="o">=</span> <span class="nb">document</span><span class="p">.</span><span class="nx">createElement</span><span class="p">(</span><span class="s1">&#39;p&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="nx">article</span><span class="p">.</span><span class="nx">className</span> <span class="o">=</span> <span class="s1">&#39;user-card&#39;</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">title</span><span class="p">.</span><span class="nx">textContent</span> <span class="o">=</span> <span class="nx">user</span><span class="p">.</span><span class="nx">name</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">bio</span><span class="p">.</span><span class="nx">textContent</span> <span class="o">=</span> <span class="nx">user</span><span class="p">.</span><span class="nx">bio</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="nx">article</span><span class="p">.</span><span class="nx">append</span><span class="p">(</span><span class="nx">title</span><span class="p">,</span> <span class="nx">bio</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">container</span><span class="p">.</span><span class="nx">append</span><span class="p">(</span><span class="nx">article</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p><code>textContent</code> 会把内容当作文本，而不是 HTML 执行。</p>
+<p>模板字符串可以生成 HTML，但不能替你判断数据是否可信。安全问题不会因为语法好看就自动消失，真遗憾。</p>
+<h2 id="十一构造-css-字符串">十一、构造 CSS 字符串</h2>
+<p>模板字符串也常用于动态样式。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">width</span> <span class="o">=</span> <span class="mi">120</span>
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">color</span> <span class="o">=</span> <span class="s1">&#39;#3b82f6&#39;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">style</span> <span class="o">=</span> <span class="sb">`
+</span></span></span><span class="line"><span class="cl"><span class="sb">  width: </span><span class="si">${</span><span class="nx">width</span><span class="si">}</span><span class="sb">px;
+</span></span></span><span class="line"><span class="cl"><span class="sb">  color: </span><span class="si">${</span><span class="nx">color</span><span class="si">}</span><span class="sb">;
+</span></span></span><span class="line"><span class="cl"><span class="sb">`</span>
+</span></span></code></pre></div><p>在框架里，通常不建议大量拼 CSS 字符串。更常见的方式是使用 class、style 对象或 CSS 变量。</p>
+<p>例如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="nx">element</span><span class="p">.</span><span class="nx">style</span><span class="p">.</span><span class="nx">setProperty</span><span class="p">(</span><span class="s1">&#39;--card-width&#39;</span><span class="p">,</span> <span class="sb">`</span><span class="si">${</span><span class="nx">width</span><span class="si">}</span><span class="sb">px`</span><span class="p">)</span>
+</span></span></code></pre></div><p>模板字符串适合生成简单样式值：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">transform</span> <span class="o">=</span> <span class="sb">`translateX(</span><span class="si">${</span><span class="nx">x</span><span class="si">}</span><span class="sb">px) translateY(</span><span class="si">${</span><span class="nx">y</span><span class="si">}</span><span class="sb">px)`</span>
+</span></span></code></pre></div><p>但如果整段 CSS 都靠字符串拼出来，维护成本会很快升高。</p>
+<h2 id="十二模板字符串与数组方法">十二、模板字符串与数组方法</h2>
+<p>模板字符串经常和 <code>map</code>、<code>join</code> 配合使用。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">users</span> <span class="o">=</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">  <span class="p">{</span> <span class="nx">id</span><span class="o">:</span> <span class="mi">1</span><span class="p">,</span> <span class="nx">name</span><span class="o">:</span> <span class="s1">&#39;Yuki&#39;</span> <span class="p">},</span>
+</span></span><span class="line"><span class="cl">  <span class="p">{</span> <span class="nx">id</span><span class="o">:</span> <span class="mi">2</span><span class="p">,</span> <span class="nx">name</span><span class="o">:</span> <span class="s1">&#39;Hachiman&#39;</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">]</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">html</span> <span class="o">=</span> <span class="nx">users</span>
+</span></span><span class="line"><span class="cl">  <span class="p">.</span><span class="nx">map</span><span class="p">(</span><span class="nx">user</span> <span class="p">=&gt;</span> <span class="sb">`&lt;li data-id=&#34;</span><span class="si">${</span><span class="nx">user</span><span class="p">.</span><span class="nx">id</span><span class="si">}</span><span class="sb">&#34;&gt;</span><span class="si">${</span><span class="nx">user</span><span class="p">.</span><span class="nx">name</span><span class="si">}</span><span class="sb">&lt;/li&gt;`</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="p">.</span><span class="nx">join</span><span class="p">(</span><span class="s1">&#39;&#39;</span><span class="p">)</span>
+</span></span></code></pre></div><p>生成：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-html" data-lang="html"><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">li</span> <span class="na">data-id</span><span class="o">=</span><span class="s">&#34;1&#34;</span><span class="p">&gt;</span>Yuki<span class="p">&lt;/</span><span class="nt">li</span><span class="p">&gt;&lt;</span><span class="nt">li</span> <span class="na">data-id</span><span class="o">=</span><span class="s">&#34;2&#34;</span><span class="p">&gt;</span>Hachiman<span class="p">&lt;/</span><span class="nt">li</span><span class="p">&gt;</span>
+</span></span></code></pre></div><p>如果需要换行，可以：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">text</span> <span class="o">=</span> <span class="nx">users</span>
+</span></span><span class="line"><span class="cl">  <span class="p">.</span><span class="nx">map</span><span class="p">(</span><span class="nx">user</span> <span class="p">=&gt;</span> <span class="sb">`- </span><span class="si">${</span><span class="nx">user</span><span class="p">.</span><span class="nx">name</span><span class="si">}</span><span class="sb">`</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="p">.</span><span class="nx">join</span><span class="p">(</span><span class="s1">&#39;\n&#39;</span><span class="p">)</span>
+</span></span></code></pre></div><p>输出：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">- Yuki
+</span></span><span class="line"><span class="cl">- Hachiman
+</span></span></code></pre></div><p>这在生成 Markdown、命令行输出、简单报表时很有用。</p>
+<h2 id="十三标签模板">十三、标签模板</h2>
+<p>模板字符串还有一种进阶用法：标签模板。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kd">function</span> <span class="nx">tag</span><span class="p">(</span><span class="nx">strings</span><span class="p">,</span> <span class="p">...</span><span class="nx">values</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">strings</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">values</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">name</span> <span class="o">=</span> <span class="s1">&#39;Yuki&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">age</span> <span class="o">=</span> <span class="mi">18</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">tag</span><span class="sb">`姓名：</span><span class="si">${</span><span class="nx">name</span><span class="si">}</span><span class="sb">，年龄：</span><span class="si">${</span><span class="nx">age</span><span class="si">}</span><span class="sb">`</span>
+</span></span></code></pre></div><p>这行代码看起来像函数名后面直接跟了一个模板字符串：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="nx">tag</span><span class="sb">`姓名：</span><span class="si">${</span><span class="nx">name</span><span class="si">}</span><span class="sb">，年龄：</span><span class="si">${</span><span class="nx">age</span><span class="si">}</span><span class="sb">`</span>
+</span></span></code></pre></div><p>它不是普通函数调用：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="nx">tag</span><span class="p">(</span><span class="sb">`姓名：</span><span class="si">${</span><span class="nx">name</span><span class="si">}</span><span class="sb">，年龄：</span><span class="si">${</span><span class="nx">age</span><span class="si">}</span><span class="sb">`</span><span class="p">)</span>
+</span></span></code></pre></div><p>普通函数调用会先把模板字符串拼成一个完整字符串，然后把这个字符串作为参数传给函数。</p>
+<p>标签模板不同。它会把模板拆成两类信息传给 <code>tag</code>：</p>
+<ul>
+<li><code>strings</code>：静态字符串片段数组。</li>
+<li><code>values</code>：插值表达式的结果。</li>
+</ul>
+<p>对于：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="nx">tag</span><span class="sb">`姓名：</span><span class="si">${</span><span class="nx">name</span><span class="si">}</span><span class="sb">，年龄：</span><span class="si">${</span><span class="nx">age</span><span class="si">}</span><span class="sb">`</span>
+</span></span></code></pre></div><p>静态片段是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="p">[</span><span class="s1">&#39;姓名：&#39;</span><span class="p">,</span> <span class="s1">&#39;，年龄：&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">]</span>
+</span></span></code></pre></div><p>插值结果是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="p">[</span><span class="s1">&#39;Yuki&#39;</span><span class="p">,</span> <span class="mi">18</span><span class="p">]</span>
+</span></span></code></pre></div><p>所以它大致可以理解成一次特殊调用：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="nx">tag</span><span class="p">([</span><span class="s1">&#39;姓名：&#39;</span><span class="p">,</span> <span class="s1">&#39;，年龄：&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">],</span> <span class="nx">name</span><span class="p">,</span> <span class="nx">age</span><span class="p">)</span>
+</span></span></code></pre></div><p>真实运行时第一个参数不是普通手写数组，而是模板对象；学习阶段先这样理解就够了。</p>
+<p>函数内部：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kd">function</span> <span class="nx">tag</span><span class="p">(</span><span class="nx">strings</span><span class="p">,</span> <span class="p">...</span><span class="nx">values</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">strings</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">values</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p><code>strings</code> 接收第一个参数。</p>
+<p><code>...values</code> 是剩余参数，负责把后面的所有插值结果收集成数组。</p>
+<p>也就是说：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="nx">strings</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="c1">// &#39;姓名：&#39;
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">strings</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="c1">// &#39;，年龄：&#39;
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">strings</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="c1">// &#39;&#39;
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="nx">values</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="c1">// &#39;Yuki&#39;
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">values</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="c1">// 18
+</span></span></span></code></pre></div><p>标签模板不是普通函数调用的花哨写法，它能在字符串最终拼接前处理静态片段和动态值。</p>
+<h2 id="十四标签模板如何重新拼接">十四、标签模板如何重新拼接</h2>
+<p>标签函数可以自己决定最终返回什么。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kd">function</span> <span class="nx">tag</span><span class="p">(</span><span class="nx">strings</span><span class="p">,</span> <span class="p">...</span><span class="nx">values</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="kd">let</span> <span class="nx">result</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">for</span> <span class="p">(</span><span class="kd">let</span> <span class="nx">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">i</span> <span class="o">&lt;</span> <span class="nx">strings</span><span class="p">.</span><span class="nx">length</span><span class="p">;</span> <span class="nx">i</span><span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">result</span> <span class="o">+=</span> <span class="nx">strings</span><span class="p">[</span><span class="nx">i</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="p">(</span><span class="nx">i</span> <span class="o">&lt;</span> <span class="nx">values</span><span class="p">.</span><span class="nx">length</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">result</span> <span class="o">+=</span> <span class="nx">values</span><span class="p">[</span><span class="nx">i</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">return</span> <span class="nx">result</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">name</span> <span class="o">=</span> <span class="s1">&#39;Yuki&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">age</span> <span class="o">=</span> <span class="mi">18</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">text</span> <span class="o">=</span> <span class="nx">tag</span><span class="sb">`姓名：</span><span class="si">${</span><span class="nx">name</span><span class="si">}</span><span class="sb">，年龄：</span><span class="si">${</span><span class="nx">age</span><span class="si">}</span><span class="sb">`</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">text</span><span class="p">)</span>
+</span></span></code></pre></div><p>输出：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">姓名：Yuki，年龄：18
+</span></span></code></pre></div><p>这里的拼接规律是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">strings[0]
+</span></span><span class="line"><span class="cl"> -&gt; values[0]
+</span></span><span class="line"><span class="cl"> -&gt; strings[1]
+</span></span><span class="line"><span class="cl"> -&gt; values[1]
+</span></span><span class="line"><span class="cl"> -&gt; strings[2]
+</span></span></code></pre></div><p>静态片段数量总是比插值数量多 1。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">`A${x}B${y}C`
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">strings -&gt; [&#39;A&#39;, &#39;B&#39;, &#39;C&#39;]
+</span></span><span class="line"><span class="cl">values  -&gt; [x, y]
+</span></span></code></pre></div><p>如果模板以插值结尾，最后一个静态片段就是空字符串。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="nx">tag</span><span class="sb">`姓名：</span><span class="si">${</span><span class="nx">name</span><span class="si">}</span><span class="sb">`</span>
+</span></span></code></pre></div><p>对应：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="nx">strings</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;姓名：&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl"><span class="nx">values</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;Yuki&#39;</span><span class="p">]</span>
+</span></span></code></pre></div><p>这个空字符串不是多余错误，而是为了让“静态片段数量比插值数量多 1”这个结构保持稳定。</p>
+<h2 id="十五stringsraw">十五、strings.raw</h2>
+<p>标签模板的 <code>strings</code> 参数还有一个 <code>raw</code> 属性，可以看到未处理转义的原始字符串片段。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kd">function</span> <span class="nx">tag</span><span class="p">(</span><span class="nx">strings</span><span class="p">,</span> <span class="p">...</span><span class="nx">values</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">strings</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">strings</span><span class="p">.</span><span class="nx">raw</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">tag</span><span class="sb">`第一行\n第二行`</span>
+</span></span></code></pre></div><p>输出含义大致是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">strings[0]     -&gt; 包含真实换行符
+</span></span><span class="line"><span class="cl">strings.raw[0] -&gt; 包含反斜杠和 n 两个字符
+</span></span></code></pre></div><p>这也是 <code>String.raw</code> 能工作的基础。普通业务里不常直接用 <code>strings.raw</code>，但理解它有助于看懂标签模板为什么能处理路径、正则、DSL 文本。</p>
+<h2 id="十六标签模板的实际用途">十六、标签模板的实际用途</h2>
+<p>标签模板常用于：</p>
+<ul>
+<li>SQL 构造。</li>
+<li>HTML 转义。</li>
+<li>CSS-in-JS。</li>
+<li>国际化文本。</li>
+<li>GraphQL 查询。</li>
+</ul>
+<p>例如实现一个简单 HTML 转义标签：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kd">function</span> <span class="nx">escapeHtml</span><span class="p">(</span><span class="nx">value</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="k">return</span> <span class="nb">String</span><span class="p">(</span><span class="nx">value</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">.</span><span class="nx">replaceAll</span><span class="p">(</span><span class="s1">&#39;&amp;&#39;</span><span class="p">,</span> <span class="s1">&#39;&amp;amp;&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">.</span><span class="nx">replaceAll</span><span class="p">(</span><span class="s1">&#39;&lt;&#39;</span><span class="p">,</span> <span class="s1">&#39;&amp;lt;&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">.</span><span class="nx">replaceAll</span><span class="p">(</span><span class="s1">&#39;&gt;&#39;</span><span class="p">,</span> <span class="s1">&#39;&amp;gt;&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">.</span><span class="nx">replaceAll</span><span class="p">(</span><span class="s1">&#39;&#34;&#39;</span><span class="p">,</span> <span class="s1">&#39;&amp;quot;&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">.</span><span class="nx">replaceAll</span><span class="p">(</span><span class="s2">&#34;&#39;&#34;</span><span class="p">,</span> <span class="s1">&#39;&amp;#39;&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">function</span> <span class="nx">html</span><span class="p">(</span><span class="nx">strings</span><span class="p">,</span> <span class="p">...</span><span class="nx">values</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="k">return</span> <span class="nx">strings</span><span class="p">.</span><span class="nx">reduce</span><span class="p">((</span><span class="nx">result</span><span class="p">,</span> <span class="nx">string</span><span class="p">,</span> <span class="nx">index</span><span class="p">)</span> <span class="p">=&gt;</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">const</span> <span class="nx">value</span> <span class="o">=</span> <span class="nx">values</span><span class="p">[</span><span class="nx">index</span><span class="p">]</span> <span class="o">===</span> <span class="kc">undefined</span> <span class="o">?</span> <span class="s1">&#39;&#39;</span> <span class="o">:</span> <span class="nx">escapeHtml</span><span class="p">(</span><span class="nx">values</span><span class="p">[</span><span class="nx">index</span><span class="p">])</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nx">result</span> <span class="o">+</span> <span class="nx">string</span> <span class="o">+</span> <span class="nx">value</span>
+</span></span><span class="line"><span class="cl">  <span class="p">},</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>使用：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">userInput</span> <span class="o">=</span> <span class="s1">&#39;&lt;script&gt;alert(1)&lt;/script&gt;&#39;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">output</span> <span class="o">=</span> <span class="nx">html</span><span class="sb">`&lt;p&gt;</span><span class="si">${</span><span class="nx">userInput</span><span class="si">}</span><span class="sb">&lt;/p&gt;`</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">output</span><span class="p">)</span>
+</span></span></code></pre></div><p>输出：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-html" data-lang="html"><span class="line"><span class="cl"><span class="p">&lt;</span><span class="nt">p</span><span class="p">&gt;</span><span class="ni">&amp;lt;</span>script<span class="ni">&amp;gt;</span>alert(1)<span class="ni">&amp;lt;</span>/script<span class="ni">&amp;gt;</span><span class="p">&lt;/</span><span class="nt">p</span><span class="p">&gt;</span>
+</span></span></code></pre></div><p>这只是教学示例。真实项目中的安全处理应该使用成熟库或框架能力，不要因为写了几行转义函数就觉得自己已经赢过了所有攻击者。傲慢通常比较贵。</p>
+<h2 id="十七stringraw">十七、String.raw</h2>
+<p><code>String.raw</code> 是一个内置标签函数，可以获取原始字符串内容。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">path</span> <span class="o">=</span> <span class="nb">String</span><span class="p">.</span><span class="nx">raw</span><span class="sb">`C:\Users\name\documents`</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">path</span><span class="p">)</span>
+</span></span></code></pre></div><p>输出：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">C:\Users\name\documents
+</span></span></code></pre></div><p>普通模板字符串中，反斜杠可能被当成转义字符处理。<code>String.raw</code> 会保留原始反斜杠。</p>
+<p>它适合：</p>
+<ul>
+<li>Windows 路径示例。</li>
+<li>正则表达式说明。</li>
+<li>需要保留反斜杠的文本。</li>
+</ul>
+<p>不要滥用。大多数业务字符串用普通模板字符串就够了。</p>
+<h2 id="十八和普通字符串的选择">十八、和普通字符串的选择</h2>
+<p>不是所有字符串都要写成模板字符串。</p>
+<p>推荐使用普通引号：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">status</span> <span class="o">=</span> <span class="s1">&#39;success&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">emptyText</span> <span class="o">=</span> <span class="s1">&#39;暂无数据&#39;</span>
+</span></span></code></pre></div><p>推荐使用模板字符串：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">message</span> <span class="o">=</span> <span class="sb">`欢迎回来，</span><span class="si">${</span><span class="nx">user</span><span class="p">.</span><span class="nx">name</span><span class="si">}</span><span class="sb">`</span>
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">url</span> <span class="o">=</span> <span class="sb">`/api/posts/</span><span class="si">${</span><span class="nx">id</span><span class="si">}</span><span class="sb">`</span>
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">log</span> <span class="o">=</span> <span class="sb">`[request] </span><span class="si">${</span><span class="nx">method</span><span class="si">}</span><span class="sb"> </span><span class="si">${</span><span class="nx">url</span><span class="si">}</span><span class="sb"> </span><span class="si">${</span><span class="nx">status</span><span class="si">}</span><span class="sb">`</span>
+</span></span></code></pre></div><p>判断标准很简单：</p>
+<ul>
+<li>没有变量、没有多行，用普通字符串。</li>
+<li>有变量插值，用模板字符串。</li>
+<li>有多行文本，用模板字符串或数组 <code>join</code>。</li>
+<li>需要特殊处理插值内容，可以考虑标签模板。</li>
+</ul>
+<h2 id="十九常见误区">十九、常见误区</h2>
+<h3 id="1-用单引号写插值">1. 用单引号写插值</h3>
+<p>错误：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">name</span> <span class="o">=</span> <span class="s1">&#39;Yuki&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">text</span> <span class="o">=</span> <span class="s1">&#39;你好，${name}&#39;</span>
+</span></span></code></pre></div><p>输出：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">你好，${name}
+</span></span></code></pre></div><p>正确：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">text</span> <span class="o">=</span> <span class="sb">`你好，</span><span class="si">${</span><span class="nx">name</span><span class="si">}</span><span class="sb">`</span>
+</span></span></code></pre></div><p>只有反引号才支持 <code>${}</code> 插值。</p>
+<h3 id="2-在插值里写太多逻辑">2. 在插值里写太多逻辑</h3>
+<p>不推荐：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">text</span> <span class="o">=</span> <span class="sb">`</span><span class="si">${</span><span class="nx">list</span><span class="p">.</span><span class="nx">filter</span><span class="p">(</span><span class="nx">item</span> <span class="p">=&gt;</span> <span class="nx">item</span><span class="p">.</span><span class="nx">visible</span><span class="p">).</span><span class="nx">map</span><span class="p">(</span><span class="nx">item</span> <span class="p">=&gt;</span> <span class="nx">item</span><span class="p">.</span><span class="nx">name</span><span class="p">).</span><span class="nx">join</span><span class="p">(</span><span class="s1">&#39;, &#39;</span><span class="p">)</span><span class="si">}</span><span class="sb">`</span>
+</span></span></code></pre></div><p>推荐：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">visibleNames</span> <span class="o">=</span> <span class="nx">list</span>
+</span></span><span class="line"><span class="cl">  <span class="p">.</span><span class="nx">filter</span><span class="p">(</span><span class="nx">item</span> <span class="p">=&gt;</span> <span class="nx">item</span><span class="p">.</span><span class="nx">visible</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="p">.</span><span class="nx">map</span><span class="p">(</span><span class="nx">item</span> <span class="p">=&gt;</span> <span class="nx">item</span><span class="p">.</span><span class="nx">name</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="p">.</span><span class="nx">join</span><span class="p">(</span><span class="s1">&#39;, &#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">text</span> <span class="o">=</span> <span class="sb">`可见用户：</span><span class="si">${</span><span class="nx">visibleNames</span><span class="si">}</span><span class="sb">`</span>
+</span></span></code></pre></div><p>逻辑拆出来后更容易调试，也更容易复用。</p>
+<h3 id="3-忽略空值">3. 忽略空值</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">user</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">name</span><span class="o">:</span> <span class="kc">undefined</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="sb">`用户名：</span><span class="si">${</span><span class="nx">user</span><span class="p">.</span><span class="nx">name</span><span class="si">}</span><span class="sb">`</span><span class="p">)</span>
+</span></span></code></pre></div><p>输出：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">用户名：undefined
+</span></span></code></pre></div><p>如果页面上不应该展示 <code>undefined</code>，就要给默认值。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">name</span> <span class="o">=</span> <span class="nx">user</span><span class="p">.</span><span class="nx">name</span> <span class="o">??</span> <span class="s1">&#39;匿名用户&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">text</span> <span class="o">=</span> <span class="sb">`用户名：</span><span class="si">${</span><span class="nx">name</span><span class="si">}</span><span class="sb">`</span>
+</span></span></code></pre></div><h3 id="4-直接拼接不可信-html">4. 直接拼接不可信 HTML</h3>
+<p>危险：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">html</span> <span class="o">=</span> <span class="sb">`&lt;p&gt;</span><span class="si">${</span><span class="nx">comment</span><span class="p">.</span><span class="nx">content</span><span class="si">}</span><span class="sb">&lt;/p&gt;`</span>
+</span></span><span class="line"><span class="cl"><span class="nx">container</span><span class="p">.</span><span class="nx">innerHTML</span> <span class="o">=</span> <span class="nx">html</span>
+</span></span></code></pre></div><p>如果 <code>comment.content</code> 来自用户输入，就要考虑 XSS。能用 <code>textContent</code> 时优先用 <code>textContent</code>；必须渲染 HTML 时，使用可信的清洗方案。</p>
+<h2 id="二十练习">二十、练习</h2>
+<p>实现一个 <code>buildPostSummary(post)</code> 函数，返回文章摘要文本。</p>
+<p>要求：</p>
+<ul>
+<li>标题为空时使用 <code>未命名文章</code>。</li>
+<li>作者为空时使用 <code>匿名用户</code>。</li>
+<li>点赞数为空时使用 <code>0</code>。</li>
+<li>时间通过 <code>formatDate(post.createdAt)</code> 格式化。</li>
+</ul>
+<p>参考结构：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kd">function</span> <span class="nx">buildPostSummary</span><span class="p">(</span><span class="nx">post</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">const</span> <span class="nx">title</span> <span class="o">=</span> <span class="nx">post</span><span class="p">.</span><span class="nx">title</span><span class="o">?</span><span class="p">.</span><span class="nx">trim</span><span class="p">()</span> <span class="o">||</span> <span class="s1">&#39;未命名文章&#39;</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">const</span> <span class="nx">authorName</span> <span class="o">=</span> <span class="nx">post</span><span class="p">.</span><span class="nx">author</span><span class="o">?</span><span class="p">.</span><span class="nx">name</span> <span class="o">??</span> <span class="s1">&#39;匿名用户&#39;</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">const</span> <span class="nx">likeCount</span> <span class="o">=</span> <span class="nx">post</span><span class="p">.</span><span class="nx">likeCount</span> <span class="o">??</span> <span class="mi">0</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">const</span> <span class="nx">createdDate</span> <span class="o">=</span> <span class="nx">formatDate</span><span class="p">(</span><span class="nx">post</span><span class="p">.</span><span class="nx">createdAt</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">return</span> <span class="sb">`《</span><span class="si">${</span><span class="nx">title</span><span class="si">}</span><span class="sb">》由 </span><span class="si">${</span><span class="nx">authorName</span><span class="si">}</span><span class="sb"> 发布于 </span><span class="si">${</span><span class="nx">createdDate</span><span class="si">}</span><span class="sb">，当前有 </span><span class="si">${</span><span class="nx">likeCount</span><span class="si">}</span><span class="sb"> 个赞。`</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>再实现一个生成 Markdown 列表的函数：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-js" data-lang="js"><span class="line"><span class="cl"><span class="kd">function</span> <span class="nx">buildPostMarkdown</span><span class="p">(</span><span class="nx">posts</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="k">return</span> <span class="nx">posts</span>
+</span></span><span class="line"><span class="cl">    <span class="p">.</span><span class="nx">map</span><span class="p">(</span><span class="nx">post</span> <span class="p">=&gt;</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="kr">const</span> <span class="nx">title</span> <span class="o">=</span> <span class="nx">post</span><span class="p">.</span><span class="nx">title</span><span class="o">?</span><span class="p">.</span><span class="nx">trim</span><span class="p">()</span> <span class="o">||</span> <span class="s1">&#39;未命名文章&#39;</span>
+</span></span><span class="line"><span class="cl">      <span class="k">return</span> <span class="sb">`- </span><span class="si">${</span><span class="nx">title</span><span class="si">}</span><span class="sb">：</span><span class="si">${</span><span class="nx">post</span><span class="p">.</span><span class="nx">summary</span> <span class="o">??</span> <span class="s1">&#39;暂无摘要&#39;</span><span class="si">}</span><span class="sb">`</span>
+</span></span><span class="line"><span class="cl">    <span class="p">})</span>
+</span></span><span class="line"><span class="cl">    <span class="p">.</span><span class="nx">join</span><span class="p">(</span><span class="s1">&#39;\n&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>模板字符串的重点不是“反引号比加号高级”。它真正解决的是：当静态文本和动态数据混在一起时，让代码仍然保持清楚、稳定、可维护。至于安全和边界处理，那就不是语法糖能替你完成的事了。</p>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

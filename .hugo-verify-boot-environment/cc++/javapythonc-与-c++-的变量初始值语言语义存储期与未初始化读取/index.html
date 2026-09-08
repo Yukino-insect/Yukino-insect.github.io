@@ -1,0 +1,1532 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Java、Python、C 与 C&#43;&#43; 的变量初始值：语言语义、存储期与未初始化读取 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="不同语言里，“变量不写初始值会怎样”确实表现得很不一样：Java 的字段会有默认值，Python 往往报名称或属性不存在，C/C&#43;&#43; 的局部标量则可能带着不确定的内容。
+这些现象很容易让人得出一个解释：Java、Python、C/C&#43;&#43; 的内存布局不同，所以变量初始值行为不同。
+这个解释抓住了一部分实现背景，却把因果关系倒了过来。更准确的结论是：变量是否默认初始化、何时允许读取、失败时是编译错误、运行时异常还是未定义行为，首先由语言规范定义；运行时、编译器和内存布局必须实现这些语义。
+内存模型会影响实现成本和设计取舍，但不能反过来替语言规则作担保。即使某次 C&#43;&#43; 调试运行时恰好读到 0，也不代表变量被初始化；即使 JVM 常会先把对象内存清零，Java 字段默认值也不是“碰巧清零”的副作用，而是语言保证。
+本文比较 Java、Python、C 与 C&#43;&#43; 的相关规则，并澄清几个特别常见的误解。
+一、先给结论：不要把几种“未赋值”混为一谈 下表中的“未赋值”看起来像同一件事，实际对应不同语言机制。
+场景 不显式初始化时的结果 能否直接读取 Java 实例字段 有默认值 可以；基本类型为零值，引用为 null Java 静态字段 有默认值 可以；基本类型为零值，引用为 null Java 局部变量 没有可用默认值 不可以；编译器报“可能尚未初始化” Python 局部名称 未绑定 不可以；通常抛 UnboundLocalError Python 模块名称 未绑定 不可以；抛 NameError Python 对象属性 属性不存在 不可以；抛 AttributeError C 自动存储期标量 不确定值（indeterminate value） 不应读取；可能导致未定义行为 C 静态存储期对象 零初始化 可以读取 C&#43;&#43; 自动存储期标量 不确定值 不应读取；常见标准语义下会导致未定义行为或错误行为 C&#43;&#43; 具有构造/成员默认初始化的对象 由类型规则决定 通常可安全使用，但要看构造函数定义 这里已经能看出第一条重要边界：**“字段”“局部变量”“名字”“对象属性”“原始存储”并不是同一个概念。**即使在同一门语言中，它们的初始化规则也可能完全不同。
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/cc&#43;&#43;/javapythonc-%E4%B8%8E-c&#43;&#43;-%E7%9A%84%E5%8F%98%E9%87%8F%E5%88%9D%E5%A7%8B%E5%80%BC%E8%AF%AD%E8%A8%80%E8%AF%AD%E4%B9%89%E5%AD%98%E5%82%A8%E6%9C%9F%E4%B8%8E%E6%9C%AA%E5%88%9D%E5%A7%8B%E5%8C%96%E8%AF%BB%E5%8F%96/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/cc&#43;&#43;/javapythonc-%E4%B8%8E-c&#43;&#43;-%E7%9A%84%E5%8F%98%E9%87%8F%E5%88%9D%E5%A7%8B%E5%80%BC%E8%AF%AD%E8%A8%80%E8%AF%AD%E4%B9%89%E5%AD%98%E5%82%A8%E6%9C%9F%E4%B8%8E%E6%9C%AA%E5%88%9D%E5%A7%8B%E5%8C%96%E8%AF%BB%E5%8F%96/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="Java、Python、C 与 C&#43;&#43; 的变量初始值：语言语义、存储期与未初始化读取">
+  <meta property="og:description" content="不同语言里，“变量不写初始值会怎样”确实表现得很不一样：Java 的字段会有默认值，Python 往往报名称或属性不存在，C/C&#43;&#43; 的局部标量则可能带着不确定的内容。
+这些现象很容易让人得出一个解释：Java、Python、C/C&#43;&#43; 的内存布局不同，所以变量初始值行为不同。
+这个解释抓住了一部分实现背景，却把因果关系倒了过来。更准确的结论是：变量是否默认初始化、何时允许读取、失败时是编译错误、运行时异常还是未定义行为，首先由语言规范定义；运行时、编译器和内存布局必须实现这些语义。
+内存模型会影响实现成本和设计取舍，但不能反过来替语言规则作担保。即使某次 C&#43;&#43; 调试运行时恰好读到 0，也不代表变量被初始化；即使 JVM 常会先把对象内存清零，Java 字段默认值也不是“碰巧清零”的副作用，而是语言保证。
+本文比较 Java、Python、C 与 C&#43;&#43; 的相关规则，并澄清几个特别常见的误解。
+一、先给结论：不要把几种“未赋值”混为一谈 下表中的“未赋值”看起来像同一件事，实际对应不同语言机制。
+场景 不显式初始化时的结果 能否直接读取 Java 实例字段 有默认值 可以；基本类型为零值，引用为 null Java 静态字段 有默认值 可以；基本类型为零值，引用为 null Java 局部变量 没有可用默认值 不可以；编译器报“可能尚未初始化” Python 局部名称 未绑定 不可以；通常抛 UnboundLocalError Python 模块名称 未绑定 不可以；抛 NameError Python 对象属性 属性不存在 不可以；抛 AttributeError C 自动存储期标量 不确定值（indeterminate value） 不应读取；可能导致未定义行为 C 静态存储期对象 零初始化 可以读取 C&#43;&#43; 自动存储期标量 不确定值 不应读取；常见标准语义下会导致未定义行为或错误行为 C&#43;&#43; 具有构造/成员默认初始化的对象 由类型规则决定 通常可安全使用，但要看构造函数定义 这里已经能看出第一条重要边界：**“字段”“局部变量”“名字”“对象属性”“原始存储”并不是同一个概念。**即使在同一门语言中，它们的初始化规则也可能完全不同。">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="c&amp;c&#43;&#43;">
+    <meta property="article:published_time" content="2026-08-27T11:30:00+08:00">
+    <meta property="article:modified_time" content="2026-08-27T11:30:00+08:00">
+
+  
+  <meta itemprop="name" content="Java、Python、C 与 C&#43;&#43; 的变量初始值：语言语义、存储期与未初始化读取">
+  <meta itemprop="description" content="不同语言里，“变量不写初始值会怎样”确实表现得很不一样：Java 的字段会有默认值，Python 往往报名称或属性不存在，C/C&#43;&#43; 的局部标量则可能带着不确定的内容。
+这些现象很容易让人得出一个解释：Java、Python、C/C&#43;&#43; 的内存布局不同，所以变量初始值行为不同。
+这个解释抓住了一部分实现背景，却把因果关系倒了过来。更准确的结论是：变量是否默认初始化、何时允许读取、失败时是编译错误、运行时异常还是未定义行为，首先由语言规范定义；运行时、编译器和内存布局必须实现这些语义。
+内存模型会影响实现成本和设计取舍，但不能反过来替语言规则作担保。即使某次 C&#43;&#43; 调试运行时恰好读到 0，也不代表变量被初始化；即使 JVM 常会先把对象内存清零，Java 字段默认值也不是“碰巧清零”的副作用，而是语言保证。
+本文比较 Java、Python、C 与 C&#43;&#43; 的相关规则，并澄清几个特别常见的误解。
+一、先给结论：不要把几种“未赋值”混为一谈 下表中的“未赋值”看起来像同一件事，实际对应不同语言机制。
+场景 不显式初始化时的结果 能否直接读取 Java 实例字段 有默认值 可以；基本类型为零值，引用为 null Java 静态字段 有默认值 可以；基本类型为零值，引用为 null Java 局部变量 没有可用默认值 不可以；编译器报“可能尚未初始化” Python 局部名称 未绑定 不可以；通常抛 UnboundLocalError Python 模块名称 未绑定 不可以；抛 NameError Python 对象属性 属性不存在 不可以；抛 AttributeError C 自动存储期标量 不确定值（indeterminate value） 不应读取；可能导致未定义行为 C 静态存储期对象 零初始化 可以读取 C&#43;&#43; 自动存储期标量 不确定值 不应读取；常见标准语义下会导致未定义行为或错误行为 C&#43;&#43; 具有构造/成员默认初始化的对象 由类型规则决定 通常可安全使用，但要看构造函数定义 这里已经能看出第一条重要边界：**“字段”“局部变量”“名字”“对象属性”“原始存储”并不是同一个概念。**即使在同一门语言中，它们的初始化规则也可能完全不同。">
+  <meta itemprop="datePublished" content="2026-08-27T11:30:00+08:00">
+  <meta itemprop="dateModified" content="2026-08-27T11:30:00+08:00">
+  <meta itemprop="wordCount" content="981">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Java、Python、C 与 C&#43;&#43; 的变量初始值：语言语义、存储期与未初始化读取">
+  <meta name="twitter:description" content="不同语言里，“变量不写初始值会怎样”确实表现得很不一样：Java 的字段会有默认值，Python 往往报名称或属性不存在，C/C&#43;&#43; 的局部标量则可能带着不确定的内容。
+这些现象很容易让人得出一个解释：Java、Python、C/C&#43;&#43; 的内存布局不同，所以变量初始值行为不同。
+这个解释抓住了一部分实现背景，却把因果关系倒了过来。更准确的结论是：变量是否默认初始化、何时允许读取、失败时是编译错误、运行时异常还是未定义行为，首先由语言规范定义；运行时、编译器和内存布局必须实现这些语义。
+内存模型会影响实现成本和设计取舍，但不能反过来替语言规则作担保。即使某次 C&#43;&#43; 调试运行时恰好读到 0，也不代表变量被初始化；即使 JVM 常会先把对象内存清零，Java 字段默认值也不是“碰巧清零”的副作用，而是语言保证。
+本文比较 Java、Python、C 与 C&#43;&#43; 的相关规则，并澄清几个特别常见的误解。
+一、先给结论：不要把几种“未赋值”混为一谈 下表中的“未赋值”看起来像同一件事，实际对应不同语言机制。
+场景 不显式初始化时的结果 能否直接读取 Java 实例字段 有默认值 可以；基本类型为零值，引用为 null Java 静态字段 有默认值 可以；基本类型为零值，引用为 null Java 局部变量 没有可用默认值 不可以；编译器报“可能尚未初始化” Python 局部名称 未绑定 不可以；通常抛 UnboundLocalError Python 模块名称 未绑定 不可以；抛 NameError Python 对象属性 属性不存在 不可以；抛 AttributeError C 自动存储期标量 不确定值（indeterminate value） 不应读取；可能导致未定义行为 C 静态存储期对象 零初始化 可以读取 C&#43;&#43; 自动存储期标量 不确定值 不应读取；常见标准语义下会导致未定义行为或错误行为 C&#43;&#43; 具有构造/成员默认初始化的对象 由类型规则决定 通常可安全使用，但要看构造函数定义 这里已经能看出第一条重要边界：**“字段”“局部变量”“名字”“对象属性”“原始存储”并不是同一个概念。**即使在同一门语言中，它们的初始化规则也可能完全不同。">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">Java、Python、C 与 C&#43;&#43; 的变量初始值：语言语义、存储期与未初始化读取</h1>
+
+    
+      <div class="post-date">August 27, 2026</div>
+    
+
+    <div class="post-content">
+      <p>不同语言里，“变量不写初始值会怎样”确实表现得很不一样：Java 的字段会有默认值，Python 往往报名称或属性不存在，C/C++ 的局部标量则可能带着不确定的内容。</p>
+<p>这些现象很容易让人得出一个解释：Java、Python、C/C++ 的内存布局不同，所以变量初始值行为不同。</p>
+<p>这个解释抓住了一部分实现背景，却把因果关系倒了过来。更准确的结论是：<strong>变量是否默认初始化、何时允许读取、失败时是编译错误、运行时异常还是未定义行为，首先由语言规范定义；运行时、编译器和内存布局必须实现这些语义。</strong></p>
+<p>内存模型会影响实现成本和设计取舍，但不能反过来替语言规则作担保。即使某次 C++ 调试运行时恰好读到 <code>0</code>，也不代表变量被初始化；即使 JVM 常会先把对象内存清零，Java 字段默认值也不是“碰巧清零”的副作用，而是语言保证。</p>
+<p>本文比较 Java、Python、C 与 C++ 的相关规则，并澄清几个特别常见的误解。</p>
+<h2 id="一先给结论不要把几种未赋值混为一谈">一、先给结论：不要把几种“未赋值”混为一谈</h2>
+<p>下表中的“未赋值”看起来像同一件事，实际对应不同语言机制。</p>
+<table>
+  <thead>
+      <tr>
+          <th>场景</th>
+          <th>不显式初始化时的结果</th>
+          <th>能否直接读取</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Java 实例字段</td>
+          <td>有默认值</td>
+          <td>可以；基本类型为零值，引用为 <code>null</code></td>
+      </tr>
+      <tr>
+          <td>Java 静态字段</td>
+          <td>有默认值</td>
+          <td>可以；基本类型为零值，引用为 <code>null</code></td>
+      </tr>
+      <tr>
+          <td>Java 局部变量</td>
+          <td>没有可用默认值</td>
+          <td>不可以；编译器报“可能尚未初始化”</td>
+      </tr>
+      <tr>
+          <td>Python 局部名称</td>
+          <td>未绑定</td>
+          <td>不可以；通常抛 <code>UnboundLocalError</code></td>
+      </tr>
+      <tr>
+          <td>Python 模块名称</td>
+          <td>未绑定</td>
+          <td>不可以；抛 <code>NameError</code></td>
+      </tr>
+      <tr>
+          <td>Python 对象属性</td>
+          <td>属性不存在</td>
+          <td>不可以；抛 <code>AttributeError</code></td>
+      </tr>
+      <tr>
+          <td>C 自动存储期标量</td>
+          <td>不确定值（indeterminate value）</td>
+          <td>不应读取；可能导致未定义行为</td>
+      </tr>
+      <tr>
+          <td>C 静态存储期对象</td>
+          <td>零初始化</td>
+          <td>可以读取</td>
+      </tr>
+      <tr>
+          <td>C++ 自动存储期标量</td>
+          <td>不确定值</td>
+          <td>不应读取；常见标准语义下会导致未定义行为或错误行为</td>
+      </tr>
+      <tr>
+          <td>C++ 具有构造/成员默认初始化的对象</td>
+          <td>由类型规则决定</td>
+          <td>通常可安全使用，但要看构造函数定义</td>
+      </tr>
+  </tbody>
+</table>
+<p>这里已经能看出第一条重要边界：**“字段”“局部变量”“名字”“对象属性”“原始存储”并不是同一个概念。**即使在同一门语言中，它们的初始化规则也可能完全不同。</p>
+<h2 id="二java字段有默认值局部变量必须经过确定赋值">二、Java：字段有默认值，局部变量必须经过确定赋值</h2>
+<p>关于 Java，最需要修正的一点是：<strong>引用类型字段不赋值并不是未定义行为，它有确定的默认值 <code>null</code>。</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="kd">class</span> <span class="nc">User</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">age</span><span class="p">;</span><span class="w">        </span><span class="c1">// 0</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kt">boolean</span><span class="w"> </span><span class="n">active</span><span class="p">;</span><span class="w"> </span><span class="c1">// false</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kt">double</span><span class="w"> </span><span class="n">score</span><span class="p">;</span><span class="w">   </span><span class="c1">// 0.0</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kt">char</span><span class="w"> </span><span class="n">grade</span><span class="p">;</span><span class="w">     </span><span class="c1">// &#39;\u0000&#39;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">String</span><span class="w"> </span><span class="n">name</span><span class="p">;</span><span class="w">    </span><span class="c1">// null</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">User</span><span class="w"> </span><span class="n">user</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">User</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">System</span><span class="p">.</span><span class="na">out</span><span class="p">.</span><span class="na">println</span><span class="p">(</span><span class="n">user</span><span class="p">.</span><span class="na">age</span><span class="p">);</span><span class="w">    </span><span class="c1">// 0</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">System</span><span class="p">.</span><span class="na">out</span><span class="p">.</span><span class="na">println</span><span class="p">(</span><span class="n">user</span><span class="p">.</span><span class="na">active</span><span class="p">);</span><span class="w"> </span><span class="c1">// false</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">System</span><span class="p">.</span><span class="na">out</span><span class="p">.</span><span class="na">println</span><span class="p">(</span><span class="n">user</span><span class="p">.</span><span class="na">name</span><span class="p">);</span><span class="w">   </span><span class="c1">// null</span><span class="w">
+</span></span></span></code></pre></div><p>Java 字段的默认值如下：</p>
+<table>
+  <thead>
+      <tr>
+          <th>字段类型</th>
+          <th>默认值</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>byte</code>、<code>short</code>、<code>int</code>、<code>long</code></td>
+          <td><code>0</code></td>
+      </tr>
+      <tr>
+          <td><code>float</code>、<code>double</code></td>
+          <td><code>0.0</code>、<code>0.0d</code></td>
+      </tr>
+      <tr>
+          <td><code>char</code></td>
+          <td><code>\u0000</code></td>
+      </tr>
+      <tr>
+          <td><code>boolean</code></td>
+          <td><code>false</code></td>
+      </tr>
+      <tr>
+          <td>任意引用类型</td>
+          <td><code>null</code></td>
+      </tr>
+  </tbody>
+</table>
+<h3 id="1-null-是确定状态不是未定义状态">1. <code>null</code> 是确定状态，不是未定义状态</h3>
+<p>下面的代码可以运行：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="kd">class</span> <span class="nc">Profile</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">String</span><span class="w"> </span><span class="n">nickname</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">Profile</span><span class="w"> </span><span class="n">profile</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">Profile</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">System</span><span class="p">.</span><span class="na">out</span><span class="p">.</span><span class="na">println</span><span class="p">(</span><span class="n">profile</span><span class="p">.</span><span class="na">nickname</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="kc">null</span><span class="p">);</span><span class="w"> </span><span class="c1">// true</span><span class="w">
+</span></span></span></code></pre></div><p>但如果把 <code>null</code> 当成对象去调用方法，会得到明确、可诊断的运行时异常：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">System</span><span class="p">.</span><span class="na">out</span><span class="p">.</span><span class="na">println</span><span class="p">(</span><span class="n">profile</span><span class="p">.</span><span class="na">nickname</span><span class="p">.</span><span class="na">length</span><span class="p">());</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// NullPointerException</span><span class="w">
+</span></span></span></code></pre></div><p>这与 C/C++ 的野指针完全不同。Java 在这里的语义是“引用没有指向任何对象”；它不是一段随机比特，也不能偶然指向某个旧地址。</p>
+<p>给引用赋值也并不只限于 <code>new</code> 或 <code>null</code>：方法返回值、数组元素、其他变量、依赖注入框架提供的对象都可以赋给引用。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">String</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">loadName</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">Object</span><span class="w"> </span><span class="n">value</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cache</span><span class="p">.</span><span class="na">get</span><span class="p">(</span><span class="s">&#34;key&#34;</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><p>关键不是赋值来源，而是<strong>在局部变量被读取前，编译器必须能证明它已被赋值</strong>。</p>
+<h3 id="2-java-局部变量没有字段那样的默认值">2. Java 局部变量没有字段那样的默认值</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="kt">void</span><span class="w"> </span><span class="nf">printAge</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">age</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">System</span><span class="p">.</span><span class="na">out</span><span class="p">.</span><span class="na">println</span><span class="p">(</span><span class="n">age</span><span class="p">);</span><span class="w"> </span><span class="c1">// 编译错误</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>引用局部变量也一样：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="kt">void</span><span class="w"> </span><span class="nf">printName</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">String</span><span class="w"> </span><span class="n">name</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">System</span><span class="p">.</span><span class="na">out</span><span class="p">.</span><span class="na">println</span><span class="p">(</span><span class="n">name</span><span class="p">);</span><span class="w"> </span><span class="c1">// 编译错误</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>Java 编译器会执行**确定赋值（definite assignment）**分析。它不允许程序读取一个尚未被证明已经赋值的局部变量：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="kt">int</span><span class="w"> </span><span class="n">score</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">enabled</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">score</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">100</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">System</span><span class="p">.</span><span class="na">out</span><span class="p">.</span><span class="na">println</span><span class="p">(</span><span class="n">score</span><span class="p">);</span><span class="w"> </span><span class="c1">// 编译错误：enabled 为 false 时 score 没有值</span><span class="w">
+</span></span></span></code></pre></div><p>补上完整分支即可：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="kt">int</span><span class="w"> </span><span class="n">score</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">enabled</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">score</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">100</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">score</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">System</span><span class="p">.</span><span class="na">out</span><span class="p">.</span><span class="na">println</span><span class="p">(</span><span class="n">score</span><span class="p">);</span><span class="w"> </span><span class="c1">// 合法</span><span class="w">
+</span></span></span></code></pre></div><p>所以 Java 不是“所有变量都会由 JVM 自动赋值”。准确说法是：<strong>实例字段和类字段有语言规定的默认值；局部变量必须在编译期通过确定赋值检查。</strong></p>
+<h3 id="3-默认值发生在什么阶段">3. 默认值发生在什么阶段</h3>
+<p>“JVM 加载类时给变量赋值”也需要拆开。</p>
+<ul>
+<li>类的静态字段在类加载后的链接/准备阶段会获得默认值；之后类初始化会按程序顺序执行静态字段显式初始化和静态初始化块。</li>
+<li>创建对象时，实例字段先处于默认值状态；随后执行实例字段初始化器、实例初始化块和构造函数体。</li>
+<li>局部变量不属于对象字段或类字段，不走这套默认初始化规则。</li>
+</ul>
+<p>例如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="kd">class</span> <span class="nc">Counter</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">static</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">total</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">10</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">step</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">1</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">Counter</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">System</span><span class="p">.</span><span class="na">out</span><span class="p">.</span><span class="na">println</span><span class="p">(</span><span class="n">step</span><span class="p">);</span><span class="w"> </span><span class="c1">// 1</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>在 <code>total = 10</code>、<code>step = 1</code> 的显式初始化执行之前，相应字段先有语言规定的默认值 <code>0</code>；最终可观察到的值再由初始化器和构造过程决定。通常不需要为了日常业务代码追踪 JVM 每一步，只要别把“字段默认值”错误推广到局部变量即可。</p>
+<h2 id="三python没有未初始化变量只有尚未绑定的名字或不存在的属性">三、Python：没有“未初始化变量”，只有尚未绑定的名字或不存在的属性</h2>
+<p>Python 的“变量”更准确地说是<strong>名字到对象的绑定</strong>。赋值不是往一个已分配的固定类型槽位里写值，而是把名字绑定到对象：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">age</span> <span class="o">=</span> <span class="mi">18</span>
+</span></span><span class="line"><span class="cl"><span class="n">name</span> <span class="o">=</span> <span class="s2">&#34;Yukino&#34;</span>
+</span></span></code></pre></div><p>这里 <code>age</code> 绑定到整数对象，<code>name</code> 绑定到字符串对象。没有一条“先声明一个 <code>int</code>，以后再决定里面是什么”的普通 Python 语法。因此 Python 不存在 C/C++ 那种“局部 <code>int</code> 未初始化，读取到栈上残留字节”的语言层面现象。</p>
+<h3 id="1-名字未绑定时是确定的异常">1. 名字未绑定时是确定的异常</h3>
+<p>在模块或交互式环境中读取尚未定义的名字：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="nb">print</span><span class="p">(</span><span class="n">token</span><span class="p">)</span>
+</span></span></code></pre></div><p>会抛出：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">NameError: name &#39;token&#39; is not defined
+</span></span></code></pre></div><p>函数中则有一个更细的规则：只要函数体里出现对名字的赋值，Python 通常会将它视为整个函数的局部名字。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">setting</span> <span class="o">=</span> <span class="s2">&#34;production&#34;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">def</span> <span class="nf">show_setting</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="nb">print</span><span class="p">(</span><span class="n">setting</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="n">setting</span> <span class="o">=</span> <span class="s2">&#34;development&#34;</span>
+</span></span></code></pre></div><p>调用 <code>show_setting()</code> 会抛出：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">UnboundLocalError: cannot access local variable &#39;setting&#39; where it is not associated with a value
+</span></span></code></pre></div><p>这不是未定义行为。解释器明确知道此处读取了一个尚未绑定的局部名称，因此以异常终止当前路径。</p>
+<h3 id="2-条件分支没有执行也会留下未绑定的名字">2. 条件分支没有执行，也会留下未绑定的名字</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="k">def</span> <span class="nf">get_value</span><span class="p">(</span><span class="n">enabled</span><span class="p">:</span> <span class="nb">bool</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="n">enabled</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="n">value</span> <span class="o">=</span> <span class="mi">42</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="n">value</span>
+</span></span></code></pre></div><p>当 <code>enabled</code> 为 <code>False</code> 时，赋值语句没有执行，<code>return value</code> 会抛出 <code>UnboundLocalError</code>。</p>
+<p>正确的处理方式是让所有分支赋值，或使用明确默认值：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="k">def</span> <span class="nf">get_value</span><span class="p">(</span><span class="n">enabled</span><span class="p">:</span> <span class="nb">bool</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">value</span> <span class="o">=</span> <span class="mi">0</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="n">enabled</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="n">value</span> <span class="o">=</span> <span class="mi">42</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="n">value</span>
+</span></span></code></pre></div><h3 id="3-对象属性不存在时抛-attributeerror">3. 对象属性不存在时抛 <code>AttributeError</code></h3>
+<p>Python 类的实例属性也不会因类型注解而自动获得值：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">User</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">user</span> <span class="o">=</span> <span class="n">User</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="nb">print</span><span class="p">(</span><span class="n">user</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>  <span class="c1"># AttributeError</span>
+</span></span></code></pre></div><p>上面的 <code>name: str</code> 主要是注解信息，它没有执行 <code>self.name = ...</code>。应在构造函数中明确赋值：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">User</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">name</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">user</span> <span class="o">=</span> <span class="n">User</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="nb">print</span><span class="p">(</span><span class="n">user</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>  <span class="c1"># None</span>
+</span></span></code></pre></div><p>若业务上“没有名字”是合法状态，可以使用 <code>None</code>；若不合法，就应让构造函数要求调用方传入非空字符串。Python 的自由并不意味着状态可以不定义，只是把定义状态的责任更明确地交给了代码。</p>
+<h3 id="4-none-也不是未定义行为">4. <code>None</code> 也不是未定义行为</h3>
+<p><code>None</code> 是一个正常的 Python 单例对象，类似 Java 的 <code>null</code>，表示“没有值”或“缺失”。错误通常发生在把它当作其他类型使用时：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+</span></span><span class="line"><span class="cl"><span class="nb">print</span><span class="p">(</span><span class="n">name</span><span class="o">.</span><span class="n">upper</span><span class="p">())</span>  <span class="c1"># AttributeError: &#39;NoneType&#39; object has no attribute &#39;upper&#39;</span>
+</span></span></code></pre></div><p>这种失败同样是有定义的运行时异常，而不是 C/C++ 式的任意内存访问。静态类型检查器可以根据 <code>str | None</code> 提前提示这个风险，但 Python 运行时本身不会因为注解而自动初始化或拦截所有类型问题。</p>
+<h2 id="四c先按存储期分类再谈初始值">四、C：先按存储期分类，再谈初始值</h2>
+<p>C 中，“没赋值”最容易被误称为“有野值”。更精确的术语是：对于许多未初始化对象，其值是<strong>不确定值</strong>（indeterminate value）。能否默认得到零，首先取决于对象的<strong>存储期</strong>。</p>
+<h3 id="1-自动存储期局部标量不会自动初始化">1. 自动存储期：局部标量不会自动初始化</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">example</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">count</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="o">*</span><span class="n">pointer</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nf">printf</span><span class="p">(</span><span class="s">&#34;%d</span><span class="se">\n</span><span class="s">&#34;</span><span class="p">,</span> <span class="n">count</span><span class="p">);</span>  <span class="cm">/* 错误：不要读取 */</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">printf</span><span class="p">(</span><span class="s">&#34;%p</span><span class="se">\n</span><span class="s">&#34;</span><span class="p">,</span> <span class="p">(</span><span class="kt">void</span> <span class="o">*</span><span class="p">)</span><span class="n">pointer</span><span class="p">);</span> <span class="cm">/* 同样错误：不要读取 */</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>这类局部变量通常具有自动存储期。没有初始化器时，<code>count</code> 和 <code>pointer</code> 的对象表示不保证是任何可用值。它们可能看似保留了调用栈上先前内容，也可能在不同优化级别、不同调用路径下呈现不同结果。</p>
+<p>读取这样的不确定值本身就可能触发未定义行为；把未初始化指针解引用则更危险：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">int</span> <span class="o">*</span><span class="n">pointer</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="o">*</span><span class="n">pointer</span> <span class="o">=</span> <span class="mi">42</span><span class="p">;</span>  <span class="cm">/* 未定义行为：不能指望它“刚好指向某处” */</span>
+</span></span></code></pre></div><p>这里应使用明确初始化：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="o">*</span><span class="n">pointer</span> <span class="o">=</span> <span class="nb">NULL</span><span class="p">;</span>
+</span></span></code></pre></div><p><code>NULL</code> 表示空指针常量；它不是一个可解引用的有效对象地址。把指针初始化为 <code>NULL</code> 的价值是表达“目前没有指向对象”，后续可先检查再使用，而不是让程序携带不确定的比特。</p>
+<h3 id="2-静态存储期默认进行零初始化">2. 静态存储期：默认进行零初始化</h3>
+<p>文件作用域变量和 <code>static</code> 局部变量具有静态存储期；未显式初始化时会被初始化为零值：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">global_count</span><span class="p">;</span>          <span class="cm">/* 0 */</span>
+</span></span><span class="line"><span class="cl"><span class="k">static</span> <span class="kt">int</span> <span class="n">cached_count</span><span class="p">;</span>   <span class="cm">/* 0 */</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">example</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">static</span> <span class="kt">int</span> <span class="n">call_count</span><span class="p">;</span> <span class="cm">/* 0，仅在程序启动时初始化一次 */</span>
+</span></span><span class="line"><span class="cl">    <span class="n">call_count</span><span class="o">++</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>对指针而言，静态存储期的零初始化会产生空指针值：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">static</span> <span class="kt">int</span> <span class="o">*</span><span class="n">cached_pointer</span><span class="p">;</span> <span class="cm">/* 空指针 */</span>
+</span></span></code></pre></div><p>这和自动局部变量不同，不能因为两者都写作 <code>int value;</code> 就把规则混在一起。</p>
+<h3 id="3-动态分配malloc-与-calloc-也不相同">3. 动态分配：<code>malloc</code> 与 <code>calloc</code> 也不相同</h3>
+<p><code>malloc</code> 只分配原始存储，不初始化：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">int</span> <span class="o">*</span><span class="n">numbers</span> <span class="o">=</span> <span class="nf">malloc</span><span class="p">(</span><span class="mi">10</span> <span class="o">*</span> <span class="k">sizeof</span> <span class="o">*</span><span class="n">numbers</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="k">if</span> <span class="p">(</span><span class="n">numbers</span> <span class="o">==</span> <span class="nb">NULL</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="cm">/* 分配失败 */</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="cm">/* numbers[0] 在写入前不可读取 */</span>
+</span></span></code></pre></div><p><code>calloc</code> 会将分配区域的每个字节置零：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">int</span> <span class="o">*</span><span class="n">numbers</span> <span class="o">=</span> <span class="nf">calloc</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="k">sizeof</span> <span class="o">*</span><span class="n">numbers</span><span class="p">);</span>
+</span></span></code></pre></div><p>对于普通整数数组，这通常得到可用的零元素；但写可移植代码时，不要把“全零字节”泛化为所有类型的语言零值，例如某些平台的浮点数或指针表示不必等于全零比特。若对象语义重要，最清晰的做法仍是按类型显式初始化。</p>
+<p>无论使用哪种分配函数，完成后都要匹配 <code>free()</code>；初始化并不会接管资源生命周期。</p>
+<h2 id="五c标量与对象的初始化规则更细">五、C++：标量与对象的初始化规则更细</h2>
+<p>C++ 继承了 C 中“局部基本类型不会自动变成零”的直觉，但它有构造函数、默认成员初始化、不同初始化形式与 RAII，因此不能只按 C 的习惯套用。</p>
+<h3 id="1-自动存储期的基本类型和指针">1. 自动存储期的基本类型和指针</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">example</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">count</span><span class="p">;</span>       <span class="c1">// 未初始化：不应读取
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="kt">double</span> <span class="n">ratio</span><span class="p">;</span>    <span class="c1">// 未初始化：不应读取
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="kt">int</span><span class="o">*</span> <span class="n">pointer</span><span class="p">;</span>    <span class="c1">// 未初始化：不应读取或解引用
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span></code></pre></div><p>在大多数 C++ 版本和常见语境下，读取这种不确定标量值属于未定义行为。较新的 C++ 标准对部分“错误值”情况作了更细的区分，但这不会让下面代码变得可依赖：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">count</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="n">std</span><span class="o">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="n">count</span><span class="p">;</span>  <span class="c1">// 错误写法
+</span></span></span></code></pre></div><p>无论编译器、调试器或某次运行恰好输出什么，都不是程序可以依赖的结果。优化器会假定程序没有执行未定义行为，并可能据此重排或删除看起来“理所当然”的分支。</p>
+<p>正确写法是选择合适的初始化形式：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">total</span><span class="p">{</span><span class="mi">0</span><span class="p">};</span>
+</span></span><span class="line"><span class="cl"><span class="kt">double</span> <span class="n">ratio</span><span class="p">{};</span>      <span class="c1">// 0.0
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kt">int</span><span class="o">*</span> <span class="n">pointer</span> <span class="o">=</span> <span class="k">nullptr</span><span class="p">;</span>
+</span></span></code></pre></div><p><code>{}</code> 的值初始化常常是现代 C++ 很好的默认选择：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">value</span><span class="p">{};</span>         <span class="c1">// 0
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kt">bool</span> <span class="n">enabled</span><span class="p">{};</span>      <span class="c1">// false
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kt">int</span><span class="o">*</span> <span class="n">pointer</span><span class="p">{};</span>      <span class="c1">// nullptr
+</span></span></span></code></pre></div><p>它还会禁止某些可能丢失精度的窄化转换：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">value</span><span class="p">{</span><span class="mf">3.14</span><span class="p">};</span>     <span class="c1">// 编译错误，避免悄悄得到 3
+</span></span></span></code></pre></div><h3 id="2-new-int-与-new-int-不同">2. <code>new int</code> 与 <code>new int{}</code> 不同</h3>
+<p>下面两种动态分配并不等价：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="kt">int</span><span class="o">*</span> <span class="n">first</span> <span class="o">=</span> <span class="k">new</span> <span class="kt">int</span><span class="p">;</span>    <span class="c1">// 默认初始化：int 未初始化
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kt">int</span><span class="o">*</span> <span class="n">second</span> <span class="o">=</span> <span class="k">new</span> <span class="kt">int</span><span class="p">{};</span> <span class="c1">// 值初始化：*second 为 0
+</span></span></span></code></pre></div><p>因此，看到 <code>new</code> 不应自动推断“对象已经有合理初始值”。基本类型与类类型的行为不同，初始化语法也会影响结果。</p>
+<p>现代 C++ 更推荐让资源所有权由 RAII 类型表达：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;memory&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="k">auto</span> <span class="n">value</span> <span class="o">=</span> <span class="n">std</span><span class="o">::</span><span class="n">make_unique</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">&gt;</span><span class="p">(</span><span class="mi">0</span><span class="p">);</span>
+</span></span></code></pre></div><p>这样既明确把值初始化为 <code>0</code>，也不必手写 <code>delete</code>。当然，智能指针解决的是所有权；里面的对象要取什么初始值，仍应由构造参数明确表达。</p>
+<h3 id="3-类类型可能由构造函数初始化">3. 类类型可能由构造函数初始化</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;string&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="n">title</span><span class="p">;</span>  <span class="c1">// 默认构造为空字符串，可安全使用
+</span></span></span></code></pre></div><p><code>std::string</code> 不是“碰巧内存为零才安全”，而是它的默认构造函数建立了有效的空字符串状态。</p>
+<p>自定义类也应让构造后的对象保持有效不变式：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">ConnectionConfig</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="k">public</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="n">host</span><span class="p">{</span><span class="s">&#34;localhost&#34;</span><span class="p">};</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">port</span><span class="p">{</span><span class="mi">5432</span><span class="p">};</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">bool</span> <span class="n">use_tls</span><span class="p">{</span><span class="nb">true</span><span class="p">};</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">ConnectionConfig</span> <span class="n">config</span><span class="p">;</span>
+</span></span></code></pre></div><p>这里的成员默认初始化器确保默认构造的 <code>config</code> 有可预测状态。若类没有用户提供的构造函数和成员初始化器，则成员初始化情况又会随 <code>Config config;</code>、<code>Config config{};</code> 等写法变化；对外暴露的类型不应要求调用者记住这种细枝末节来避免非法状态。</p>
+<h3 id="4-静态存储期对象同样先零初始化">4. 静态存储期对象同样先零初始化</h3>
+<p>C++ 的静态存储期对象也会在动态初始化前经历零初始化：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">global_count</span><span class="p">;</span>          <span class="c1">// 0
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">static</span> <span class="kt">int</span> <span class="n">cached_count</span><span class="p">;</span>   <span class="c1">// 0
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">static</span> <span class="kt">int</span><span class="o">*</span> <span class="n">cached_pointer</span><span class="p">;</span> <span class="c1">// nullptr
+</span></span></span></code></pre></div><p>对类对象而言，随后还会执行构造函数或动态初始化。它与“函数里的 <code>int count;</code>”是不同的存储期和初始化过程。</p>
+<h2 id="六为什么不能只用内存布局不同解释">六、为什么不能只用“内存布局不同”解释</h2>
+<p>内存布局和运行时实现当然重要，但它们不能单独推出语言层面的初始化规则。至少有四个原因。</p>
+<h3 id="1-同一门语言内部也有不同规则">1. 同一门语言内部也有不同规则</h3>
+<p>Java 的字段和局部变量不同；C/C++ 的自动、静态、动态存储对象不同；Python 的模块名、局部名和实例属性不同。若只用“Java 的内存布局”或“C++ 的栈”来解释，连同一种语言内部的差别都解释不完整。</p>
+<h3 id="2-栈和堆不是最先该问的问题">2. “栈”和“堆”不是最先该问的问题</h3>
+<p>人们常说：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">C/C++ 局部变量在栈上，所以是野值。
+</span></span><span class="line"><span class="cl">Java 对象在堆上，所以字段是零。
+</span></span></code></pre></div><p>这只是一种不完整的实现直觉。</p>
+<ul>
+<li>C/C++ 标准用的是自动、静态、线程、动态等<strong>存储期</strong>概念，并不要求某个对象必须放在名为“栈”的硬件区域。</li>
+<li>Java 规范也不是通过“堆上对象天然为零”来定义字段语义；虚拟机实现必须让程序观察到规定默认值。</li>
+<li>优化器可以把变量放在寄存器、消除对象、重排存储，实际物理布局甚至可能与源码直觉不同。</li>
+</ul>
+<p>对业务代码而言，最可靠的问题是：**语言在这个位置保证了什么？**而不是“我猜此刻内存里大概是什么”。</p>
+<h3 id="3-java-的安全保证是语言和虚拟机协作的结果">3. Java 的安全保证是语言和虚拟机协作的结果</h3>
+<p>Java 要保证引用字段初始为 <code>null</code>，并在空引用解引用时给出 <code>NullPointerException</code>，这要求 JVM、字节码验证、对象模型与垃圾回收等机制共同配合。对象内存清零是常见且高效的实现方式之一，但应用程序依赖的是 Java 语言语义，不是某款 JVM 的某个内存清零细节。</p>
+<p>同样，Java 局部变量的确定赋值检查主要是编译语言规则；即使底层某个栈槽位恰好有零，也不允许源码读取它。</p>
+<h3 id="4-cc-把更多责任交给程序员和工具链">4. C/C++ 把更多责任交给程序员和工具链</h3>
+<p>C/C++ 不自动初始化多数局部标量，减少了一部分初始化开销，也保留了与底层系统紧密协作的自由。但代价是程序员必须在使用前写入合法值，并借助编译器警告、静态分析、Sanitizer 和测试发现遗漏。</p>
+<p>这不是“C/C++ 不知道变量里有什么”，而是语言不替程序员建立一个可读取的默认状态。对性能敏感代码，可以明确选择何处初始化；对普通业务代码，明确初始化通常更值得。</p>
+<h2 id="七同一段意图用四种语言分别写">七、同一段意图，用四种语言分别写</h2>
+<p>假设需求是“有一个可选的当前用户；尚未登录时表示为空”。不同语言应使用各自的明确状态表达。</p>
+<h3 id="java">Java</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="kd">class</span> <span class="nc">Session</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="n">User</span><span class="w"> </span><span class="n">currentUser</span><span class="p">;</span><span class="w"> </span><span class="c1">// 默认 null</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kt">boolean</span><span class="w"> </span><span class="nf">isLoggedIn</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">currentUser</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">null</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>更严格的 API 也可以使用 <code>Optional&lt;User&gt;</code> 作为返回类型，但不应把它当作实体字段中 <code>null</code> 的机械替代；关键是清楚定义缺失状态。</p>
+<h3 id="python">Python</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">Session</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="bp">self</span><span class="o">.</span><span class="n">current_user</span><span class="p">:</span> <span class="n">User</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">def</span> <span class="nf">is_logged_in</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_user</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+</span></span></code></pre></div><h3 id="c">C</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">struct</span> <span class="n">Session</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">struct</span> <span class="n">User</span> <span class="o">*</span><span class="n">current_user</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">struct</span> <span class="n">Session</span> <span class="n">session</span> <span class="o">=</span> <span class="p">{</span><span class="mi">0</span><span class="p">};</span>
+</span></span><span class="line"><span class="cl"><span class="cm">/* current_user 被初始化为 NULL */</span>
+</span></span></code></pre></div><p>也可显式写得更有语义：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">struct</span> <span class="n">Session</span> <span class="n">session</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="p">.</span><span class="n">current_user</span> <span class="o">=</span> <span class="nb">NULL</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><h3 id="c-1">C++</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">struct</span> <span class="nc">Session</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">User</span><span class="o">*</span> <span class="n">current_user</span><span class="p">{</span><span class="k">nullptr</span><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="na">[[nodiscard]]</span> <span class="kt">bool</span> <span class="n">is_logged_in</span><span class="p">()</span> <span class="k">const</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="n">current_user</span> <span class="o">!=</span> <span class="k">nullptr</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><p>若 <code>Session</code> 拥有用户对象，则不应仅用裸指针表示所有权，应根据语义选择 <code>std::unique_ptr&lt;User&gt;</code>、值成员或其他合适模型。初始化为 <code>nullptr</code> 能避免野指针，但不能替你决定生命周期和所有权。</p>
+<h2 id="八实践建议">八、实践建议</h2>
+<h3 id="java-1">Java</h3>
+<ul>
+<li>区分字段默认值与局部变量确定赋值规则。</li>
+<li>引用字段默认是 <code>null</code>；访问前应根据业务规则检查、保证非空，或采用合适的非空约束工具。</li>
+<li>不要把 <code>NullPointerException</code> 描述成未定义行为；它是确定的运行时异常。</li>
+<li>不要依赖“类加载时的某个中间值”设计业务逻辑，应以最终初始化顺序和构造不变式为准。</li>
+</ul>
+<h3 id="python-1">Python</h3>
+<ul>
+<li>在所有可能执行路径上绑定局部名称，或直接赋一个清晰默认值。</li>
+<li>在 <code>__init__</code> 中建立实例属性；单独的类型注解不等于赋值。</li>
+<li>用 <code>None</code> 表示缺失状态时，将类型标注为 <code>T | None</code>，并在使用前判断。</li>
+<li>把 <code>NameError</code>、<code>UnboundLocalError</code>、<code>AttributeError</code> 当作逻辑遗漏处理，不要把它们误称为未定义行为。</li>
+</ul>
+<h3 id="c-与-c">C 与 C++</h3>
+<ul>
+<li>默认初始化局部标量和指针：C 用 <code>= 0</code>、<code>= NULL</code>，C++ 优先用 <code>{}</code>、<code>nullptr</code>。</li>
+<li>不要通过打印、比较或条件判断“试探”未初始化值；读取本身就不可靠。</li>
+<li>对 C++ 类类型，使用构造函数和成员默认初始化器建立有效默认状态。</li>
+<li>区分 <code>malloc</code> 与 <code>calloc</code>、<code>new int</code> 与 <code>new int{}</code>、自动存储期与静态存储期。</li>
+<li>启用编译器警告，例如 GCC/Clang 的 <code>-Wall -Wextra -Wuninitialized</code>；在可用场景下使用 AddressSanitizer、MemorySanitizer 或静态分析工具。工具能帮助发现遗漏，但不能替代初始化语义。</li>
+</ul>
+<h2 id="九总结">九、总结</h2>
+<p>对“变量没有显式赋值”这件事，Java、Python、C/C++ 的回答并不相同：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Java 字段：有确定的默认零值，引用为 null
+</span></span><span class="line"><span class="cl">Java 局部变量：编译器禁止读取未确定赋值的变量
+</span></span><span class="line"><span class="cl">Python：名字或属性尚不存在时抛出明确异常
+</span></span><span class="line"><span class="cl">C/C++ 自动局部标量：不确定值，读取不可依赖，可能触发未定义行为
+</span></span><span class="line"><span class="cl">C/C++ 静态对象：零初始化
+</span></span></code></pre></div><p>因此，下面几句话应当分别改正：</p>
+<ul>
+<li>Java 引用字段不赋值不是未定义行为，而是默认 <code>null</code>。</li>
+<li>Java 局部引用也不是默认 <code>null</code>，而是必须先经过确定赋值，否则无法编译。</li>
+<li>Python 没有 C/C++ 式的未初始化变量读取；它会因名字未绑定或属性不存在而抛出异常。</li>
+<li>C/C++ 局部指针和普通标量的未初始化问题不应简单叫“野值”；它们具有不确定值，读取或解引用会落入语言不保证的区域。</li>
+</ul>
+<p>内存布局能帮助理解为何某些保证有成本、为何 C/C++ 提供更接近底层的控制，但不能替代规范。写代码时，最可靠的原则依然朴素：**先根据语言和业务语义建立明确有效的状态，再读取或使用它。**一段内存偶然看起来像零，并没有承诺过要继续替你保守秘密。</p>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

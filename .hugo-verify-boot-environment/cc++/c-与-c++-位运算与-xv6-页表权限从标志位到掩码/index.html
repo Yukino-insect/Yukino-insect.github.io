@@ -1,0 +1,1806 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>C 与 C&#43;&#43; 位运算与 xv6 页表权限：从标志位到掩码 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="读 C 系统代码时，位运算几乎绕不开。
+在 xv6 里，你会看到类似代码：
+#define PTE_V (1L &lt;&lt; 0) #define PTE_R (1L &lt;&lt; 1) #define PTE_W (1L &lt;&lt; 2) #define PTE_X (1L &lt;&lt; 3) #define PTE_U (1L &lt;&lt; 4) flags |= PTE_W; flags &amp;= ~PTE_U; if ((*pte &amp; PTE_V) == 0) { return 0; } 如果只从表面看，|、&amp;、~、&lt;&lt; 这些符号确实显得冷淡。它们不解释自己，也不会给初学者一点情绪价值。
+但位运算并不神秘。它的核心只有一句话：
+把一个整数的每一位当作独立开关，用掩码进行设置、清除、检查和组合。 操作系统、文件格式、网络协议、硬件寄存器和权限系统喜欢位运算，是因为它紧凑、稳定、低开销，并且和机器表示方式非常接近。
+一、整数也是一串 bit C 和 C&#43;&#43; 里的整数可以从两个角度看。
+平时我们把它看成数值：
+unsigned x = 5; 5 是一个数。
+但从二进制角度看，它也是一串 bit：
+0101 如果用 4 位演示：
+十进制 二进制 0 0000 1 0001 2 0010 3 0011 4 0100 5 0101 8 1000 真实的 unsigned int 通常不止 4 位。这里用 4 位，只是为了让每一位都看得清楚。
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/cc&#43;&#43;/c-%E4%B8%8E-c&#43;&#43;-%E4%BD%8D%E8%BF%90%E7%AE%97%E4%B8%8E-xv6-%E9%A1%B5%E8%A1%A8%E6%9D%83%E9%99%90%E4%BB%8E%E6%A0%87%E5%BF%97%E4%BD%8D%E5%88%B0%E6%8E%A9%E7%A0%81/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/cc&#43;&#43;/c-%E4%B8%8E-c&#43;&#43;-%E4%BD%8D%E8%BF%90%E7%AE%97%E4%B8%8E-xv6-%E9%A1%B5%E8%A1%A8%E6%9D%83%E9%99%90%E4%BB%8E%E6%A0%87%E5%BF%97%E4%BD%8D%E5%88%B0%E6%8E%A9%E7%A0%81/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="C 与 C&#43;&#43; 位运算与 xv6 页表权限：从标志位到掩码">
+  <meta property="og:description" content="读 C 系统代码时，位运算几乎绕不开。
+在 xv6 里，你会看到类似代码：
+#define PTE_V (1L &lt;&lt; 0) #define PTE_R (1L &lt;&lt; 1) #define PTE_W (1L &lt;&lt; 2) #define PTE_X (1L &lt;&lt; 3) #define PTE_U (1L &lt;&lt; 4) flags |= PTE_W; flags &amp;= ~PTE_U; if ((*pte &amp; PTE_V) == 0) { return 0; } 如果只从表面看，|、&amp;、~、&lt;&lt; 这些符号确实显得冷淡。它们不解释自己，也不会给初学者一点情绪价值。
+但位运算并不神秘。它的核心只有一句话：
+把一个整数的每一位当作独立开关，用掩码进行设置、清除、检查和组合。 操作系统、文件格式、网络协议、硬件寄存器和权限系统喜欢位运算，是因为它紧凑、稳定、低开销，并且和机器表示方式非常接近。
+一、整数也是一串 bit C 和 C&#43;&#43; 里的整数可以从两个角度看。
+平时我们把它看成数值：
+unsigned x = 5; 5 是一个数。
+但从二进制角度看，它也是一串 bit：
+0101 如果用 4 位演示：
+十进制 二进制 0 0000 1 0001 2 0010 3 0011 4 0100 5 0101 8 1000 真实的 unsigned int 通常不止 4 位。这里用 4 位，只是为了让每一位都看得清楚。">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="c&amp;c&#43;&#43;">
+    <meta property="article:published_time" content="2026-08-25T20:10:00+08:00">
+    <meta property="article:modified_time" content="2026-08-25T20:10:00+08:00">
+
+  
+  <meta itemprop="name" content="C 与 C&#43;&#43; 位运算与 xv6 页表权限：从标志位到掩码">
+  <meta itemprop="description" content="读 C 系统代码时，位运算几乎绕不开。
+在 xv6 里，你会看到类似代码：
+#define PTE_V (1L &lt;&lt; 0) #define PTE_R (1L &lt;&lt; 1) #define PTE_W (1L &lt;&lt; 2) #define PTE_X (1L &lt;&lt; 3) #define PTE_U (1L &lt;&lt; 4) flags |= PTE_W; flags &amp;= ~PTE_U; if ((*pte &amp; PTE_V) == 0) { return 0; } 如果只从表面看，|、&amp;、~、&lt;&lt; 这些符号确实显得冷淡。它们不解释自己，也不会给初学者一点情绪价值。
+但位运算并不神秘。它的核心只有一句话：
+把一个整数的每一位当作独立开关，用掩码进行设置、清除、检查和组合。 操作系统、文件格式、网络协议、硬件寄存器和权限系统喜欢位运算，是因为它紧凑、稳定、低开销，并且和机器表示方式非常接近。
+一、整数也是一串 bit C 和 C&#43;&#43; 里的整数可以从两个角度看。
+平时我们把它看成数值：
+unsigned x = 5; 5 是一个数。
+但从二进制角度看，它也是一串 bit：
+0101 如果用 4 位演示：
+十进制 二进制 0 0000 1 0001 2 0010 3 0011 4 0100 5 0101 8 1000 真实的 unsigned int 通常不止 4 位。这里用 4 位，只是为了让每一位都看得清楚。">
+  <meta itemprop="datePublished" content="2026-08-25T20:10:00+08:00">
+  <meta itemprop="dateModified" content="2026-08-25T20:10:00+08:00">
+  <meta itemprop="wordCount" content="1528">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="C 与 C&#43;&#43; 位运算与 xv6 页表权限：从标志位到掩码">
+  <meta name="twitter:description" content="读 C 系统代码时，位运算几乎绕不开。
+在 xv6 里，你会看到类似代码：
+#define PTE_V (1L &lt;&lt; 0) #define PTE_R (1L &lt;&lt; 1) #define PTE_W (1L &lt;&lt; 2) #define PTE_X (1L &lt;&lt; 3) #define PTE_U (1L &lt;&lt; 4) flags |= PTE_W; flags &amp;= ~PTE_U; if ((*pte &amp; PTE_V) == 0) { return 0; } 如果只从表面看，|、&amp;、~、&lt;&lt; 这些符号确实显得冷淡。它们不解释自己，也不会给初学者一点情绪价值。
+但位运算并不神秘。它的核心只有一句话：
+把一个整数的每一位当作独立开关，用掩码进行设置、清除、检查和组合。 操作系统、文件格式、网络协议、硬件寄存器和权限系统喜欢位运算，是因为它紧凑、稳定、低开销，并且和机器表示方式非常接近。
+一、整数也是一串 bit C 和 C&#43;&#43; 里的整数可以从两个角度看。
+平时我们把它看成数值：
+unsigned x = 5; 5 是一个数。
+但从二进制角度看，它也是一串 bit：
+0101 如果用 4 位演示：
+十进制 二进制 0 0000 1 0001 2 0010 3 0011 4 0100 5 0101 8 1000 真实的 unsigned int 通常不止 4 位。这里用 4 位，只是为了让每一位都看得清楚。">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">C 与 C&#43;&#43; 位运算与 xv6 页表权限：从标志位到掩码</h1>
+
+    
+      <div class="post-date">August 25, 2026</div>
+    
+
+    <div class="post-content">
+      <p>读 C 系统代码时，位运算几乎绕不开。</p>
+<p>在 xv6 里，你会看到类似代码：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#define PTE_V (1L &lt;&lt; 0)
+</span></span></span><span class="line"><span class="cl"><span class="cp">#define PTE_R (1L &lt;&lt; 1)
+</span></span></span><span class="line"><span class="cl"><span class="cp">#define PTE_W (1L &lt;&lt; 2)
+</span></span></span><span class="line"><span class="cl"><span class="cp">#define PTE_X (1L &lt;&lt; 3)
+</span></span></span><span class="line"><span class="cl"><span class="cp">#define PTE_U (1L &lt;&lt; 4)
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="n">flags</span> <span class="o">|=</span> <span class="n">PTE_W</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="n">flags</span> <span class="o">&amp;=</span> <span class="o">~</span><span class="n">PTE_U</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">if</span> <span class="p">((</span><span class="o">*</span><span class="n">pte</span> <span class="o">&amp;</span> <span class="n">PTE_V</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>如果只从表面看，<code>|</code>、<code>&amp;</code>、<code>~</code>、<code>&lt;&lt;</code> 这些符号确实显得冷淡。它们不解释自己，也不会给初学者一点情绪价值。</p>
+<p>但位运算并不神秘。它的核心只有一句话：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">把一个整数的每一位当作独立开关，用掩码进行设置、清除、检查和组合。
+</span></span></code></pre></div><p>操作系统、文件格式、网络协议、硬件寄存器和权限系统喜欢位运算，是因为它紧凑、稳定、低开销，并且和机器表示方式非常接近。</p>
+<h2 id="一整数也是一串-bit">一、整数也是一串 bit</h2>
+<p>C 和 C++ 里的整数可以从两个角度看。</p>
+<p>平时我们把它看成数值：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">unsigned</span> <span class="n">x</span> <span class="o">=</span> <span class="mi">5</span><span class="p">;</span>
+</span></span></code></pre></div><p><code>5</code> 是一个数。</p>
+<p>但从二进制角度看，它也是一串 bit：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">0101
+</span></span></code></pre></div><p>如果用 4 位演示：</p>
+<table>
+  <thead>
+      <tr>
+          <th>十进制</th>
+          <th>二进制</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>0</code></td>
+          <td><code>0000</code></td>
+      </tr>
+      <tr>
+          <td><code>1</code></td>
+          <td><code>0001</code></td>
+      </tr>
+      <tr>
+          <td><code>2</code></td>
+          <td><code>0010</code></td>
+      </tr>
+      <tr>
+          <td><code>3</code></td>
+          <td><code>0011</code></td>
+      </tr>
+      <tr>
+          <td><code>4</code></td>
+          <td><code>0100</code></td>
+      </tr>
+      <tr>
+          <td><code>5</code></td>
+          <td><code>0101</code></td>
+      </tr>
+      <tr>
+          <td><code>8</code></td>
+          <td><code>1000</code></td>
+      </tr>
+  </tbody>
+</table>
+<p>真实的 <code>unsigned int</code> 通常不止 4 位。这里用 4 位，只是为了让每一位都看得清楚。</p>
+<p>位运算就是直接操作这些 bit。</p>
+<h2 id="二常用位运算符">二、常用位运算符</h2>
+<p>常用运算符如下：</p>
+<table>
+  <thead>
+      <tr>
+          <th>运算符</th>
+          <th>名称</th>
+          <th>含义</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>&amp;</code></td>
+          <td>按位与</td>
+          <td>两位都为 1，结果才为 1</td>
+      </tr>
+      <tr>
+          <td>`</td>
+          <td>`</td>
+          <td>按位或</td>
+      </tr>
+      <tr>
+          <td><code>^</code></td>
+          <td>按位异或</td>
+          <td>两位不同，结果为 1</td>
+      </tr>
+      <tr>
+          <td><code>~</code></td>
+          <td>按位取反</td>
+          <td>0 变 1，1 变 0</td>
+      </tr>
+      <tr>
+          <td><code>&lt;&lt;</code></td>
+          <td>左移</td>
+          <td>二进制位整体向左移动</td>
+      </tr>
+      <tr>
+          <td><code>&gt;&gt;</code></td>
+          <td>右移</td>
+          <td>二进制位整体向右移动</td>
+      </tr>
+  </tbody>
+</table>
+<p>先看 4 位例子：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">  0101
+</span></span><span class="line"><span class="cl">&amp; 0011
+</span></span><span class="line"><span class="cl">= 0001
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  0101
+</span></span><span class="line"><span class="cl">| 0011
+</span></span><span class="line"><span class="cl">= 0111
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  0101
+</span></span><span class="line"><span class="cl">^ 0011
+</span></span><span class="line"><span class="cl">= 0110
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">~ 0101
+</span></span><span class="line"><span class="cl">= 1010
+</span></span></code></pre></div><p><code>&amp;</code> 像筛子，用来选中某些位。</p>
+<p><code>|</code> 像开关合并，用来打开某些位。</p>
+<p><code>~</code> 用来制造“除了这些位之外”的掩码。</p>
+<p><code>&lt;&lt;</code> 常用来构造某一个 bit。</p>
+<h2 id="三用左移构造标志位">三、用左移构造标志位</h2>
+<p>如果要让每个标志占一个独立 bit，可以这样写：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#define FLAG_A (1U &lt;&lt; 0)
+</span></span></span><span class="line"><span class="cl"><span class="cp">#define FLAG_B (1U &lt;&lt; 1)
+</span></span></span><span class="line"><span class="cl"><span class="cp">#define FLAG_C (1U &lt;&lt; 2)
+</span></span></span></code></pre></div><p>展开后大致是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">FLAG_A = 0001
+</span></span><span class="line"><span class="cl">FLAG_B = 0010
+</span></span><span class="line"><span class="cl">FLAG_C = 0100
+</span></span></code></pre></div><p><code>1U &lt;&lt; 0</code> 表示把 <code>1</code> 放在第 0 位。</p>
+<p><code>1U &lt;&lt; 1</code> 表示把 <code>1</code> 放在第 1 位。</p>
+<p><code>1U &lt;&lt; 2</code> 表示把 <code>1</code> 放在第 2 位。</p>
+<p>这样每个宏都占据一个不同的位置。</p>
+<p>在 xv6 中，页表权限位常见写法类似：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#define PTE_V (1L &lt;&lt; 0)
+</span></span></span><span class="line"><span class="cl"><span class="cp">#define PTE_R (1L &lt;&lt; 1)
+</span></span></span><span class="line"><span class="cl"><span class="cp">#define PTE_W (1L &lt;&lt; 2)
+</span></span></span><span class="line"><span class="cl"><span class="cp">#define PTE_X (1L &lt;&lt; 3)
+</span></span></span><span class="line"><span class="cl"><span class="cp">#define PTE_U (1L &lt;&lt; 4)
+</span></span></span></code></pre></div><p>它们分别表示页表项里的不同 bit。</p>
+<table>
+  <thead>
+      <tr>
+          <th>宏</th>
+          <th>含义</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>PTE_V</code></td>
+          <td>valid，有效</td>
+      </tr>
+      <tr>
+          <td><code>PTE_R</code></td>
+          <td>readable，可读</td>
+      </tr>
+      <tr>
+          <td><code>PTE_W</code></td>
+          <td>writable，可写</td>
+      </tr>
+      <tr>
+          <td><code>PTE_X</code></td>
+          <td>executable，可执行</td>
+      </tr>
+      <tr>
+          <td><code>PTE_U</code></td>
+          <td>user，用户态可访问</td>
+      </tr>
+  </tbody>
+</table>
+<p>所以：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PTE_V</span> <span class="o">|</span> <span class="n">PTE_R</span> <span class="o">|</span> <span class="n">PTE_W</span>
+</span></span></code></pre></div><p>可以理解成：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">有效 + 可读 + 可写。
+</span></span></code></pre></div><h2 id="四按位或设置某个标志位">四、按位或：设置某个标志位</h2>
+<p>设置标志位通常用 <code>|=</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">flags</span> <span class="o">|=</span> <span class="n">FLAG_A</span><span class="p">;</span>
+</span></span></code></pre></div><p>它等价于：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">flags</span> <span class="o">=</span> <span class="n">flags</span> <span class="o">|</span> <span class="n">FLAG_A</span><span class="p">;</span>
+</span></span></code></pre></div><p>如果原来是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">flags  = 0000
+</span></span><span class="line"><span class="cl">FLAG_A = 0001
+</span></span></code></pre></div><p>那么：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">0000 | 0001 = 0001
+</span></span></code></pre></div><p>再设置 <code>FLAG_C</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">flags</span> <span class="o">|=</span> <span class="n">FLAG_C</span><span class="p">;</span>
+</span></span></code></pre></div><p>结果：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">flags  = 0001
+</span></span><span class="line"><span class="cl">FLAG_C = 0100
+</span></span><span class="line"><span class="cl">result = 0101
+</span></span></code></pre></div><p><code>FLAG_A</code> 和 <code>FLAG_C</code> 都被打开了。</p>
+<p>注意不要写成：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">flags</span> <span class="o">=</span> <span class="n">FLAG_C</span><span class="p">;</span>
+</span></span></code></pre></div><p>这会把原来的其他标志全部覆盖掉。</p>
+<p>在页表代码里：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="o">*</span><span class="n">pte</span> <span class="o">|=</span> <span class="n">PTE_W</span><span class="p">;</span>
+</span></span></code></pre></div><p>意思是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">给这个页表项增加写权限，同时保留其他权限位。
+</span></span></code></pre></div><p>如果写成：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="o">*</span><span class="n">pte</span> <span class="o">=</span> <span class="n">PTE_W</span><span class="p">;</span>
+</span></span></code></pre></div><p>那就不是“增加写权限”，而是把整个页表项改成只剩 <code>PTE_W</code>。原来的有效位、读权限、地址部分都可能被破坏。底层代码对这种错误通常没有耐心，当然它也没有义务有。</p>
+<h2 id="五按位与检查某个标志位">五、按位与：检查某个标志位</h2>
+<p>检查标志位通常用 <code>&amp;</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">if</span> <span class="p">(</span><span class="n">flags</span> <span class="o">&amp;</span> <span class="n">FLAG_A</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="cm">/* FLAG_A is set */</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>如果：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">flags  = 0101
+</span></span><span class="line"><span class="cl">FLAG_A = 0001
+</span></span></code></pre></div><p>那么：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">0101 &amp; 0001 = 0001
+</span></span></code></pre></div><p>结果非零，说明 <code>FLAG_A</code> 存在。</p>
+<p>如果检查 <code>FLAG_B</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">flags  = 0101
+</span></span><span class="line"><span class="cl">FLAG_B = 0010
+</span></span><span class="line"><span class="cl">result = 0000
+</span></span></code></pre></div><p>结果为 0，说明 <code>FLAG_B</code> 不存在。</p>
+<p>更明确的写法是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">if</span> <span class="p">((</span><span class="n">flags</span> <span class="o">&amp;</span> <span class="n">FLAG_A</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="cm">/* FLAG_A is set */</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>这对初学者更友好，也能减少优先级误读。</p>
+<p>在 xv6 页表代码里：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">if</span> <span class="p">((</span><span class="o">*</span><span class="n">pte</span> <span class="o">&amp;</span> <span class="n">PTE_V</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>可以翻译成：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">如果页表项没有有效位，就返回失败。
+</span></span></code></pre></div><h2 id="六取反再按位与清除某个标志位">六、取反再按位与：清除某个标志位</h2>
+<p>清除标志位通常用：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">flags</span> <span class="o">&amp;=</span> <span class="o">~</span><span class="n">FLAG_A</span><span class="p">;</span>
+</span></span></code></pre></div><p>它等价于：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">flags</span> <span class="o">=</span> <span class="n">flags</span> <span class="o">&amp;</span> <span class="o">~</span><span class="n">FLAG_A</span><span class="p">;</span>
+</span></span></code></pre></div><p>如果只看 4 位：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">FLAG_A  = 0001
+</span></span><span class="line"><span class="cl">~FLAG_A = 1110
+</span></span><span class="line"><span class="cl">flags   = 0101
+</span></span><span class="line"><span class="cl">result  = 0100
+</span></span></code></pre></div><p><code>FLAG_A</code> 那一位被清掉，其他位保持不变。</p>
+<p>所以：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">flags</span> <span class="o">&amp;=</span> <span class="o">~</span><span class="n">FLAG_A</span><span class="p">;</span>
+</span></span></code></pre></div><p>意思是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">关闭 FLAG_A，保留其他标志位。
+</span></span></code></pre></div><p>在页表代码里：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="o">*</span><span class="n">pte</span> <span class="o">&amp;=</span> <span class="o">~</span><span class="n">PTE_U</span><span class="p">;</span>
+</span></span></code></pre></div><p>可以翻译成：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">清除用户态可访问权限，其他位保持不变。
+</span></span></code></pre></div><p>不要写成：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">flags</span> <span class="o">&amp;=</span> <span class="n">FLAG_A</span><span class="p">;</span>
+</span></span></code></pre></div><p>这不是清除 <code>FLAG_A</code>，而是只保留 <code>FLAG_A</code> 这一位，其他位全部清掉。</p>
+<h2 id="七异或翻转某个标志位">七、异或：翻转某个标志位</h2>
+<p>异或 <code>^</code> 可以翻转 bit。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">flags</span> <span class="o">^=</span> <span class="n">FLAG_A</span><span class="p">;</span>
+</span></span></code></pre></div><p>如果 <code>FLAG_A</code> 原来是 1，异或后变成 0。</p>
+<p>如果 <code>FLAG_A</code> 原来是 0，异或后变成 1。</p>
+<p>示意：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">1 ^ 1 = 0
+</span></span><span class="line"><span class="cl">0 ^ 1 = 1
+</span></span></code></pre></div><p>所以异或常用于“切换状态”：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">flags</span> <span class="o">^=</span> <span class="n">FLAG_A</span><span class="p">;</span>
+</span></span></code></pre></div><p>但在权限代码里，异或要谨慎使用。</p>
+<p>权限通常需要明确设置或清除：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">flags</span> <span class="o">|=</span> <span class="n">PERM_WRITE</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="n">flags</span> <span class="o">&amp;=</span> <span class="o">~</span><span class="n">PERM_WRITE</span><span class="p">;</span>
+</span></span></code></pre></div><p>而不是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">flags</span> <span class="o">^=</span> <span class="n">PERM_WRITE</span><span class="p">;</span>
+</span></span></code></pre></div><p>因为“原来有就去掉，原来没有就加上”这种语义太暧昧。权限检查里暧昧不是一种美德。</p>
+<h2 id="八标志位的增删查改">八、标志位的增删查改</h2>
+<p>可以把标志位操作记成四个动作：</p>
+<table>
+  <thead>
+      <tr>
+          <th>操作</th>
+          <th>写法</th>
+          <th>含义</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>设置某位</td>
+          <td>`flags</td>
+          <td>= FLAG_A`</td>
+      </tr>
+      <tr>
+          <td>清除某位</td>
+          <td><code>flags &amp;= ~FLAG_A</code></td>
+          <td>关闭 <code>FLAG_A</code></td>
+      </tr>
+      <tr>
+          <td>检查某位</td>
+          <td><code>flags &amp; FLAG_A</code></td>
+          <td>判断 <code>FLAG_A</code> 是否存在</td>
+      </tr>
+      <tr>
+          <td>翻转某位</td>
+          <td><code>flags ^= FLAG_A</code></td>
+          <td>有则去掉，无则加上</td>
+      </tr>
+  </tbody>
+</table>
+<p>完整例子：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;stdio.h&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="cp">#define PERM_READ  (1U &lt;&lt; 0)
+</span></span></span><span class="line"><span class="cl"><span class="cp">#define PERM_WRITE (1U &lt;&lt; 1)
+</span></span></span><span class="line"><span class="cl"><span class="cp">#define PERM_EXEC  (1U &lt;&lt; 2)
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">main</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">unsigned</span> <span class="n">perm</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">perm</span> <span class="o">|=</span> <span class="n">PERM_READ</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">perm</span> <span class="o">|=</span> <span class="n">PERM_WRITE</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="p">((</span><span class="n">perm</span> <span class="o">&amp;</span> <span class="n">PERM_READ</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">printf</span><span class="p">(</span><span class="s">&#34;readable</span><span class="se">\n</span><span class="s">&#34;</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">perm</span> <span class="o">&amp;=</span> <span class="o">~</span><span class="n">PERM_WRITE</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="p">((</span><span class="n">perm</span> <span class="o">&amp;</span> <span class="n">PERM_WRITE</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">printf</span><span class="p">(</span><span class="s">&#34;not writable</span><span class="se">\n</span><span class="s">&#34;</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>这里一个整数 <code>perm</code> 同时保存多个权限：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">bit 0: read
+</span></span><span class="line"><span class="cl">bit 1: write
+</span></span><span class="line"><span class="cl">bit 2: exec
+</span></span></code></pre></div><p>这比使用多个变量更紧凑：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">readable</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">writable</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">executable</span><span class="p">;</span>
+</span></span></code></pre></div><p>在普通业务代码里，三个变量也许更清晰。但在页表、协议头、文件权限、硬件寄存器里，位标志的紧凑性和可组合性非常重要。</p>
+<h2 id="九掩码">九、掩码</h2>
+<p>掩码就是专门用来选择、保留、清除某些 bit 的数。</p>
+<p>例如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">value = 1011 0110
+</span></span><span class="line"><span class="cl">mask  = 0000 1111
+</span></span></code></pre></div><p>取低 4 位：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">value &amp; mask = 0000 0110
+</span></span></code></pre></div><p>清低 4 位：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">value &amp; ~mask = 1011 0000
+</span></span></code></pre></div><p>设置低 4 位：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">value | mask = 1011 1111
+</span></span></code></pre></div><p>掩码的常见用途：</p>
+<ul>
+<li>取出某几位。</li>
+<li>清除某几位。</li>
+<li>设置某几位。</li>
+<li>判断某几位是否符合条件。</li>
+</ul>
+<p>一句话概括：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">mask 为 1 的位会被选中；
+</span></span><span class="line"><span class="cl">mask 为 0 的位会被忽略或清除，取决于你使用的运算。
+</span></span></code></pre></div><h2 id="十判断多个标志位">十、判断多个标志位</h2>
+<p>判断某一位是否存在：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">if</span> <span class="p">((</span><span class="n">perm</span> <span class="o">&amp;</span> <span class="n">PERM_READ</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>判断读或写至少一个存在：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">if</span> <span class="p">((</span><span class="n">perm</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">PERM_READ</span> <span class="o">|</span> <span class="n">PERM_WRITE</span><span class="p">))</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>判断读和写都存在：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">if</span> <span class="p">((</span><span class="n">perm</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">PERM_READ</span> <span class="o">|</span> <span class="n">PERM_WRITE</span><span class="p">))</span> <span class="o">==</span> <span class="p">(</span><span class="n">PERM_READ</span> <span class="o">|</span> <span class="n">PERM_WRITE</span><span class="p">))</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>两者区别很重要：</p>
+<table>
+  <thead>
+      <tr>
+          <th>写法</th>
+          <th>含义</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>`(perm &amp; (R</td>
+          <td>W)) != 0`</td>
+      </tr>
+      <tr>
+          <td>`(perm &amp; (R</td>
+          <td>W)) == (R</td>
+      </tr>
+  </tbody>
+</table>
+<p>判断某几位全都不存在：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">if</span> <span class="p">((</span><span class="n">perm</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">PERM_WRITE</span> <span class="o">|</span> <span class="n">PERM_EXEC</span><span class="p">))</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="cm">/* neither write nor exec is set */</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>权限检查这种东西，差一个 bit 就不是“差不多”的问题。它只会安静地变成漏洞或错误。</p>
+<h2 id="十一替换一组位">十一、替换一组位</h2>
+<p>有时某几位不是独立开关，而是共同表示一个模式。</p>
+<p>例如低两位表示模式：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#define MODE_MASK 0x3
+</span></span></span><span class="line"><span class="cl"><span class="cp">#define MODE_A    0x0
+</span></span></span><span class="line"><span class="cl"><span class="cp">#define MODE_B    0x1
+</span></span></span><span class="line"><span class="cl"><span class="cp">#define MODE_C    0x2
+</span></span></span></code></pre></div><p>设置模式时应该先清掉旧模式，再放入新模式：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">flags</span> <span class="o">=</span> <span class="p">(</span><span class="n">flags</span> <span class="o">&amp;</span> <span class="o">~</span><span class="n">MODE_MASK</span><span class="p">)</span> <span class="o">|</span> <span class="n">MODE_B</span><span class="p">;</span>
+</span></span></code></pre></div><p>拆开看：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">flags</span> <span class="o">=</span> <span class="n">flags</span> <span class="o">&amp;</span> <span class="o">~</span><span class="n">MODE_MASK</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="n">flags</span> <span class="o">=</span> <span class="n">flags</span> <span class="o">|</span> <span class="n">MODE_B</span><span class="p">;</span>
+</span></span></code></pre></div><p>先清空低两位，再设置成 <code>MODE_B</code>。</p>
+<p>如果直接写：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">flags</span> <span class="o">|=</span> <span class="n">MODE_B</span><span class="p">;</span>
+</span></span></code></pre></div><p>旧模式位可能残留，最后得到不合法或意外的组合。</p>
+<p>独立标志位可以叠加：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PERM_READ</span> <span class="o">|</span> <span class="n">PERM_WRITE</span>
+</span></span></code></pre></div><p>互斥模式位则通常要先清再设：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="p">(</span><span class="n">flags</span> <span class="o">&amp;</span> <span class="o">~</span><span class="n">MODE_MASK</span><span class="p">)</span> <span class="o">|</span> <span class="n">MODE_B</span>
+</span></span></code></pre></div><p>这两个模型要分清。否则代码看起来很短，问题也会很短地出现。</p>
+<h2 id="十二xv6-页表项里的地址和标志位">十二、xv6 页表项里的地址和标志位</h2>
+<p>页表项通常不只保存权限位，还保存物理页地址的一部分。</p>
+<p>可以粗略理解为：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">高位：物理地址相关信息
+</span></span><span class="line"><span class="cl">低位：权限和状态标志
+</span></span></code></pre></div><p>xv6 中常见的页表标志位类似：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#define PTE_V (1L &lt;&lt; 0)
+</span></span></span><span class="line"><span class="cl"><span class="cp">#define PTE_R (1L &lt;&lt; 1)
+</span></span></span><span class="line"><span class="cl"><span class="cp">#define PTE_W (1L &lt;&lt; 2)
+</span></span></span><span class="line"><span class="cl"><span class="cp">#define PTE_X (1L &lt;&lt; 3)
+</span></span></span><span class="line"><span class="cl"><span class="cp">#define PTE_U (1L &lt;&lt; 4)
+</span></span></span></code></pre></div><p>如果一个页表项同时有效、可读、可写：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PTE_V</span> <span class="o">|</span> <span class="n">PTE_R</span> <span class="o">|</span> <span class="n">PTE_W</span>
+</span></span></code></pre></div><p>从二进制看：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">PTE_V = 00001
+</span></span><span class="line"><span class="cl">PTE_R = 00010
+</span></span><span class="line"><span class="cl">PTE_W = 00100
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">PTE_V | PTE_R | PTE_W = 00111
+</span></span></code></pre></div><p>一个整数里同时表达了三个权限。</p>
+<p>提取标志位时，常见写法是使用掩码：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#define PTE_FLAGS(pte) ((pte) &amp; 0x3FF)
+</span></span></span></code></pre></div><p>这表示取出页表项低 10 位作为标志位。</p>
+<p>如果想清掉低位，只保留高位地址部分，可以看到类似写法：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">uint64</span> <span class="n">addr_part</span> <span class="o">=</span> <span class="n">pte</span> <span class="o">&amp;</span> <span class="o">~</span><span class="mh">0x3FF</span><span class="p">;</span>
+</span></span></code></pre></div><p>这里：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">0x3FF = 二进制低 10 位全为 1
+</span></span><span class="line"><span class="cl">~0x3FF = 低 10 位为 0，其余位为 1
+</span></span></code></pre></div><p>所以：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">pte &amp; 0x3FF
+</span></span></code></pre></div><p>表示取低 10 位。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">pte &amp; ~0x3FF
+</span></span></code></pre></div><p>表示清低 10 位，保留高位。</p>
+<p>不要被十六进制吓到。<code>0x3FF</code> 只是比写一长串二进制更体面一点。</p>
+<h2 id="十三移位的几个细节">十三、移位的几个细节</h2>
+<p>移位常用，但边界上并不温柔。</p>
+<h3 id="1-构造标志位时优先使用无符号类型">1. 构造标志位时优先使用无符号类型</h3>
+<p>推荐：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#define FLAG_A (1U &lt;&lt; 0)
+</span></span></span><span class="line"><span class="cl"><span class="cp">#define FLAG_B (1U &lt;&lt; 1)
+</span></span></span></code></pre></div><p>如果需要 64 位：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#define FLAG64_A (1ULL &lt;&lt; 40)
+</span></span></span></code></pre></div><p>原因是有符号整数移位更容易踩到边界问题。</p>
+<p>例如把 <code>1</code> 左移到有符号类型的符号位，可能产生未定义行为或实现相关行为。</p>
+<p>xv6 里常见：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#define PTE_V (1L &lt;&lt; 0)
+</span></span></span></code></pre></div><p>这是和它的目标平台、编译器和代码环境一起成立的写法。自己写通用 C/C++ 代码时，更推荐使用 <code>1U</code>、<code>1UL</code>、<code>1ULL</code>，或者明确的 <code>uint64_t</code> 相关类型。</p>
+<h3 id="2-移位数量不能越界">2. 移位数量不能越界</h3>
+<p>如果类型宽度是 32 位：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="mi">1U</span> <span class="o">&lt;&lt;</span> <span class="mi">32</span>
+</span></span></code></pre></div><p>这是错误的。移位数量必须小于类型的位宽。</p>
+<p>正确构造 64 位高位标志：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="mi">1ULL</span> <span class="o">&lt;&lt;</span> <span class="mi">32</span>
+</span></span></code></pre></div><p>因为 <code>1ULL</code> 至少提供 64 位无符号整数范围。</p>
+<h3 id="3-有符号负数右移要谨慎">3. 有符号负数右移要谨慎</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">x</span> <span class="o">=</span> <span class="o">-</span><span class="mi">8</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">y</span> <span class="o">=</span> <span class="n">x</span> <span class="o">&gt;&gt;</span> <span class="mi">1</span><span class="p">;</span>
+</span></span></code></pre></div><p>有符号负数右移的结果在 C 里是实现定义行为。很多机器上会做算术右移，也就是保留符号位，但不要把它当成跨平台保证。</p>
+<p>处理位模式时，尽量使用无符号类型：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">unsigned</span> <span class="n">x</span> <span class="o">=</span> <span class="mh">0x80000000U</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="kt">unsigned</span> <span class="n">y</span> <span class="o">=</span> <span class="n">x</span> <span class="o">&gt;&gt;</span> <span class="mi">1</span><span class="p">;</span>
+</span></span></code></pre></div><p>底层代码喜欢无符号整数，并不是性格问题，而是位运算本来就更适合在无符号类型上表达。</p>
+<h2 id="十四运算符优先级">十四、运算符优先级</h2>
+<p>位运算和比较、逻辑运算混用时，最容易出现优先级错误。</p>
+<h3 id="1--的优先级低于-">1. <code>&amp;</code> 的优先级低于 <code>==</code></h3>
+<p>这句有问题：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">if</span> <span class="p">(</span><span class="n">flags</span> <span class="o">&amp;</span> <span class="n">FLAG_A</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="cm">/* wrong */</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>它会被理解成：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">if</span> <span class="p">(</span><span class="n">flags</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">FLAG_A</span> <span class="o">==</span> <span class="mi">0</span><span class="p">))</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="cm">/* wrong */</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>因为 <code>==</code> 的优先级高于按位与 <code>&amp;</code>。</p>
+<p>应该写：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">if</span> <span class="p">((</span><span class="n">flags</span> <span class="o">&amp;</span> <span class="n">FLAG_A</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="cm">/* FLAG_A is not set */</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>或者：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="p">(</span><span class="n">flags</span> <span class="o">&amp;</span> <span class="n">FLAG_A</span><span class="p">))</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="cm">/* FLAG_A is not set */</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>括号不是多余的。它是在帮后来读代码的人省时间，也是在帮自己少犯错。</p>
+<h3 id="2--和--不是一回事">2. <code>&amp;</code> 和 <code>&amp;&amp;</code> 不是一回事</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">if</span> <span class="p">(</span><span class="n">flags</span> <span class="o">&amp;</span> <span class="n">FLAG_A</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">if</span> <span class="p">(</span><span class="n">a</span> <span class="o">&amp;&amp;</span> <span class="n">b</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p><code>&amp;</code> 是按位与，会对整数的每一位进行运算。</p>
+<p><code>&amp;&amp;</code> 是逻辑与，只判断真假，并且有短路行为。</p>
+<p>同样：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">flags</span> <span class="o">|</span> <span class="n">FLAG_A</span>
+</span></span></code></pre></div><p>和：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">a</span> <span class="o">||</span> <span class="n">b</span>
+</span></span></code></pre></div><p>也完全不同。</p>
+<p>在标志位代码里，通常使用 <code>&amp;</code>、<code>|</code>、<code>~</code>。</p>
+<p>在条件组合里，通常使用 <code>&amp;&amp;</code>、<code>||</code>、<code>!</code>。</p>
+<h3 id="3-宏里要加括号">3. 宏里要加括号</h3>
+<p>推荐：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#define BIT(n) (1ULL &lt;&lt; (n))
+</span></span></span><span class="line"><span class="cl"><span class="cp">#define HAS_FLAG(x, flag) (((x) &amp; (flag)) != 0)
+</span></span></span></code></pre></div><p>不要写成：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#define BIT(n) 1ULL &lt;&lt; n
+</span></span></span><span class="line"><span class="cl"><span class="cp">#define HAS_FLAG(x, flag) x &amp; flag != 0
+</span></span></span></code></pre></div><p>宏展开只是文本替换。预处理器不会理解你的善意，也不会替你补括号。</p>
+<h2 id="十五c-里的位标志">十五、C++ 里的位标志</h2>
+<p>C++ 也可以直接使用 C 风格位标志：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">constexpr</span> <span class="kt">unsigned</span> <span class="n">Read</span>  <span class="o">=</span> <span class="mi">1U</span> <span class="o">&lt;&lt;</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="k">constexpr</span> <span class="kt">unsigned</span> <span class="n">Write</span> <span class="o">=</span> <span class="mi">1U</span> <span class="o">&lt;&lt;</span> <span class="mi">1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="k">constexpr</span> <span class="kt">unsigned</span> <span class="n">Exec</span>  <span class="o">=</span> <span class="mi">1U</span> <span class="o">&lt;&lt;</span> <span class="mi">2</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kt">unsigned</span> <span class="n">perm</span> <span class="o">=</span> <span class="n">Read</span> <span class="o">|</span> <span class="n">Write</span><span class="p">;</span>
+</span></span></code></pre></div><p>比宏更推荐 <code>constexpr</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">constexpr</span> <span class="kt">unsigned</span> <span class="nf">bit</span><span class="p">(</span><span class="kt">unsigned</span> <span class="n">n</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="mi">1U</span> <span class="o">&lt;&lt;</span> <span class="n">n</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>如果使用枚举，可以写：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">enum</span> <span class="nc">Permission</span> <span class="o">:</span> <span class="kt">unsigned</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">Read</span>  <span class="o">=</span> <span class="mi">1U</span> <span class="o">&lt;&lt;</span> <span class="mi">0</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">Write</span> <span class="o">=</span> <span class="mi">1U</span> <span class="o">&lt;&lt;</span> <span class="mi">1</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">Exec</span>  <span class="o">=</span> <span class="mi">1U</span> <span class="o">&lt;&lt;</span> <span class="mi">2</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kt">unsigned</span> <span class="n">perm</span> <span class="o">=</span> <span class="n">Read</span> <span class="o">|</span> <span class="n">Write</span><span class="p">;</span>
+</span></span></code></pre></div><p>如果使用 <code>enum class</code>，类型更安全，但默认不能直接 <code>|</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">enum</span> <span class="k">class</span> <span class="nc">Permission</span> <span class="o">:</span> <span class="kt">unsigned</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">Read</span>  <span class="o">=</span> <span class="mi">1U</span> <span class="o">&lt;&lt;</span> <span class="mi">0</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">Write</span> <span class="o">=</span> <span class="mi">1U</span> <span class="o">&lt;&lt;</span> <span class="mi">1</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">Exec</span>  <span class="o">=</span> <span class="mi">1U</span> <span class="o">&lt;&lt;</span> <span class="mi">2</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><p>需要自己定义运算符：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">constexpr</span> <span class="n">Permission</span> <span class="k">operator</span><span class="o">|</span><span class="p">(</span><span class="n">Permission</span> <span class="n">a</span><span class="p">,</span> <span class="n">Permission</span> <span class="n">b</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="k">static_cast</span><span class="o">&lt;</span><span class="n">Permission</span><span class="o">&gt;</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">        <span class="k">static_cast</span><span class="o">&lt;</span><span class="kt">unsigned</span><span class="o">&gt;</span><span class="p">(</span><span class="n">a</span><span class="p">)</span> <span class="o">|</span> <span class="k">static_cast</span><span class="o">&lt;</span><span class="kt">unsigned</span><span class="o">&gt;</span><span class="p">(</span><span class="n">b</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">constexpr</span> <span class="kt">bool</span> <span class="nf">has_permission</span><span class="p">(</span><span class="n">Permission</span> <span class="n">value</span><span class="p">,</span> <span class="n">Permission</span> <span class="n">flag</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="p">(</span><span class="k">static_cast</span><span class="o">&lt;</span><span class="kt">unsigned</span><span class="o">&gt;</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="o">&amp;</span> <span class="k">static_cast</span><span class="o">&lt;</span><span class="kt">unsigned</span><span class="o">&gt;</span><span class="p">(</span><span class="n">flag</span><span class="p">))</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>这样调用：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="n">Permission</span> <span class="n">perm</span> <span class="o">=</span> <span class="n">Permission</span><span class="o">::</span><span class="n">Read</span> <span class="o">|</span> <span class="n">Permission</span><span class="o">::</span><span class="n">Write</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">if</span> <span class="p">(</span><span class="n">has_permission</span><span class="p">(</span><span class="n">perm</span><span class="p">,</span> <span class="n">Permission</span><span class="o">::</span><span class="n">Read</span><span class="p">))</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>底层仍然是位运算，只是类型系统更严格。</p>
+<h2 id="十六读-xv6-时的翻译方法">十六、读 xv6 时的翻译方法</h2>
+<p>读底层代码时，不要先被符号压住。先把表达式翻译成状态变化。</p>
+<h3 id="1-权限组合">1. 权限组合</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PTE_V</span> <span class="o">|</span> <span class="n">PTE_R</span> <span class="o">|</span> <span class="n">PTE_W</span>
+</span></span></code></pre></div><p>翻译：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">有效、可读、可写这几个权限同时存在。
+</span></span></code></pre></div><h3 id="2-检查权限">2. 检查权限</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">if</span> <span class="p">((</span><span class="o">*</span><span class="n">pte</span> <span class="o">&amp;</span> <span class="n">PTE_V</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>翻译：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">如果页表项没有有效位，就返回失败。
+</span></span></code></pre></div><h3 id="3-增加权限">3. 增加权限</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="o">*</span><span class="n">pte</span> <span class="o">|=</span> <span class="n">PTE_W</span><span class="p">;</span>
+</span></span></code></pre></div><p>翻译：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">打开写权限，其他位不动。
+</span></span></code></pre></div><h3 id="4-清除权限">4. 清除权限</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="o">*</span><span class="n">pte</span> <span class="o">&amp;=</span> <span class="o">~</span><span class="n">PTE_U</span><span class="p">;</span>
+</span></span></code></pre></div><p>翻译：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">清除用户态可访问位，其他位保持不变。
+</span></span></code></pre></div><h3 id="5-提取标志位">5. 提取标志位</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="nf">PTE_FLAGS</span><span class="p">(</span><span class="n">pte</span><span class="p">)</span>
+</span></span></code></pre></div><p>如果定义类似：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#define PTE_FLAGS(pte) ((pte) &amp; 0x3FF)
+</span></span></span></code></pre></div><p>翻译：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">取出页表项低 10 位的标志部分。
+</span></span></code></pre></div><p>这种翻译看起来朴素，但非常有效。底层代码的难点往往不是某个符号本身，而是你能不能把它还原成“哪些位被保留、哪些位被打开、哪些位被清除”。</p>
+<h2 id="十七常见错误整理">十七、常见错误整理</h2>
+<h3 id="1-用--覆盖标志位">1. 用 <code>=</code> 覆盖标志位</h3>
+<p>错误：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">flags</span> <span class="o">=</span> <span class="n">FLAG_A</span><span class="p">;</span>
+</span></span></code></pre></div><p>如果目标是添加 <code>FLAG_A</code>，应该写：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">flags</span> <span class="o">|=</span> <span class="n">FLAG_A</span><span class="p">;</span>
+</span></span></code></pre></div><p><code>=</code> 是整体替换，<code>|=</code> 是设置某位并保留其他位。</p>
+<h3 id="2-清除标志位时忘记取反">2. 清除标志位时忘记取反</h3>
+<p>错误：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">flags</span> <span class="o">&amp;=</span> <span class="n">FLAG_A</span><span class="p">;</span>
+</span></span></code></pre></div><p>这不是清除 <code>FLAG_A</code>，而是只保留 <code>FLAG_A</code>。</p>
+<p>正确：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">flags</span> <span class="o">&amp;=</span> <span class="o">~</span><span class="n">FLAG_A</span><span class="p">;</span>
+</span></span></code></pre></div><h3 id="3-检查多个标志位时语义不清">3. 检查多个标志位时语义不清</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">if</span> <span class="p">(</span><span class="n">flags</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">A</span> <span class="o">|</span> <span class="n">B</span><span class="p">))</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>这表示 <code>A</code> 或 <code>B</code> 至少一个存在。</p>
+<p>如果要检查 <code>A</code> 和 <code>B</code> 都存在：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">if</span> <span class="p">((</span><span class="n">flags</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">A</span> <span class="o">|</span> <span class="n">B</span><span class="p">))</span> <span class="o">==</span> <span class="p">(</span><span class="n">A</span> <span class="o">|</span> <span class="n">B</span><span class="p">))</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><h3 id="4-忘记优先级">4. 忘记优先级</h3>
+<p>错误：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">if</span> <span class="p">(</span><span class="n">flags</span> <span class="o">&amp;</span> <span class="n">A</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>正确：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">if</span> <span class="p">((</span><span class="n">flags</span> <span class="o">&amp;</span> <span class="n">A</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>这种错误很隐蔽。编译器可能不报错，因为它在语法上成立。只是语义已经去了别处。</p>
+<h3 id="5-移位类型太窄">5. 移位类型太窄</h3>
+<p>错误：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">uint64_t</span> <span class="n">x</span> <span class="o">=</span> <span class="mi">1U</span> <span class="o">&lt;&lt;</span> <span class="mi">40</span><span class="p">;</span>
+</span></span></code></pre></div><p><code>1U</code> 通常是 32 位，先在 32 位范围内移位，已经出问题了。</p>
+<p>正确：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">uint64_t</span> <span class="n">x</span> <span class="o">=</span> <span class="mi">1ULL</span> <span class="o">&lt;&lt;</span> <span class="mi">40</span><span class="p">;</span>
+</span></span></code></pre></div><p>或者：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">uint64_t</span> <span class="n">x</span> <span class="o">=</span> <span class="p">(</span><span class="kt">uint64_t</span><span class="p">)</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="mi">40</span><span class="p">;</span>
+</span></span></code></pre></div><h2 id="十八一页速查">十八、一页速查</h2>
+<p>定义标志位：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#define A (1U &lt;&lt; 0)
+</span></span></span><span class="line"><span class="cl"><span class="cp">#define B (1U &lt;&lt; 1)
+</span></span></span><span class="line"><span class="cl"><span class="cp">#define C (1U &lt;&lt; 2)
+</span></span></span></code></pre></div><p>设置：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">flags</span> <span class="o">|=</span> <span class="n">A</span><span class="p">;</span>
+</span></span></code></pre></div><p>清除：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">flags</span> <span class="o">&amp;=</span> <span class="o">~</span><span class="n">A</span><span class="p">;</span>
+</span></span></code></pre></div><p>检查：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">if</span> <span class="p">((</span><span class="n">flags</span> <span class="o">&amp;</span> <span class="n">A</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>翻转：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">flags</span> <span class="o">^=</span> <span class="n">A</span><span class="p">;</span>
+</span></span></code></pre></div><p>检查多个位至少一个存在：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">if</span> <span class="p">((</span><span class="n">flags</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">A</span> <span class="o">|</span> <span class="n">B</span><span class="p">))</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>检查多个位全部存在：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">if</span> <span class="p">((</span><span class="n">flags</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">A</span> <span class="o">|</span> <span class="n">B</span><span class="p">))</span> <span class="o">==</span> <span class="p">(</span><span class="n">A</span> <span class="o">|</span> <span class="n">B</span><span class="p">))</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>替换一组模式位：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">flags</span> <span class="o">=</span> <span class="p">(</span><span class="n">flags</span> <span class="o">&amp;</span> <span class="o">~</span><span class="n">MODE_MASK</span><span class="p">)</span> <span class="o">|</span> <span class="n">MODE_B</span><span class="p">;</span>
+</span></span></code></pre></div><p>取低 10 位：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">low</span> <span class="o">=</span> <span class="n">value</span> <span class="o">&amp;</span> <span class="mh">0x3FF</span><span class="p">;</span>
+</span></span></code></pre></div><p>清低 10 位：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">high</span> <span class="o">=</span> <span class="n">value</span> <span class="o">&amp;</span> <span class="o">~</span><span class="mh">0x3FF</span><span class="p">;</span>
+</span></span></code></pre></div><h2 id="十九总结">十九、总结</h2>
+<p>位运算的核心不是符号，而是状态变化。</p>
+<p>看到：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">flags</span> <span class="o">|=</span> <span class="n">A</span><span class="p">;</span>
+</span></span></code></pre></div><p>就翻译成：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">打开 A。
+</span></span></code></pre></div><p>看到：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">flags</span> <span class="o">&amp;=</span> <span class="o">~</span><span class="n">A</span><span class="p">;</span>
+</span></span></code></pre></div><p>就翻译成：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">关闭 A。
+</span></span></code></pre></div><p>看到：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">flags</span> <span class="o">&amp;</span> <span class="n">A</span>
+</span></span></code></pre></div><p>就翻译成：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">检查 A 是否存在。
+</span></span></code></pre></div><p>看到 xv6 里的：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PTE_V</span> <span class="o">|</span> <span class="n">PTE_R</span> <span class="o">|</span> <span class="n">PTE_W</span>
+</span></span></code></pre></div><p>就翻译成：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">页表项有效、可读、可写。
+</span></span></code></pre></div><p>看到：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="o">*</span><span class="n">pte</span> <span class="o">&amp;=</span> <span class="o">~</span><span class="n">PTE_U</span><span class="p">;</span>
+</span></span></code></pre></div><p>就翻译成：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">清除用户态可访问权限。
+</span></span></code></pre></div><p>只要能完成这种翻译，位运算就不再是一堆冷冰冰的符号，而是一组明确的开关操作。它仍然不亲切，但至少诚实。而在系统代码里，诚实已经算是相当不错的品质了。</p>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

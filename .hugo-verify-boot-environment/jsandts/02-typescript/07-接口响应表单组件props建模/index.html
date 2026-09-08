@@ -1,0 +1,1488 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>接口响应、表单和组件 Props 建模：让 TypeScript 进入真实业务 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="TypeScript 学到最后，一定要回到业务。会写 Partial、infer、keyof 只是工具，真正的问题是：接口返回的数据、页面展示的数据、表单编辑的数据和组件接收的数据，它们是不是同一个东西？
+很多项目类型混乱，不是因为语法不熟，而是因为这些边界没有分开。
+一、先区分四类模型 前端常见模型可以分成四类：
+模型 说明 接口响应模型 后端实际返回的数据 页面展示模型 页面渲染需要的数据 表单模型 用户正在编辑的数据 提交参数模型 最终发给后端的数据 它们有时长得很像，但不应该默认等同。
+例如文章详情：
+type PostResponse = { id: number title: string content: string | null author: { id: number name: string | null } | null like_count: number | null created_at: string } 页面展示模型可以更干净：
+type PostDetail = { id: number title: string content: string authorName: string likeCount: number createdAtText: string } 中间需要映射函数。
+二、接口响应泛型 统一响应结构：
+type ApiResponse&lt;T&gt; = { code: number message: string data: T } 分页结构：
+type PageResult&lt;T&gt; = { records: T[] total: number page: number pageSize: number } 组合：
+type PostPageResponse = ApiResponse&lt;PageResult&lt;PostResponse&gt;&gt; 请求函数：
+async function fetchPostPage(): Promise&lt;PageResult&lt;PostResponse&gt;&gt; { const response = await fetch(&#39;/api/posts&#39;) const result = await response.json() as ApiResponse&lt;PageResult&lt;PostResponse&gt;&gt; return result.data } 这里的 as 只是告诉 TypeScript 你期望的结构，不会校验真实响应。生产项目里如果接口不可信，需要运行时校验。
+三、响应模型到展示模型 不要把字段兜底散落在模板里。推荐写 mapper。
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/jsandts/02-typescript/07-%E6%8E%A5%E5%8F%A3%E5%93%8D%E5%BA%94%E8%A1%A8%E5%8D%95%E7%BB%84%E4%BB%B6props%E5%BB%BA%E6%A8%A1/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/jsandts/02-typescript/07-%E6%8E%A5%E5%8F%A3%E5%93%8D%E5%BA%94%E8%A1%A8%E5%8D%95%E7%BB%84%E4%BB%B6props%E5%BB%BA%E6%A8%A1/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="接口响应、表单和组件 Props 建模：让 TypeScript 进入真实业务">
+  <meta property="og:description" content="TypeScript 学到最后，一定要回到业务。会写 Partial、infer、keyof 只是工具，真正的问题是：接口返回的数据、页面展示的数据、表单编辑的数据和组件接收的数据，它们是不是同一个东西？
+很多项目类型混乱，不是因为语法不熟，而是因为这些边界没有分开。
+一、先区分四类模型 前端常见模型可以分成四类：
+模型 说明 接口响应模型 后端实际返回的数据 页面展示模型 页面渲染需要的数据 表单模型 用户正在编辑的数据 提交参数模型 最终发给后端的数据 它们有时长得很像，但不应该默认等同。
+例如文章详情：
+type PostResponse = { id: number title: string content: string | null author: { id: number name: string | null } | null like_count: number | null created_at: string } 页面展示模型可以更干净：
+type PostDetail = { id: number title: string content: string authorName: string likeCount: number createdAtText: string } 中间需要映射函数。
+二、接口响应泛型 统一响应结构：
+type ApiResponse&lt;T&gt; = { code: number message: string data: T } 分页结构：
+type PageResult&lt;T&gt; = { records: T[] total: number page: number pageSize: number } 组合：
+type PostPageResponse = ApiResponse&lt;PageResult&lt;PostResponse&gt;&gt; 请求函数：
+async function fetchPostPage(): Promise&lt;PageResult&lt;PostResponse&gt;&gt; { const response = await fetch(&#39;/api/posts&#39;) const result = await response.json() as ApiResponse&lt;PageResult&lt;PostResponse&gt;&gt; return result.data } 这里的 as 只是告诉 TypeScript 你期望的结构，不会校验真实响应。生产项目里如果接口不可信，需要运行时校验。
+三、响应模型到展示模型 不要把字段兜底散落在模板里。推荐写 mapper。">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="jsandts">
+    <meta property="article:published_time" content="2026-08-20T18:34:00+08:00">
+    <meta property="article:modified_time" content="2026-08-20T18:34:00+08:00">
+
+  
+  <meta itemprop="name" content="接口响应、表单和组件 Props 建模：让 TypeScript 进入真实业务">
+  <meta itemprop="description" content="TypeScript 学到最后，一定要回到业务。会写 Partial、infer、keyof 只是工具，真正的问题是：接口返回的数据、页面展示的数据、表单编辑的数据和组件接收的数据，它们是不是同一个东西？
+很多项目类型混乱，不是因为语法不熟，而是因为这些边界没有分开。
+一、先区分四类模型 前端常见模型可以分成四类：
+模型 说明 接口响应模型 后端实际返回的数据 页面展示模型 页面渲染需要的数据 表单模型 用户正在编辑的数据 提交参数模型 最终发给后端的数据 它们有时长得很像，但不应该默认等同。
+例如文章详情：
+type PostResponse = { id: number title: string content: string | null author: { id: number name: string | null } | null like_count: number | null created_at: string } 页面展示模型可以更干净：
+type PostDetail = { id: number title: string content: string authorName: string likeCount: number createdAtText: string } 中间需要映射函数。
+二、接口响应泛型 统一响应结构：
+type ApiResponse&lt;T&gt; = { code: number message: string data: T } 分页结构：
+type PageResult&lt;T&gt; = { records: T[] total: number page: number pageSize: number } 组合：
+type PostPageResponse = ApiResponse&lt;PageResult&lt;PostResponse&gt;&gt; 请求函数：
+async function fetchPostPage(): Promise&lt;PageResult&lt;PostResponse&gt;&gt; { const response = await fetch(&#39;/api/posts&#39;) const result = await response.json() as ApiResponse&lt;PageResult&lt;PostResponse&gt;&gt; return result.data } 这里的 as 只是告诉 TypeScript 你期望的结构，不会校验真实响应。生产项目里如果接口不可信，需要运行时校验。
+三、响应模型到展示模型 不要把字段兜底散落在模板里。推荐写 mapper。">
+  <meta itemprop="datePublished" content="2026-08-20T18:34:00+08:00">
+  <meta itemprop="dateModified" content="2026-08-20T18:34:00+08:00">
+  <meta itemprop="wordCount" content="732">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="接口响应、表单和组件 Props 建模：让 TypeScript 进入真实业务">
+  <meta name="twitter:description" content="TypeScript 学到最后，一定要回到业务。会写 Partial、infer、keyof 只是工具，真正的问题是：接口返回的数据、页面展示的数据、表单编辑的数据和组件接收的数据，它们是不是同一个东西？
+很多项目类型混乱，不是因为语法不熟，而是因为这些边界没有分开。
+一、先区分四类模型 前端常见模型可以分成四类：
+模型 说明 接口响应模型 后端实际返回的数据 页面展示模型 页面渲染需要的数据 表单模型 用户正在编辑的数据 提交参数模型 最终发给后端的数据 它们有时长得很像，但不应该默认等同。
+例如文章详情：
+type PostResponse = { id: number title: string content: string | null author: { id: number name: string | null } | null like_count: number | null created_at: string } 页面展示模型可以更干净：
+type PostDetail = { id: number title: string content: string authorName: string likeCount: number createdAtText: string } 中间需要映射函数。
+二、接口响应泛型 统一响应结构：
+type ApiResponse&lt;T&gt; = { code: number message: string data: T } 分页结构：
+type PageResult&lt;T&gt; = { records: T[] total: number page: number pageSize: number } 组合：
+type PostPageResponse = ApiResponse&lt;PageResult&lt;PostResponse&gt;&gt; 请求函数：
+async function fetchPostPage(): Promise&lt;PageResult&lt;PostResponse&gt;&gt; { const response = await fetch(&#39;/api/posts&#39;) const result = await response.json() as ApiResponse&lt;PageResult&lt;PostResponse&gt;&gt; return result.data } 这里的 as 只是告诉 TypeScript 你期望的结构，不会校验真实响应。生产项目里如果接口不可信，需要运行时校验。
+三、响应模型到展示模型 不要把字段兜底散落在模板里。推荐写 mapper。">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">接口响应、表单和组件 Props 建模：让 TypeScript 进入真实业务</h1>
+
+    
+      <div class="post-date">August 20, 2026</div>
+    
+
+    <div class="post-content">
+      <p>TypeScript 学到最后，一定要回到业务。会写 <code>Partial</code>、<code>infer</code>、<code>keyof</code> 只是工具，真正的问题是：接口返回的数据、页面展示的数据、表单编辑的数据和组件接收的数据，它们是不是同一个东西？</p>
+<p>很多项目类型混乱，不是因为语法不熟，而是因为这些边界没有分开。</p>
+<h2 id="一先区分四类模型">一、先区分四类模型</h2>
+<p>前端常见模型可以分成四类：</p>
+<table>
+  <thead>
+      <tr>
+          <th>模型</th>
+          <th>说明</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>接口响应模型</td>
+          <td>后端实际返回的数据</td>
+      </tr>
+      <tr>
+          <td>页面展示模型</td>
+          <td>页面渲染需要的数据</td>
+      </tr>
+      <tr>
+          <td>表单模型</td>
+          <td>用户正在编辑的数据</td>
+      </tr>
+      <tr>
+          <td>提交参数模型</td>
+          <td>最终发给后端的数据</td>
+      </tr>
+  </tbody>
+</table>
+<p>它们有时长得很像，但不应该默认等同。</p>
+<p>例如文章详情：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">PostResponse</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">id</span>: <span class="kt">number</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">title</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">content</span>: <span class="kt">string</span> <span class="o">|</span> <span class="kc">null</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">author</span><span class="o">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">id</span>: <span class="kt">number</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">name</span>: <span class="kt">string</span> <span class="o">|</span> <span class="kc">null</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span> <span class="o">|</span> <span class="kc">null</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">like_count</span>: <span class="kt">number</span> <span class="o">|</span> <span class="kc">null</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">created_at</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>页面展示模型可以更干净：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">PostDetail</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">id</span>: <span class="kt">number</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">title</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">content</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">authorName</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">likeCount</span>: <span class="kt">number</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">createdAtText</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>中间需要映射函数。</p>
+<h2 id="二接口响应泛型">二、接口响应泛型</h2>
+<p>统一响应结构：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">ApiResponse</span><span class="p">&lt;</span><span class="nt">T</span><span class="p">&gt;</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">code</span>: <span class="kt">number</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">message</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">data</span>: <span class="kt">T</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>分页结构：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">PageResult</span><span class="p">&lt;</span><span class="nt">T</span><span class="p">&gt;</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">records</span>: <span class="kt">T</span><span class="p">[]</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">total</span>: <span class="kt">number</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">page</span>: <span class="kt">number</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">pageSize</span>: <span class="kt">number</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>组合：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">PostPageResponse</span> <span class="o">=</span> <span class="nx">ApiResponse</span><span class="p">&lt;</span><span class="nt">PageResult</span><span class="p">&lt;</span><span class="nt">PostResponse</span><span class="p">&gt;&gt;</span>
+</span></span></code></pre></div><p>请求函数：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">async</span> <span class="kd">function</span> <span class="nx">fetchPostPage</span><span class="p">()</span><span class="o">:</span> <span class="nx">Promise</span><span class="p">&lt;</span><span class="nt">PageResult</span><span class="p">&lt;</span><span class="nt">PostResponse</span><span class="p">&gt;&gt;</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">const</span> <span class="nx">response</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">fetch</span><span class="p">(</span><span class="s1">&#39;/api/posts&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">const</span> <span class="nx">result</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">response</span><span class="p">.</span><span class="nx">json</span><span class="p">()</span> <span class="kr">as</span> <span class="nx">ApiResponse</span><span class="p">&lt;</span><span class="nt">PageResult</span><span class="p">&lt;</span><span class="nt">PostResponse</span><span class="p">&gt;&gt;</span>
+</span></span><span class="line"><span class="cl">  <span class="k">return</span> <span class="nx">result</span><span class="p">.</span><span class="nx">data</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>这里的 <code>as</code> 只是告诉 TypeScript 你期望的结构，不会校验真实响应。生产项目里如果接口不可信，需要运行时校验。</p>
+<h2 id="三响应模型到展示模型">三、响应模型到展示模型</h2>
+<p>不要把字段兜底散落在模板里。推荐写 mapper。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kd">function</span> <span class="nx">toPostDetail</span><span class="p">(</span><span class="nx">response</span>: <span class="kt">PostResponse</span><span class="p">)</span><span class="o">:</span> <span class="nx">PostDetail</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="k">return</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">id</span>: <span class="kt">response.id</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">title</span>: <span class="kt">response.title.trim</span><span class="p">()</span> <span class="o">||</span> <span class="s1">&#39;未命名文章&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">content</span>: <span class="kt">response.content</span> <span class="o">??</span> <span class="s1">&#39;&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">authorName</span>: <span class="kt">response.author?.name</span> <span class="o">??</span> <span class="s1">&#39;匿名用户&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">likeCount</span>: <span class="kt">response.like_count</span> <span class="o">??</span> <span class="mi">0</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">createdAtText</span>: <span class="kt">formatDate</span><span class="p">(</span><span class="nx">response</span><span class="p">.</span><span class="nx">created_at</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>好处：</p>
+<ul>
+<li>接口字段风格可以和页面字段风格分开。</li>
+<li>空值兜底集中处理。</li>
+<li>模板更干净。</li>
+<li>后端字段调整时有明确修改位置。</li>
+</ul>
+<p>这一步很朴素，却能让页面代码少很多噪音。</p>
+<h2 id="四列表项和详情不一定同型">四、列表项和详情不一定同型</h2>
+<p>列表通常不需要详情全部字段。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">PostListItemResponse</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">id</span>: <span class="kt">number</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">title</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">summary</span>: <span class="kt">string</span> <span class="o">|</span> <span class="kc">null</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">like_count</span>: <span class="kt">number</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">PostCard</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">id</span>: <span class="kt">number</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">title</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">summary</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">likeCountText</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>不要为了省事让列表使用 <code>PostDetail</code>。字段越多，依赖越重，后续越不敢改。</p>
+<h2 id="五表单模型">五、表单模型</h2>
+<p>表单模型描述用户正在编辑的数据。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">PostForm</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">title</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">content</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">tagIds</span>: <span class="kt">number</span><span class="p">[]</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">publishNow</span>: <span class="kt">boolean</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>提交参数可能不同：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">CreatePostRequest</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">title</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">content</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">tagIds</span>: <span class="kt">number</span><span class="p">[]</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">status</span><span class="o">:</span> <span class="s1">&#39;draft&#39;</span> <span class="o">|</span> <span class="s1">&#39;published&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>转换函数：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kd">function</span> <span class="nx">toCreatePostRequest</span><span class="p">(</span><span class="nx">form</span>: <span class="kt">PostForm</span><span class="p">)</span><span class="o">:</span> <span class="nx">CreatePostRequest</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="k">return</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">title</span>: <span class="kt">form.title.trim</span><span class="p">(),</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">content</span>: <span class="kt">form.content</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">tagIds</span>: <span class="kt">form.tagIds</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">status</span>: <span class="kt">form.publishNow</span> <span class="o">?</span> <span class="s1">&#39;published&#39;</span> <span class="o">:</span> <span class="s1">&#39;draft&#39;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>表单里的 <code>publishNow</code> 是 UI 字段，不一定应该原样提交给后端。</p>
+<h2 id="六新增和编辑表单">六、新增和编辑表单</h2>
+<p>新增和编辑可以共享一部分字段。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">PostEditableFields</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">title</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">content</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">tagIds</span>: <span class="kt">number</span><span class="p">[]</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">CreatePostRequest</span> <span class="o">=</span> <span class="nx">PostEditableFields</span> <span class="o">&amp;</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">status</span><span class="o">:</span> <span class="s1">&#39;draft&#39;</span> <span class="o">|</span> <span class="s1">&#39;published&#39;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">UpdatePostRequest</span> <span class="o">=</span> <span class="nx">Partial</span><span class="p">&lt;</span><span class="nt">PostEditableFields</span><span class="p">&gt;</span>
+</span></span></code></pre></div><p>编辑时常用局部更新，但不代表所有字段都可以随便缺失。是否使用 <code>Partial</code>，取决于后端接口语义。</p>
+<p>如果后端要求 PUT 全量更新，就不要用 <code>Partial</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">ReplacePostRequest</span> <span class="o">=</span> <span class="nx">PostEditableFields</span>
+</span></span></code></pre></div><h2 id="七请求状态建模">七、请求状态建模</h2>
+<p>页面请求不要只写一个 <code>loading</code>。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">LoadState</span><span class="p">&lt;</span><span class="nt">T</span><span class="p">&gt;</span> <span class="o">=</span>
+</span></span><span class="line"><span class="cl">  <span class="o">|</span> <span class="p">{</span> <span class="nx">status</span><span class="o">:</span> <span class="s1">&#39;idle&#39;</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="o">|</span> <span class="p">{</span> <span class="nx">status</span><span class="o">:</span> <span class="s1">&#39;loading&#39;</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="o">|</span> <span class="p">{</span> <span class="nx">status</span><span class="o">:</span> <span class="s1">&#39;success&#39;</span><span class="p">;</span> <span class="nx">data</span>: <span class="kt">T</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="o">|</span> <span class="p">{</span> <span class="nx">status</span><span class="o">:</span> <span class="s1">&#39;empty&#39;</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="o">|</span> <span class="p">{</span> <span class="nx">status</span><span class="o">:</span> <span class="s1">&#39;error&#39;</span><span class="p">;</span> <span class="nx">message</span>: <span class="kt">string</span> <span class="p">}</span>
+</span></span></code></pre></div><p>使用：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">PostPageState</span> <span class="o">=</span> <span class="nx">LoadState</span><span class="p">&lt;</span><span class="nt">PageResult</span><span class="p">&lt;</span><span class="nt">PostCard</span><span class="p">&gt;&gt;</span>
+</span></span></code></pre></div><p>渲染：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kd">function</span> <span class="nx">getPageText</span><span class="p">(</span><span class="nx">state</span>: <span class="kt">PostPageState</span><span class="p">)</span><span class="o">:</span> <span class="kt">string</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="k">switch</span> <span class="p">(</span><span class="nx">state</span><span class="p">.</span><span class="nx">status</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">case</span> <span class="s1">&#39;idle&#39;</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">      <span class="k">return</span> <span class="s1">&#39;尚未加载&#39;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">case</span> <span class="s1">&#39;loading&#39;</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">      <span class="k">return</span> <span class="s1">&#39;加载中&#39;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">case</span> <span class="s1">&#39;success&#39;</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">      <span class="k">return</span> <span class="sb">`共 </span><span class="si">${</span><span class="nx">state</span><span class="p">.</span><span class="nx">data</span><span class="p">.</span><span class="nx">total</span><span class="si">}</span><span class="sb"> 条`</span>
+</span></span><span class="line"><span class="cl">    <span class="k">case</span> <span class="s1">&#39;empty&#39;</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">      <span class="k">return</span> <span class="s1">&#39;暂无文章&#39;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">case</span> <span class="s1">&#39;error&#39;</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">      <span class="k">return</span> <span class="nx">state</span><span class="p">.</span><span class="nx">message</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>状态建模越清楚，页面条件判断越少互相打架。</p>
+<h2 id="八组件-props">八、组件 Props</h2>
+<p>组件 Props 应该表达组件真正依赖什么。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">UserCardProps</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">user</span><span class="o">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">id</span>: <span class="kt">number</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">name</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">avatarUrl?</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">size</span><span class="o">?:</span> <span class="s1">&#39;small&#39;</span> <span class="o">|</span> <span class="s1">&#39;medium&#39;</span> <span class="o">|</span> <span class="s1">&#39;large&#39;</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">showActions?</span>: <span class="kt">boolean</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>如果多个组件使用同一展示模型，可以抽类型：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">UserCardModel</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">id</span>: <span class="kt">number</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">name</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">avatarUrl?</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">UserCardProps</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">user</span>: <span class="kt">UserCardModel</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">size</span><span class="o">?:</span> <span class="s1">&#39;small&#39;</span> <span class="o">|</span> <span class="s1">&#39;medium&#39;</span> <span class="o">|</span> <span class="s1">&#39;large&#39;</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">showActions?</span>: <span class="kt">boolean</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>不要让组件直接依赖庞大的后端响应模型。组件需要什么，就给什么。</p>
+<h2 id="九vue-defineprops">九、Vue defineProps</h2>
+<p>Vue 组合式写法：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">ButtonProps</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">type</span><span class="o">?:</span> <span class="s1">&#39;primary&#39;</span> <span class="o">|</span> <span class="s1">&#39;default&#39;</span> <span class="o">|</span> <span class="s1">&#39;danger&#39;</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">loading?</span>: <span class="kt">boolean</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">disabled?</span>: <span class="kt">boolean</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">props</span> <span class="o">=</span> <span class="nx">withDefaults</span><span class="p">(</span><span class="nx">defineProps</span><span class="p">&lt;</span><span class="nt">ButtonProps</span><span class="p">&gt;(),</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="kr">type</span><span class="o">:</span> <span class="s1">&#39;default&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">loading</span>: <span class="kt">false</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">disabled</span>: <span class="kt">false</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span></code></pre></div><p>事件也可以建模：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">emit</span> <span class="o">=</span> <span class="nx">defineEmits</span><span class="o">&lt;</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">submit</span><span class="o">:</span> <span class="p">[</span><span class="nx">id</span>: <span class="kt">number</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">cancel</span><span class="o">:</span> <span class="p">[]</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span><span class="o">&gt;</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">emit</span><span class="p">(</span><span class="s1">&#39;submit&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">emit</span><span class="p">(</span><span class="s1">&#39;cancel&#39;</span><span class="p">)</span>
+</span></span></code></pre></div><p>事件名和参数都能被检查。</p>
+<h2 id="十表格列配置">十、表格列配置</h2>
+<p>表格列可以用泛型约束字段名。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">TableColumn</span><span class="p">&lt;</span><span class="nt">T</span><span class="p">&gt;</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">key</span>: <span class="kt">keyof</span> <span class="nx">T</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">title</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">width?</span>: <span class="kt">number</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">render</span><span class="o">?:</span> <span class="p">(</span><span class="nx">row</span>: <span class="kt">T</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="kt">string</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">PostCard</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">id</span>: <span class="kt">number</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">title</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">likeCount</span>: <span class="kt">number</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">columns</span>: <span class="kt">TableColumn</span><span class="p">&lt;</span><span class="nt">PostCard</span><span class="p">&gt;[]</span> <span class="o">=</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">  <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">key</span><span class="o">:</span> <span class="s1">&#39;title&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">title</span><span class="o">:</span> <span class="s1">&#39;标题&#39;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">},</span>
+</span></span><span class="line"><span class="cl">  <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">key</span><span class="o">:</span> <span class="s1">&#39;likeCount&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">title</span><span class="o">:</span> <span class="s1">&#39;点赞数&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">render</span>: <span class="kt">row</span> <span class="o">=&gt;</span> <span class="sb">`</span><span class="si">${</span><span class="nx">row</span><span class="p">.</span><span class="nx">likeCount</span><span class="si">}</span><span class="sb"> 个赞`</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">]</span>
+</span></span></code></pre></div><p>字段名写错时会报错。这种类型约束很适合重复出现的组件配置。</p>
+<h2 id="十一错误模型">十一、错误模型</h2>
+<p>错误也应该建模。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">ApiError</span> <span class="o">=</span>
+</span></span><span class="line"><span class="cl">  <span class="o">|</span> <span class="p">{</span> <span class="kr">type</span><span class="o">:</span> <span class="s1">&#39;unauthorized&#39;</span><span class="p">;</span> <span class="nx">message</span>: <span class="kt">string</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="o">|</span> <span class="p">{</span> <span class="kr">type</span><span class="o">:</span> <span class="s1">&#39;forbidden&#39;</span><span class="p">;</span> <span class="nx">message</span>: <span class="kt">string</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="o">|</span> <span class="p">{</span> <span class="kr">type</span><span class="o">:</span> <span class="s1">&#39;validation&#39;</span><span class="p">;</span> <span class="nx">fields</span>: <span class="kt">Record</span><span class="p">&lt;</span><span class="nt">string</span><span class="p">,</span> <span class="na">string</span><span class="p">&gt;</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="o">|</span> <span class="p">{</span> <span class="kr">type</span><span class="o">:</span> <span class="s1">&#39;network&#39;</span><span class="p">;</span> <span class="nx">message</span>: <span class="kt">string</span> <span class="p">}</span>
+</span></span></code></pre></div><p>处理：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kd">function</span> <span class="nx">getErrorText</span><span class="p">(</span><span class="nx">error</span>: <span class="kt">ApiError</span><span class="p">)</span><span class="o">:</span> <span class="kt">string</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="k">switch</span> <span class="p">(</span><span class="nx">error</span><span class="p">.</span><span class="kr">type</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">case</span> <span class="s1">&#39;unauthorized&#39;</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">      <span class="k">return</span> <span class="s1">&#39;登录已过期&#39;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">case</span> <span class="s1">&#39;forbidden&#39;</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">      <span class="k">return</span> <span class="s1">&#39;没有权限&#39;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">case</span> <span class="s1">&#39;validation&#39;</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">      <span class="k">return</span> <span class="nb">Object</span><span class="p">.</span><span class="nx">values</span><span class="p">(</span><span class="nx">error</span><span class="p">.</span><span class="nx">fields</span><span class="p">).</span><span class="nx">join</span><span class="p">(</span><span class="s1">&#39;，&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">case</span> <span class="s1">&#39;network&#39;</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">      <span class="k">return</span> <span class="nx">error</span><span class="p">.</span><span class="nx">message</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>把错误分清楚，页面才能做正确响应。所有错误都叫 <code>Error</code>，最后就只能统一弹一个“系统异常”，也算一种放弃思考。</p>
+<h2 id="十二目录组织">十二、目录组织</h2>
+<p>按领域组织类型：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">src/
+</span></span><span class="line"><span class="cl">  domains/
+</span></span><span class="line"><span class="cl">    post/
+</span></span><span class="line"><span class="cl">      post.model.ts
+</span></span><span class="line"><span class="cl">      post.api.ts
+</span></span><span class="line"><span class="cl">      post.mapper.ts
+</span></span><span class="line"><span class="cl">      post.state.ts
+</span></span><span class="line"><span class="cl">      components/
+</span></span><span class="line"><span class="cl">        PostCard.vue
+</span></span></code></pre></div><p><code>post.model.ts</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">export</span> <span class="kr">type</span> <span class="nx">PostResponse</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">id</span>: <span class="kt">number</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">title</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">export</span> <span class="kr">type</span> <span class="nx">PostCard</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">id</span>: <span class="kt">number</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">title</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p><code>post.mapper.ts</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">import</span> <span class="kr">type</span> <span class="p">{</span> <span class="nx">PostCard</span><span class="p">,</span> <span class="nx">PostResponse</span> <span class="p">}</span> <span class="kr">from</span> <span class="s1">&#39;./post.model&#39;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">export</span> <span class="kd">function</span> <span class="nx">toPostCard</span><span class="p">(</span><span class="nx">response</span>: <span class="kt">PostResponse</span><span class="p">)</span><span class="o">:</span> <span class="nx">PostCard</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="k">return</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">id</span>: <span class="kt">response.id</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">title</span>: <span class="kt">response.title.trim</span><span class="p">()</span> <span class="o">||</span> <span class="s1">&#39;未命名文章&#39;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>注意 <code>import type</code> 表示只导入类型，构建后不会产生运行时代码依赖。</p>
+<h2 id="十三建模检查清单">十三、建模检查清单</h2>
+<ul>
+<li>这是后端响应、页面展示、表单编辑，还是提交参数？</li>
+<li>字段名是否需要从下划线转换成驼峰？</li>
+<li>空值是否已经集中兜底？</li>
+<li>后端枚举值是否用字面量联合约束？</li>
+<li>页面状态是否能用判别联合表达？</li>
+<li>组件 Props 是否只包含组件真正需要的数据？</li>
+<li>是否把一个大类型传得到处都是？</li>
+<li>是否需要 mapper 把外部数据变成内部模型？</li>
+</ul>
+<h2 id="十四练习">十四、练习</h2>
+<p>给文章列表页建模：</p>
+<ul>
+<li>后端返回 <code>PostListItemResponse</code>，字段包括 <code>id</code>、<code>title</code>、<code>summary</code>、<code>like_count</code>、<code>created_at</code>。</li>
+<li>页面使用 <code>PostCard</code>，字段包括 <code>id</code>、<code>title</code>、<code>summary</code>、<code>likeCountText</code>、<code>createdAtText</code>。</li>
+<li>定义 <code>PageResult&lt;T&gt;</code>。</li>
+<li>定义 <code>LoadState&lt;T&gt;</code>。</li>
+<li>写 <code>toPostCard(response)</code>。</li>
+</ul>
+<p>参考：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-ts" data-lang="ts"><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">PostListItemResponse</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">id</span>: <span class="kt">number</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">title</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">summary</span>: <span class="kt">string</span> <span class="o">|</span> <span class="kc">null</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">like_count</span>: <span class="kt">number</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">created_at</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">type</span> <span class="nx">PostCard</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">id</span>: <span class="kt">number</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">title</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">summary</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">likeCountText</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">createdAtText</span>: <span class="kt">string</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">function</span> <span class="nx">toPostCard</span><span class="p">(</span><span class="nx">response</span>: <span class="kt">PostListItemResponse</span><span class="p">)</span><span class="o">:</span> <span class="nx">PostCard</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="k">return</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">id</span>: <span class="kt">response.id</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">title</span>: <span class="kt">response.title.trim</span><span class="p">()</span> <span class="o">||</span> <span class="s1">&#39;未命名文章&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">summary</span>: <span class="kt">response.summary</span> <span class="o">??</span> <span class="s1">&#39;暂无摘要&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">likeCountText</span><span class="o">:</span> <span class="sb">`</span><span class="si">${</span><span class="nx">response</span><span class="p">.</span><span class="nx">like_count</span><span class="si">}</span><span class="sb"> 个赞`</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">createdAtText</span>: <span class="kt">formatDate</span><span class="p">(</span><span class="nx">response</span><span class="p">.</span><span class="nx">created_at</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>真正的 TypeScript 工程能力，就是让类型贴着业务边界生长。类型不应该只证明“这段代码能编译”，还应该帮助你看清数据从哪里来、到哪里去、中间发生了什么变化。</p>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

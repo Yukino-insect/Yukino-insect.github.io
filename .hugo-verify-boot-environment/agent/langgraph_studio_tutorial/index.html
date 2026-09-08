@@ -1,0 +1,1764 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LangGraph Studio 教程：可视化调试 LangGraph Agent | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="当前日期：2026-08-16
+LangGraph Studio 是用于查看、运行、调试 LangGraph/Agent Server 应用的交互式界面。它不是画流程图哄人开心的装饰品，而是让你真正看到 graph 如何执行、thread 如何变化、assistant 如何配置、memory 如何读写的开发工具。对复杂 agent 来说，这比在终端里盯着一排日志要体面得多。虽然日志也有尊严，只是它不太会照顾人类眼睛。
+目录 LangGraph Studio 在 LangChain 中的作用 它解决的问题和满足的需求 Studio、LangSmith、LangGraph Server 的关系 基础使用步骤：连接本地 graph 基础使用步骤：运行、查看和调试 进阶使用步骤：threads、assistants、memory 进阶使用步骤：断点、热重载、远程连接 Studio 调试 LangGraph 的典型流程 常见问题 总结 参考资料 1. LangGraph Studio 在 LangChain 中的作用 LangGraph Studio 位于 LangGraph 开发与 LangSmith 平台之间。它连接一个正在运行的 Agent Server，然后提供可视化界面，让你与 graph 交互。
+它可以连接两类 graph：
+类型 说明 本地 graph 通过 langgraph dev 启动的本地 Agent Server 已部署 graph 在 LangSmith Deployment 或自托管环境中运行的 Agent Server 它的核心作用：
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/agent/langgraph_studio_tutorial/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/agent/langgraph_studio_tutorial/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="LangGraph Studio 教程：可视化调试 LangGraph Agent">
+  <meta property="og:description" content="当前日期：2026-08-16
+LangGraph Studio 是用于查看、运行、调试 LangGraph/Agent Server 应用的交互式界面。它不是画流程图哄人开心的装饰品，而是让你真正看到 graph 如何执行、thread 如何变化、assistant 如何配置、memory 如何读写的开发工具。对复杂 agent 来说，这比在终端里盯着一排日志要体面得多。虽然日志也有尊严，只是它不太会照顾人类眼睛。
+目录 LangGraph Studio 在 LangChain 中的作用 它解决的问题和满足的需求 Studio、LangSmith、LangGraph Server 的关系 基础使用步骤：连接本地 graph 基础使用步骤：运行、查看和调试 进阶使用步骤：threads、assistants、memory 进阶使用步骤：断点、热重载、远程连接 Studio 调试 LangGraph 的典型流程 常见问题 总结 参考资料 1. LangGraph Studio 在 LangChain 中的作用 LangGraph Studio 位于 LangGraph 开发与 LangSmith 平台之间。它连接一个正在运行的 Agent Server，然后提供可视化界面，让你与 graph 交互。
+它可以连接两类 graph：
+类型 说明 本地 graph 通过 langgraph dev 启动的本地 Agent Server 已部署 graph 在 LangSmith Deployment 或自托管环境中运行的 Agent Server 它的核心作用：">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="agent">
+    <meta property="article:published_time" content="2026-08-16T23:44:58+08:00">
+    <meta property="article:modified_time" content="2026-08-16T23:44:58+08:00">
+
+  
+  <meta itemprop="name" content="LangGraph Studio 教程：可视化调试 LangGraph Agent">
+  <meta itemprop="description" content="当前日期：2026-08-16
+LangGraph Studio 是用于查看、运行、调试 LangGraph/Agent Server 应用的交互式界面。它不是画流程图哄人开心的装饰品，而是让你真正看到 graph 如何执行、thread 如何变化、assistant 如何配置、memory 如何读写的开发工具。对复杂 agent 来说，这比在终端里盯着一排日志要体面得多。虽然日志也有尊严，只是它不太会照顾人类眼睛。
+目录 LangGraph Studio 在 LangChain 中的作用 它解决的问题和满足的需求 Studio、LangSmith、LangGraph Server 的关系 基础使用步骤：连接本地 graph 基础使用步骤：运行、查看和调试 进阶使用步骤：threads、assistants、memory 进阶使用步骤：断点、热重载、远程连接 Studio 调试 LangGraph 的典型流程 常见问题 总结 参考资料 1. LangGraph Studio 在 LangChain 中的作用 LangGraph Studio 位于 LangGraph 开发与 LangSmith 平台之间。它连接一个正在运行的 Agent Server，然后提供可视化界面，让你与 graph 交互。
+它可以连接两类 graph：
+类型 说明 本地 graph 通过 langgraph dev 启动的本地 Agent Server 已部署 graph 在 LangSmith Deployment 或自托管环境中运行的 Agent Server 它的核心作用：">
+  <meta itemprop="datePublished" content="2026-08-16T23:44:58+08:00">
+  <meta itemprop="dateModified" content="2026-08-16T23:44:58+08:00">
+  <meta itemprop="wordCount" content="1161">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="LangGraph Studio 教程：可视化调试 LangGraph Agent">
+  <meta name="twitter:description" content="当前日期：2026-08-16
+LangGraph Studio 是用于查看、运行、调试 LangGraph/Agent Server 应用的交互式界面。它不是画流程图哄人开心的装饰品，而是让你真正看到 graph 如何执行、thread 如何变化、assistant 如何配置、memory 如何读写的开发工具。对复杂 agent 来说，这比在终端里盯着一排日志要体面得多。虽然日志也有尊严，只是它不太会照顾人类眼睛。
+目录 LangGraph Studio 在 LangChain 中的作用 它解决的问题和满足的需求 Studio、LangSmith、LangGraph Server 的关系 基础使用步骤：连接本地 graph 基础使用步骤：运行、查看和调试 进阶使用步骤：threads、assistants、memory 进阶使用步骤：断点、热重载、远程连接 Studio 调试 LangGraph 的典型流程 常见问题 总结 参考资料 1. LangGraph Studio 在 LangChain 中的作用 LangGraph Studio 位于 LangGraph 开发与 LangSmith 平台之间。它连接一个正在运行的 Agent Server，然后提供可视化界面，让你与 graph 交互。
+它可以连接两类 graph：
+类型 说明 本地 graph 通过 langgraph dev 启动的本地 Agent Server 已部署 graph 在 LangSmith Deployment 或自托管环境中运行的 Agent Server 它的核心作用：">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">LangGraph Studio 教程：可视化调试 LangGraph Agent</h1>
+
+    
+      <div class="post-date">August 16, 2026</div>
+    
+
+    <div class="post-content">
+      <p>当前日期：2026-08-16</p>
+<p>LangGraph Studio 是用于查看、运行、调试 LangGraph/Agent Server 应用的交互式界面。它不是画流程图哄人开心的装饰品，而是让你真正看到 graph 如何执行、thread 如何变化、assistant 如何配置、memory 如何读写的开发工具。对复杂 agent 来说，这比在终端里盯着一排日志要体面得多。虽然日志也有尊严，只是它不太会照顾人类眼睛。</p>
+<h2 id="目录">目录</h2>
+<ol>
+<li>LangGraph Studio 在 LangChain 中的作用</li>
+<li>它解决的问题和满足的需求</li>
+<li>Studio、LangSmith、LangGraph Server 的关系</li>
+<li>基础使用步骤：连接本地 graph</li>
+<li>基础使用步骤：运行、查看和调试</li>
+<li>进阶使用步骤：threads、assistants、memory</li>
+<li>进阶使用步骤：断点、热重载、远程连接</li>
+<li>Studio 调试 LangGraph 的典型流程</li>
+<li>常见问题</li>
+<li>总结</li>
+<li>参考资料</li>
+</ol>
+<h2 id="1-langgraph-studio-在-langchain-中的作用">1. LangGraph Studio 在 LangChain 中的作用</h2>
+<p>LangGraph Studio 位于 LangGraph 开发与 LangSmith 平台之间。它连接一个正在运行的 Agent Server，然后提供可视化界面，让你与 graph 交互。</p>
+<p>它可以连接两类 graph：</p>
+<table>
+  <thead>
+      <tr>
+          <th>类型</th>
+          <th>说明</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>本地 graph</td>
+          <td>通过 <code>langgraph dev</code> 启动的本地 Agent Server</td>
+      </tr>
+      <tr>
+          <td>已部署 graph</td>
+          <td>在 LangSmith Deployment 或自托管环境中运行的 Agent Server</td>
+      </tr>
+  </tbody>
+</table>
+<p>它的核心作用：</p>
+<ol>
+<li>运行 graph。</li>
+<li>查看 graph 执行过程。</li>
+<li>调试输入、输出、状态变化。</li>
+<li>管理和查看 threads。</li>
+<li>查看 assistants 配置。</li>
+<li>调试 memory 和 store。</li>
+<li>与 LangSmith traces 联动分析。</li>
+</ol>
+<h2 id="2-它解决的问题和满足的需求">2. 它解决的问题和满足的需求</h2>
+<p>复杂 agent 的问题通常不在“某一行代码明显写错”，而在流程里：</p>
+<ol>
+<li>某个节点返回的 state 少了字段。</li>
+<li>reducer 合并状态不符合预期。</li>
+<li>条件边跳错。</li>
+<li>工具调用参数被模型生成坏了。</li>
+<li>中断和恢复逻辑不清楚。</li>
+<li>多轮 thread 里历史消息污染了当前请求。</li>
+<li>memory 写入了不该写的内容。</li>
+</ol>
+<p>Studio 解决的就是这些“流程不可见”的问题。</p>
+<table>
+  <thead>
+      <tr>
+          <th>问题</th>
+          <th>Studio 的价值</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>graph 结构看不清</td>
+          <td>可视化 graph 与运行入口</td>
+      </tr>
+      <tr>
+          <td>state 变化不透明</td>
+          <td>查看运行时输入输出</td>
+      </tr>
+      <tr>
+          <td>多轮会话难复现</td>
+          <td>使用 thread 保留上下文</td>
+      </tr>
+      <tr>
+          <td>assistant 配置难管理</td>
+          <td>查看和切换 assistant</td>
+      </tr>
+      <tr>
+          <td>本地与部署环境割裂</td>
+          <td>同一 UI 可连本地或远程服务</td>
+      </tr>
+      <tr>
+          <td>只靠日志效率低</td>
+          <td>交互式运行和观察</td>
+      </tr>
+  </tbody>
+</table>
+<h2 id="3-studiolangsmithlanggraph-server-的关系">3. Studio、LangSmith、LangGraph Server 的关系</h2>
+<p>三者关系可以这样理解：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">LangGraph 代码
+</span></span><span class="line"><span class="cl">  -&gt; 通过 LangGraph CLI 启动为 Agent Server
+</span></span><span class="line"><span class="cl">  -&gt; LangGraph Studio 连接这个 Server 进行交互式调试
+</span></span><span class="line"><span class="cl">  -&gt; LangSmith 记录 traces、评测和监控
+</span></span></code></pre></div><p>更具体一点：</p>
+<table>
+  <thead>
+      <tr>
+          <th>组件</th>
+          <th>角色</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>LangGraph</td>
+          <td>定义 agent 的状态、节点、边、工具调用和控制流</td>
+      </tr>
+      <tr>
+          <td>LangGraph CLI</td>
+          <td>启动本地 Agent Server，如 <code>langgraph dev</code></td>
+      </tr>
+      <tr>
+          <td>Agent Server</td>
+          <td>暴露 assistants、threads、runs、store 等 API</td>
+      </tr>
+      <tr>
+          <td>Studio</td>
+          <td>连接 Agent Server，提供可视化运行和调试</td>
+      </tr>
+      <tr>
+          <td>LangSmith</td>
+          <td>保存 traces、experiments、feedback、evaluations</td>
+      </tr>
+  </tbody>
+</table>
+<p>Studio 不是单独运行 graph 的后端。它需要一个 Agent Server。这个 Server 可以在你本机，也可以在部署环境里。</p>
+<h2 id="4-基础使用步骤连接本地-graph">4. 基础使用步骤：连接本地 graph</h2>
+<h3 id="41-安装-langgraph-cli">4.1 安装 LangGraph CLI</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-powershell" data-lang="powershell"><span class="line"><span class="cl"><span class="n">pip</span> <span class="n">install</span> <span class="n">-U</span> <span class="s2">&#34;langgraph-cli[inmem]&#34;</span>
+</span></span></code></pre></div><p>验证：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-powershell" data-lang="powershell"><span class="line"><span class="cl"><span class="n">langgraph</span> <span class="p">-</span><span class="n">-help</span>
+</span></span></code></pre></div><h3 id="42-创建示例应用">4.2 创建示例应用</h3>
+<p>这里我们简单写一个示例：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="c1"># example_langgraph.py</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Literal</span><span class="p">,</span> <span class="n">TypedDict</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">from</span> <span class="nn">langgraph.graph</span> <span class="kn">import</span> <span class="n">StateGraph</span><span class="p">,</span> <span class="n">START</span><span class="p">,</span> <span class="n">END</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">ResearchState</span><span class="p">(</span><span class="n">TypedDict</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">    <span class="s2">&#34;&#34;&#34;
+</span></span></span><span class="line"><span class="cl"><span class="s2">    LangGraph 的 State。
+</span></span></span><span class="line"><span class="cl"><span class="s2">    每个节点都会读取这个状态，并返回一部分状态更新。
+</span></span></span><span class="line"><span class="cl"><span class="s2">    &#34;&#34;&#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">topic</span><span class="p">:</span> <span class="nb">str</span>
+</span></span><span class="line"><span class="cl">    <span class="n">plan</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">    <span class="n">current_step</span><span class="p">:</span> <span class="nb">int</span>
+</span></span><span class="line"><span class="cl">    <span class="n">notes</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">    <span class="n">final_answer</span><span class="p">:</span> <span class="nb">str</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">def</span> <span class="nf">plan_node</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">ResearchState</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="s2">&#34;&#34;&#34;
+</span></span></span><span class="line"><span class="cl"><span class="s2">    第一个节点：根据用户输入生成一个简单计划。
+</span></span></span><span class="line"><span class="cl"><span class="s2">    这里为了示例，不调用 LLM。
+</span></span></span><span class="line"><span class="cl"><span class="s2">    &#34;&#34;&#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">topic</span> <span class="o">=</span> <span class="n">state</span><span class="p">[</span><span class="s2">&#34;topic&#34;</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="s2">&#34;plan&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">            <span class="sa">f</span><span class="s2">&#34;了解 </span><span class="si">{</span><span class="n">topic</span><span class="si">}</span><span class="s2"> 的基本概念&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">            <span class="sa">f</span><span class="s2">&#34;总结 </span><span class="si">{</span><span class="n">topic</span><span class="si">}</span><span class="s2"> 的核心用途&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">            <span class="sa">f</span><span class="s2">&#34;给出一个 </span><span class="si">{</span><span class="n">topic</span><span class="si">}</span><span class="s2"> 的实践建议&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="p">],</span>
+</span></span><span class="line"><span class="cl">        <span class="s2">&#34;current_step&#34;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="s2">&#34;notes&#34;</span><span class="p">:</span> <span class="p">[],</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">def</span> <span class="nf">execute_node</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">ResearchState</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="s2">&#34;&#34;&#34;
+</span></span></span><span class="line"><span class="cl"><span class="s2">    第二个节点：执行当前步骤。
+</span></span></span><span class="line"><span class="cl"><span class="s2">    这里模拟执行，把结果写入 notes。
+</span></span></span><span class="line"><span class="cl"><span class="s2">    &#34;&#34;&#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">step_index</span> <span class="o">=</span> <span class="n">state</span><span class="p">[</span><span class="s2">&#34;current_step&#34;</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">    <span class="n">step</span> <span class="o">=</span> <span class="n">state</span><span class="p">[</span><span class="s2">&#34;plan&#34;</span><span class="p">][</span><span class="n">step_index</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">new_note</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&#34;步骤 </span><span class="si">{</span><span class="n">step_index</span> <span class="o">+</span> <span class="mi">1</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">step</span><span class="si">}</span><span class="s2">。这是该步骤的模拟结果。&#34;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="s2">&#34;current_step&#34;</span><span class="p">:</span> <span class="n">step_index</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="s2">&#34;notes&#34;</span><span class="p">:</span> <span class="n">state</span><span class="p">[</span><span class="s2">&#34;notes&#34;</span><span class="p">]</span> <span class="o">+</span> <span class="p">[</span><span class="n">new_note</span><span class="p">],</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">def</span> <span class="nf">route_after_execute</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">ResearchState</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&#34;execute&#34;</span><span class="p">,</span> <span class="s2">&#34;summarize&#34;</span><span class="p">]:</span>
+</span></span><span class="line"><span class="cl">    <span class="s2">&#34;&#34;&#34;
+</span></span></span><span class="line"><span class="cl"><span class="s2">    条件路由函数：
+</span></span></span><span class="line"><span class="cl"><span class="s2">    如果还有步骤没执行，就继续回到 execute；
+</span></span></span><span class="line"><span class="cl"><span class="s2">    如果计划完成，就进入 summarize。
+</span></span></span><span class="line"><span class="cl"><span class="s2">    &#34;&#34;&#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="n">state</span><span class="p">[</span><span class="s2">&#34;current_step&#34;</span><span class="p">]</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">state</span><span class="p">[</span><span class="s2">&#34;plan&#34;</span><span class="p">]):</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="s2">&#34;execute&#34;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="s2">&#34;summarize&#34;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">def</span> <span class="nf">summarize_node</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">ResearchState</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="s2">&#34;&#34;&#34;
+</span></span></span><span class="line"><span class="cl"><span class="s2">    最后一个节点：汇总所有 notes，生成最终答案。
+</span></span></span><span class="line"><span class="cl"><span class="s2">    &#34;&#34;&#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">notes_text</span> <span class="o">=</span> <span class="s2">&#34;</span><span class="se">\n</span><span class="s2">&#34;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">state</span><span class="p">[</span><span class="s2">&#34;notes&#34;</span><span class="p">])</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">final_answer</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&#34;&#34;&#34;
+</span></span></span><span class="line"><span class="cl"><span class="s2">关于「</span><span class="si">{</span><span class="n">state</span><span class="p">[</span><span class="s2">&#34;topic&#34;</span><span class="p">]</span><span class="si">}</span><span class="s2">」的简要研究结果：
+</span></span></span><span class="line"><span class="cl"><span class="s2">
+</span></span></span><span class="line"><span class="cl"><span class="s2"></span><span class="si">{</span><span class="n">notes_text</span><span class="si">}</span><span class="s2">
+</span></span></span><span class="line"><span class="cl"><span class="s2">
+</span></span></span><span class="line"><span class="cl"><span class="s2">结论：
+</span></span></span><span class="line"><span class="cl"><span class="s2"></span><span class="si">{</span><span class="n">state</span><span class="p">[</span><span class="s2">&#34;topic&#34;</span><span class="p">]</span><span class="si">}</span><span class="s2"> 适合用在需要“状态流转、条件分支、循环执行、多步骤协作”的场景。
+</span></span></span><span class="line"><span class="cl"><span class="s2">&#34;&#34;&#34;</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="s2">&#34;final_answer&#34;</span><span class="p">:</span> <span class="n">final_answer</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="s2">&#34;&#34;&#34;
+</span></span></span><span class="line"><span class="cl"><span class="s2">构建 LangGraph 工作流。
+</span></span></span><span class="line"><span class="cl"><span class="s2">&#34;&#34;&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="n">graph_builder</span> <span class="o">=</span> <span class="n">StateGraph</span><span class="p">(</span><span class="n">ResearchState</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">graph_builder</span><span class="o">.</span><span class="n">add_node</span><span class="p">(</span><span class="s2">&#34;plan&#34;</span><span class="p">,</span> <span class="n">plan_node</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="n">graph_builder</span><span class="o">.</span><span class="n">add_node</span><span class="p">(</span><span class="s2">&#34;execute&#34;</span><span class="p">,</span> <span class="n">execute_node</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="n">graph_builder</span><span class="o">.</span><span class="n">add_node</span><span class="p">(</span><span class="s2">&#34;summarize&#34;</span><span class="p">,</span> <span class="n">summarize_node</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">graph_builder</span><span class="o">.</span><span class="n">add_edge</span><span class="p">(</span><span class="n">START</span><span class="p">,</span> <span class="s2">&#34;plan&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="n">graph_builder</span><span class="o">.</span><span class="n">add_edge</span><span class="p">(</span><span class="s2">&#34;plan&#34;</span><span class="p">,</span> <span class="s2">&#34;execute&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">graph_builder</span><span class="o">.</span><span class="n">add_conditional_edges</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="s2">&#34;execute&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">route_after_execute</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="s2">&#34;execute&#34;</span><span class="p">:</span> <span class="s2">&#34;execute&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="s2">&#34;summarize&#34;</span><span class="p">:</span> <span class="s2">&#34;summarize&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="p">},</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">graph_builder</span><span class="o">.</span><span class="n">add_edge</span><span class="p">(</span><span class="s2">&#34;summarize&#34;</span><span class="p">,</span> <span class="n">END</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">graph</span> <span class="o">=</span> <span class="n">graph_builder</span><span class="o">.</span><span class="n">compile</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">result</span> <span class="o">=</span> <span class="n">graph</span><span class="o">.</span><span class="n">invoke</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="s2">&#34;topic&#34;</span><span class="p">:</span> <span class="s2">&#34;LangGraph&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="s2">&#34;plan&#34;</span><span class="p">:</span> <span class="p">[],</span>
+</span></span><span class="line"><span class="cl">        <span class="s2">&#34;current_step&#34;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="s2">&#34;notes&#34;</span><span class="p">:</span> <span class="p">[],</span>
+</span></span><span class="line"><span class="cl">        <span class="s2">&#34;final_answer&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nb">print</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="s2">&#34;final_answer&#34;</span><span class="p">])</span>
+</span></span></code></pre></div><h3 id="43-配置-env">4.3 配置 <code>.env</code></h3>
+<p>在 <code>.env</code> 文件中写入类似内容：</p>
+<pre tabindex="0"><code class="language-dotenv" data-lang="dotenv">OPENAI_API_KEY=sk-...
+LANGSMITH_API_KEY=lsv2_...
+LANGSMITH_TRACING=true
+LANGSMITH_PROJECT=studio-demo
+</code></pre><blockquote>
+<p>我们上面的示例没有用到真正的大模型</p></blockquote>
+<p>如果你只是本地试 Studio，不希望 trace 数据发送到 LangSmith：</p>
+<pre tabindex="0"><code class="language-dotenv" data-lang="dotenv">LANGSMITH_TRACING=false
+</code></pre><h3 id="44-启动-agent-server">4.4 启动 Agent Server</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-powershell" data-lang="powershell"><span class="line"><span class="cl"><span class="n">langgraph</span> <span class="n">dev</span>
+</span></span></code></pre></div><p>正常启动后通常会看到：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">API: http://127.0.0.1:2024
+</span></span><span class="line"><span class="cl">Docs: http://127.0.0.1:2024/docs
+</span></span><span class="line"><span class="cl">Studio: https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024
+</span></span></code></pre></div><p>浏览器会自动打开 Studio。如果没有自动打开，手动访问：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024
+</span></span></code></pre></div><blockquote>
+<p>如果用的是 window 的话，可能出现以下问题：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">UnicodeDecodeError: <span class="s1">&#39;gbk&#39;</span> codec can<span class="err">&#39;</span>t decode byte 0x94 in position 1660: illegal multibyte sequence
+</span></span></code></pre></div><p>这是因为 LangGraph 的开发服务器在启动时读取某个 OpenAPI 文件，Python 在 Windows 上默认用 <code>gbk</code> 编码打开文本文件，但那个文件实际更像是 <code>utf-8</code> 编码，于是读取失败。</p>
+<p>最简单的解决方式是在当前 PowerShell 里启用 Python UTF-8 模式：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-powershell" data-lang="powershell"><span class="line"><span class="cl"><span class="nv">$env:PYTHONUTF8</span> <span class="p">=</span> <span class="s2">&#34;1&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="n">langgraph</span> <span class="n">dev</span>
+</span></span></code></pre></div></blockquote>
+<h3 id="45-safari-或-localhost-连接问题">4.5 Safari 或 localhost 连接问题</h3>
+<p>某些浏览器或网络环境可能限制 Studio 访问 localhost。可以使用 tunnel：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-powershell" data-lang="powershell"><span class="line"><span class="cl"><span class="n">langgraph</span> <span class="n">dev</span> <span class="p">-</span><span class="n">-tunnel</span>
+</span></span></code></pre></div><p>然后在 Studio 中把 tunnel URL 加到允许连接的本地服务里。</p>
+<h2 id="5-基础使用步骤运行查看和调试">5. 基础使用步骤：运行、查看和调试</h2>
+<h3 id="51-选择-graph">5.1 选择 graph</h3>
+<p>Studio 连接到 Server 后，会读取 <code>langgraph.json</code> 中声明的 graph。</p>
+<p>示例：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;$schema&#34;</span><span class="p">:</span> <span class="s2">&#34;https://langgra.ph/schema.json&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;dependencies&#34;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&#34;.&#34;</span><span class="p">],</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;graphs&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;agent&#34;</span><span class="p">:</span> <span class="s2">&#34;./graph_test.py:graph&#34;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">},</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;env&#34;</span><span class="p">:</span> <span class="s2">&#34;.env&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>如果你有多个 graph：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;$schema&#34;</span><span class="p">:</span> <span class="s2">&#34;https://langgra.ph/schema.json&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;dependencies&#34;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&#34;.&#34;</span><span class="p">],</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;graphs&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;chat&#34;</span><span class="p">:</span> <span class="s2">&#34;./agent/chat.py:graph&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;research&#34;</span><span class="p">:</span> <span class="s2">&#34;./agent/research.py:graph&#34;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">},</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;env&#34;</span><span class="p">:</span> <span class="s2">&#34;.env&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>Studio 会让你选择要调试哪个 graph。</p>
+<h3 id="52-输入测试数据">5.2 输入测试数据</h3>
+<p>聊天类 graph 常见输入：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;messages&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;role&#34;</span><span class="p">:</span> <span class="s2">&#34;user&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;content&#34;</span><span class="p">:</span> <span class="s2">&#34;请用三句话解释 LangGraph Studio。&#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">]</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>我们编写的状态类 graph 输入是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;topic&#34;</span><span class="p">:</span> <span class="s2">&#34;LangGraph&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;plan&#34;</span><span class="p">:</span> <span class="p">[],</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;current_step&#34;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;notes&#34;</span><span class="p">:</span> <span class="p">[],</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;final_answer&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>输入格式必须匹配你的 state schema。Studio 不会替你猜测业务含义；它只是把不匹配诚实地暴露出来。说起来，这已经比很多人类同事仁慈。</p>
+<h3 id="53-查看节点执行">5.3 查看节点执行</h3>
+<p>运行后重点观察：</p>
+<ol>
+<li>哪些节点执行了。</li>
+<li>节点执行顺序是否符合预期。</li>
+<li>每个节点输入是什么。</li>
+<li>每个节点输出是什么。</li>
+<li>state 是否被正确合并。</li>
+<li>条件边是否跳到正确节点。</li>
+<li>是否出现异常。</li>
+</ol>
+<h3 id="54-查看-messages">5.4 查看 messages</h3>
+<p>聊天 agent 通常把消息保存在 <code>messages</code> 字段。你要确认：</p>
+<ol>
+<li>system prompt 是否存在。</li>
+<li>user message 是否正确。</li>
+<li>tool message 是否和 tool call 对应。</li>
+<li>AI message 是否携带 tool_calls。</li>
+<li>最终回答是否落在预期字段。</li>
+</ol>
+<h3 id="55-与-langsmith-trace-对照">5.5 与 LangSmith trace 对照</h3>
+<p>Studio 适合看 graph 运行与状态；LangSmith trace 适合看更细的模型、工具、检索、耗时和错误。调试时建议两边一起看：</p>
+<table>
+  <thead>
+      <tr>
+          <th>想看什么</th>
+          <th>更适合用</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>graph 节点怎么跳</td>
+          <td>Studio</td>
+      </tr>
+      <tr>
+          <td>state 怎么变化</td>
+          <td>Studio</td>
+      </tr>
+      <tr>
+          <td>模型看到的 prompt</td>
+          <td>LangSmith trace</td>
+      </tr>
+      <tr>
+          <td>工具调用参数</td>
+          <td>LangSmith trace 或 Studio</td>
+      </tr>
+      <tr>
+          <td>token、latency、error</td>
+          <td>LangSmith trace</td>
+      </tr>
+      <tr>
+          <td>多版本评测</td>
+          <td>LangSmith Evaluation</td>
+      </tr>
+  </tbody>
+</table>
+<h2 id="6-进阶使用步骤threadsassistantsmemory">6. 进阶使用步骤：threads、assistants、memory</h2>
+<h3 id="61-thread">6.1 Thread</h3>
+<p>Thread 表示一次多轮会话。Agent Server 会把每轮 run 与 thread 关联起来。</p>
+<p>适合调试：</p>
+<ol>
+<li>多轮上下文是否保留。</li>
+<li>上一轮工具结果是否影响下一轮。</li>
+<li>checkpoint 是否正确恢复。</li>
+<li>memory 是否被错误写入或读取。</li>
+</ol>
+<p>示例问题：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">第一轮：请记住我正在学习 LangGraph。
+</span></span><span class="line"><span class="cl">第二轮：我刚才说我在学什么？
+</span></span></code></pre></div><p>如果第二轮答不出来，可能是：</p>
+<ol>
+<li>graph 没有 checkpoint。</li>
+<li>thread 没有复用。</li>
+<li>state schema 没保存消息。</li>
+<li>memory 和 short-term state 混淆。</li>
+</ol>
+<h3 id="62-assistant">6.2 Assistant</h3>
+<p>Assistant 可以理解为 graph 的一个配置实例。一个 graph 可以有多个 assistant，每个 assistant 可以有不同配置。</p>
+<p>例如同一个 research graph：</p>
+<table>
+  <thead>
+      <tr>
+          <th>Assistant</th>
+          <th>配置</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>fast-researcher</code></td>
+          <td>小模型、低搜索深度</td>
+      </tr>
+      <tr>
+          <td><code>deep-researcher</code></td>
+          <td>大模型、高搜索深度</td>
+      </tr>
+      <tr>
+          <td><code>cn-writer</code></td>
+          <td>中文输出风格</td>
+      </tr>
+      <tr>
+          <td><code>strict-json</code></td>
+          <td>强制结构化输出</td>
+      </tr>
+  </tbody>
+</table>
+<p>Studio 中切换 assistant，可以帮助你比较不同配置下 graph 的行为。</p>
+<h3 id="63-memory-与-store">6.3 Memory 与 Store</h3>
+<p>LangGraph/Agent Server 中经常区分：</p>
+<table>
+  <thead>
+      <tr>
+          <th>类型</th>
+          <th>含义</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Thread state</td>
+          <td>某个会话内的短期状态</td>
+      </tr>
+      <tr>
+          <td>Checkpoint</td>
+          <td>用于恢复 graph 执行的状态快照</td>
+      </tr>
+      <tr>
+          <td>Store</td>
+          <td>跨 thread 或长期保存的数据</td>
+      </tr>
+      <tr>
+          <td>Semantic memory</td>
+          <td>可向量检索的长期记忆</td>
+      </tr>
+  </tbody>
+</table>
+<p>Studio 可以辅助你检查 memory 是否符合预期。尤其要注意：</p>
+<ol>
+<li>不要把敏感信息写入长期记忆。</li>
+<li>不要把临时工具结果当成长期事实。</li>
+<li>不要让旧记忆覆盖用户当前明确指令。</li>
+<li>对 memory 加 metadata，便于筛选和删除。</li>
+</ol>
+<h3 id="64-store-配置示例">6.4 Store 配置示例</h3>
+<p><code>langgraph.json</code> 中可以配置 semantic search：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;$schema&#34;</span><span class="p">:</span> <span class="s2">&#34;https://langgra.ph/schema.json&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;dependencies&#34;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&#34;.&#34;</span><span class="p">],</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;graphs&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;memory_agent&#34;</span><span class="p">:</span> <span class="s2">&#34;./agent/graph.py:graph&#34;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">},</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;store&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;index&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;embed&#34;</span><span class="p">:</span> <span class="s2">&#34;openai:text-embedding-3-small&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;dims&#34;</span><span class="p">:</span> <span class="mi">1536</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;fields&#34;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&#34;$&#34;</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>也可以配置 TTL：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;$schema&#34;</span><span class="p">:</span> <span class="s2">&#34;https://langgra.ph/schema.json&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;dependencies&#34;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&#34;.&#34;</span><span class="p">],</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;graphs&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;memory_agent&#34;</span><span class="p">:</span> <span class="s2">&#34;./agent/graph.py:graph&#34;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">},</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;store&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;ttl&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;refresh_on_read&#34;</span><span class="p">:</span> <span class="kc">true</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;sweep_interval_minutes&#34;</span><span class="p">:</span> <span class="mi">60</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;default_ttl&#34;</span><span class="p">:</span> <span class="mi">10080</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>学习时不必急着上这些配置。先把 thread state 和 checkpoint 搞明白，否则长期记忆只会把混乱保存得更持久。</p>
+<h2 id="7-进阶使用步骤断点热重载远程连接">7. 进阶使用步骤：断点、热重载、远程连接</h2>
+<h3 id="71-热重载">7.1 热重载</h3>
+<p><code>langgraph dev</code> 默认适合开发，会监听代码变化并自动重启。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-powershell" data-lang="powershell"><span class="line"><span class="cl"><span class="n">langgraph</span> <span class="n">dev</span>
+</span></span></code></pre></div><p>如果你要关闭热重载：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-powershell" data-lang="powershell"><span class="line"><span class="cl"><span class="n">langgraph</span> <span class="n">dev</span> <span class="p">-</span><span class="n">-no-reload</span>
+</span></span></code></pre></div><h3 id="72-使用调试端口">7.2 使用调试端口</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-powershell" data-lang="powershell"><span class="line"><span class="cl"><span class="n">langgraph</span> <span class="n">dev</span> <span class="p">-</span><span class="n">-debug-port</span> <span class="mf">5678</span>
+</span></span></code></pre></div><p>等待调试器连接：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-powershell" data-lang="powershell"><span class="line"><span class="cl"><span class="n">langgraph</span> <span class="n">dev</span> <span class="p">-</span><span class="n">-debug-port</span> <span class="mf">5678</span> <span class="p">-</span><span class="n">-wait-for-client</span>
+</span></span></code></pre></div><p>调试器适合排查：</p>
+<ol>
+<li>节点函数内部逻辑。</li>
+<li>工具函数参数。</li>
+<li>条件边 routing。</li>
+<li>自定义 reducer。</li>
+<li>配置读取。</li>
+</ol>
+<h3 id="73-绑定不同-host-和-port">7.3 绑定不同 host 和 port</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-powershell" data-lang="powershell"><span class="line"><span class="cl"><span class="n">langgraph</span> <span class="n">dev</span> <span class="p">-</span><span class="n">-host</span> <span class="mf">127.0</span><span class="p">.</span><span class="py">0</span><span class="p">.</span><span class="py">1</span> <span class="p">-</span><span class="n">-port</span> <span class="mf">2025</span>
+</span></span></code></pre></div><p>对应 Studio URL：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2025
+</span></span></code></pre></div><h3 id="74-连接已部署-graph">7.4 连接已部署 graph</h3>
+<p>对于已部署应用，可以在 LangSmith UI 的 Deployments 中进入对应 deployment，然后选择 Studio。Studio 会连接 live deployment，让你创建、读取、更新 threads、assistants 和 memory。</p>
+<p>注意：</p>
+<ol>
+<li>不要在生产 Studio 中随意写入测试 memory。</li>
+<li>不要用真实用户 thread 做破坏性实验。</li>
+<li>区分 dev、staging、prod deployment。</li>
+<li>给测试 thread 加 metadata 或命名约定。</li>
+</ol>
+<h3 id="75-隔离本地-trace">7.5 隔离本地 trace</h3>
+<p>如果你正在反复调试，不想污染生产项目：</p>
+<pre tabindex="0"><code class="language-dotenv" data-lang="dotenv">LANGSMITH_PROJECT=studio-local-debug
+</code></pre><p>如果不想发送 trace：</p>
+<pre tabindex="0"><code class="language-dotenv" data-lang="dotenv">LANGSMITH_TRACING=false
+</code></pre><h2 id="8-studio-调试-langgraph-的典型流程">8. Studio 调试 LangGraph 的典型流程</h2>
+<h3 id="81-调试节点顺序">8.1 调试节点顺序</h3>
+<p>症状：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">agent 没有调用工具，直接回答了。
+</span></span></code></pre></div><p>排查：</p>
+<ol>
+<li>在 Studio 看是否进入 tool routing 节点。</li>
+<li>看 LLM 节点输出是否包含 tool call。</li>
+<li>看条件边函数返回了什么。</li>
+<li>看 tool node 是否被注册。</li>
+<li>在 LangSmith trace 看模型是否知道有哪些工具。</li>
+</ol>
+<h3 id="82-调试-state-丢失">8.2 调试 state 丢失</h3>
+<p>症状：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">前一个节点生成的字段，后一个节点拿不到。
+</span></span></code></pre></div><p>排查：</p>
+<ol>
+<li>节点是否返回了正确 key。</li>
+<li>state schema 是否声明了该字段。</li>
+<li>reducer 是否覆盖了旧值。</li>
+<li>是否返回了完整 state 还是 partial update。</li>
+<li>并行节点是否写同一个字段导致冲突。</li>
+</ol>
+<h3 id="83-调试循环无法结束">8.3 调试循环无法结束</h3>
+<p>症状：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">agent 一直循环调用模型或工具。
+</span></span></code></pre></div><p>排查：</p>
+<ol>
+<li>条件边是否有 END 分支。</li>
+<li>是否设置了最大迭代次数。</li>
+<li>工具结果是否能让模型完成任务。</li>
+<li>模型是否一直生成同一个 tool call。</li>
+<li>state 中的完成标记是否被正确更新。</li>
+</ol>
+<p>建议给 agent 加保护：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">MAX_STEPS</span> <span class="o">=</span> <span class="mi">8</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">def</span> <span class="nf">should_continue</span><span class="p">(</span><span class="n">state</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="n">state</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&#34;step_count&#34;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="n">MAX_STEPS</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="s2">&#34;final&#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="n">state</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&#34;done&#34;</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="s2">&#34;final&#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="s2">&#34;continue&#34;</span>
+</span></span></code></pre></div><h3 id="84-调试中断与恢复">8.4 调试中断与恢复</h3>
+<p>对于 human-in-the-loop：</p>
+<ol>
+<li>检查 interrupt 是否在预期节点发生。</li>
+<li>检查 thread 是否保留。</li>
+<li>恢复时输入是否符合 Command 或 resume 格式。</li>
+<li>检查 checkpoint 是否存在。</li>
+</ol>
+<p>这类问题只看最终输出通常看不出来。Studio 的意义就在这里。</p>
+<h2 id="9-常见问题">9. 常见问题</h2>
+<h3 id="91-studio-打不开">9.1 Studio 打不开</h3>
+<p>检查：</p>
+<ol>
+<li><code>langgraph dev</code> 是否还在运行。</li>
+<li>地址是否是 <code>http://127.0.0.1:2024</code>，不是别的端口。</li>
+<li>浏览器是否拦截 localhost 连接。</li>
+<li>是否需要 <code>--tunnel</code>。</li>
+<li>防火墙或代理是否拦截请求。</li>
+</ol>
+<h3 id="92-studio-连接成功但没有-graph">9.2 Studio 连接成功但没有 graph</h3>
+<p>检查：</p>
+<ol>
+<li><code>langgraph.json</code> 是否在启动目录。</li>
+<li><code>graphs</code> 是否为空。</li>
+<li>graph 路径是否写错。</li>
+<li>Python 模块导入是否报错。</li>
+<li><code>pip install -e .</code> 或 <code>uv sync</code> 是否已执行。</li>
+</ol>
+<h3 id="93-输入后报-schema-错误">9.3 输入后报 schema 错误</h3>
+<p>说明输入 JSON 与 state schema 不匹配。</p>
+<p>比如 state 需要：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">State</span><span class="p">(</span><span class="n">TypedDict</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">    <span class="n">question</span><span class="p">:</span> <span class="nb">str</span>
+</span></span></code></pre></div><p>你却传：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;messages&#34;</span><span class="p">:</span> <span class="p">[]</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>那当然不行。模型还没开始犯错，人类已经领先一步了。</p>
+<h3 id="94-本地改代码后-studio-还是旧行为">9.4 本地改代码后 Studio 还是旧行为</h3>
+<p>检查：</p>
+<ol>
+<li>是否用了 <code>--no-reload</code>。</li>
+<li>服务是否自动重启失败。</li>
+<li>是否在编辑另一个目录的代码。</li>
+<li>是否有旧 Python 包被安装到环境里。</li>
+<li>重启 <code>langgraph dev</code> 后再试。</li>
+</ol>
+<h3 id="95-trace-没有出现在-langsmith">9.5 Trace 没有出现在 LangSmith</h3>
+<p>检查：</p>
+<pre tabindex="0"><code class="language-dotenv" data-lang="dotenv">LANGSMITH_TRACING=true
+LANGSMITH_API_KEY=lsv2_...
+LANGSMITH_PROJECT=studio-demo
+</code></pre><p>如果你设置了：</p>
+<pre tabindex="0"><code class="language-dotenv" data-lang="dotenv">LANGSMITH_TRACING=false
+</code></pre><p>那就不会发送 trace。这个结果完全合理，不必怀疑宇宙。</p>
+<h2 id="10-总结">10. 总结</h2>
+<p>LangGraph Studio 的核心价值是让 LangGraph agent 从“黑盒运行”变成“可交互调试”。</p>
+<p>你应该掌握：</p>
+<ol>
+<li>用 <code>langgraph dev</code> 启动本地 Agent Server。</li>
+<li>用 Studio URL 连接本地 graph。</li>
+<li>根据 state schema 构造输入。</li>
+<li>查看节点执行、state 变化、thread 行为。</li>
+<li>将 Studio 观察与 LangSmith trace 结合。</li>
+<li>对部署环境使用 Studio 时注意数据隔离和权限。</li>
+</ol>
+<p>学 Studio 不要停留在“能打开页面”。真正有用的是用它回答这些问题：为什么这个节点执行了，为什么那个节点没执行，为什么 state 变成这样，为什么下一轮记住了不该记的东西。只要能回答这些，Studio 就不是 UI，而是你的调试武器。</p>
+<h2 id="11-参考资料">11. 参考资料</h2>
+<ul>
+<li>LangGraph Studio quickstart：https://docs.langchain.com/langsmith/quick-start-studio</li>
+<li>LangGraph 本地服务教程：https://docs.langchain.com/oss/python/langgraph/local-server</li>
+<li>LangGraph CLI 官方文档：https://docs.langchain.com/langsmith/cli</li>
+<li>LangSmith observability：https://docs.langchain.com/langsmith/observability</li>
+<li>LangSmith observability concepts：https://docs.langchain.com/langsmith/observability-concepts</li>
+<li>LangSmith Agent Server 文档：https://docs.langchain.com/langsmith/agent-server</li>
+</ul>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

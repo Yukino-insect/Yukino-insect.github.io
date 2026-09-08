@@ -1,0 +1,1547 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>搜索提示词 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="搜索提示词，也叫搜索补全、自动补全、Autocomplete。用户在搜索框里只输入几个字，系统就返回候选词：
+ela ↓ elasticsearch elasticsearch tutorial elasticsearch vector search 这件事看起来像是 Elasticsearch 的一个查询功能，但真正上线时，它其实是一个前端、后端、缓存、ES、日志统计一起配合的低延迟系统。
+它的目标非常明确：
+响应要快，通常希望在几十毫秒内返回。 返回数量要少，一般 5 到 10 条。 结果要稳定，不要每输入一个字符就剧烈跳动。 候选词要可控，不能出现黑词、脏词、低质量词。 热门搜索、历史行为、业务运营词都可能参与排序。 如果只是在 ES 里随便写个 match，当然也能返回一点东西。只是那样做出来的补全，大概会很努力地证明“能跑”和“好用”之间隔着一条河。
+一、整体链路 典型流程如下：
+用户输入 ↓ 前端防抖 ↓ 后端 suggest 接口 ↓ 本地缓存 / Redis ↓ Elasticsearch 补全索引 ↓ 业务过滤和排序 ↓ 前端渲染候选词 一次请求示例：
+GET /api/search/suggest?q=elas&amp;size=10 后端返回：
+{ &#34;items&#34;: [ { &#34;text&#34;: &#34;elasticsearch&#34;, &#34;score&#34;: 1000 }, { &#34;text&#34;: &#34;elasticsearch tutorial&#34;, &#34;score&#34;: 850 }, { &#34;text&#34;: &#34;elasticsearch vector search&#34;, &#34;score&#34;: 620 } ] } 前端真正展示的通常只是 text，但后端需要保留热度、来源、权重等信息，方便排序和调试。
+二、前端为什么要防抖 用户输入时，内容可能是这样变化的：
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/elasticsearch/%E6%90%9C%E7%B4%A2%E6%8F%90%E7%A4%BA%E8%AF%8D/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/elasticsearch/%E6%90%9C%E7%B4%A2%E6%8F%90%E7%A4%BA%E8%AF%8D/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="搜索提示词">
+  <meta property="og:description" content="搜索提示词，也叫搜索补全、自动补全、Autocomplete。用户在搜索框里只输入几个字，系统就返回候选词：
+ela ↓ elasticsearch elasticsearch tutorial elasticsearch vector search 这件事看起来像是 Elasticsearch 的一个查询功能，但真正上线时，它其实是一个前端、后端、缓存、ES、日志统计一起配合的低延迟系统。
+它的目标非常明确：
+响应要快，通常希望在几十毫秒内返回。 返回数量要少，一般 5 到 10 条。 结果要稳定，不要每输入一个字符就剧烈跳动。 候选词要可控，不能出现黑词、脏词、低质量词。 热门搜索、历史行为、业务运营词都可能参与排序。 如果只是在 ES 里随便写个 match，当然也能返回一点东西。只是那样做出来的补全，大概会很努力地证明“能跑”和“好用”之间隔着一条河。
+一、整体链路 典型流程如下：
+用户输入 ↓ 前端防抖 ↓ 后端 suggest 接口 ↓ 本地缓存 / Redis ↓ Elasticsearch 补全索引 ↓ 业务过滤和排序 ↓ 前端渲染候选词 一次请求示例：
+GET /api/search/suggest?q=elas&amp;size=10 后端返回：
+{ &#34;items&#34;: [ { &#34;text&#34;: &#34;elasticsearch&#34;, &#34;score&#34;: 1000 }, { &#34;text&#34;: &#34;elasticsearch tutorial&#34;, &#34;score&#34;: 850 }, { &#34;text&#34;: &#34;elasticsearch vector search&#34;, &#34;score&#34;: 620 } ] } 前端真正展示的通常只是 text，但后端需要保留热度、来源、权重等信息，方便排序和调试。
+二、前端为什么要防抖 用户输入时，内容可能是这样变化的：">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="elasticsearch">
+    <meta property="article:published_time" content="2026-03-17T21:37:33+08:00">
+    <meta property="article:modified_time" content="2026-03-17T21:37:33+08:00">
+
+  
+  <meta itemprop="name" content="搜索提示词">
+  <meta itemprop="description" content="搜索提示词，也叫搜索补全、自动补全、Autocomplete。用户在搜索框里只输入几个字，系统就返回候选词：
+ela ↓ elasticsearch elasticsearch tutorial elasticsearch vector search 这件事看起来像是 Elasticsearch 的一个查询功能，但真正上线时，它其实是一个前端、后端、缓存、ES、日志统计一起配合的低延迟系统。
+它的目标非常明确：
+响应要快，通常希望在几十毫秒内返回。 返回数量要少，一般 5 到 10 条。 结果要稳定，不要每输入一个字符就剧烈跳动。 候选词要可控，不能出现黑词、脏词、低质量词。 热门搜索、历史行为、业务运营词都可能参与排序。 如果只是在 ES 里随便写个 match，当然也能返回一点东西。只是那样做出来的补全，大概会很努力地证明“能跑”和“好用”之间隔着一条河。
+一、整体链路 典型流程如下：
+用户输入 ↓ 前端防抖 ↓ 后端 suggest 接口 ↓ 本地缓存 / Redis ↓ Elasticsearch 补全索引 ↓ 业务过滤和排序 ↓ 前端渲染候选词 一次请求示例：
+GET /api/search/suggest?q=elas&amp;size=10 后端返回：
+{ &#34;items&#34;: [ { &#34;text&#34;: &#34;elasticsearch&#34;, &#34;score&#34;: 1000 }, { &#34;text&#34;: &#34;elasticsearch tutorial&#34;, &#34;score&#34;: 850 }, { &#34;text&#34;: &#34;elasticsearch vector search&#34;, &#34;score&#34;: 620 } ] } 前端真正展示的通常只是 text，但后端需要保留热度、来源、权重等信息，方便排序和调试。
+二、前端为什么要防抖 用户输入时，内容可能是这样变化的：">
+  <meta itemprop="datePublished" content="2026-03-17T21:37:33+08:00">
+  <meta itemprop="dateModified" content="2026-03-17T21:37:33+08:00">
+  <meta itemprop="wordCount" content="679">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="搜索提示词">
+  <meta name="twitter:description" content="搜索提示词，也叫搜索补全、自动补全、Autocomplete。用户在搜索框里只输入几个字，系统就返回候选词：
+ela ↓ elasticsearch elasticsearch tutorial elasticsearch vector search 这件事看起来像是 Elasticsearch 的一个查询功能，但真正上线时，它其实是一个前端、后端、缓存、ES、日志统计一起配合的低延迟系统。
+它的目标非常明确：
+响应要快，通常希望在几十毫秒内返回。 返回数量要少，一般 5 到 10 条。 结果要稳定，不要每输入一个字符就剧烈跳动。 候选词要可控，不能出现黑词、脏词、低质量词。 热门搜索、历史行为、业务运营词都可能参与排序。 如果只是在 ES 里随便写个 match，当然也能返回一点东西。只是那样做出来的补全，大概会很努力地证明“能跑”和“好用”之间隔着一条河。
+一、整体链路 典型流程如下：
+用户输入 ↓ 前端防抖 ↓ 后端 suggest 接口 ↓ 本地缓存 / Redis ↓ Elasticsearch 补全索引 ↓ 业务过滤和排序 ↓ 前端渲染候选词 一次请求示例：
+GET /api/search/suggest?q=elas&amp;size=10 后端返回：
+{ &#34;items&#34;: [ { &#34;text&#34;: &#34;elasticsearch&#34;, &#34;score&#34;: 1000 }, { &#34;text&#34;: &#34;elasticsearch tutorial&#34;, &#34;score&#34;: 850 }, { &#34;text&#34;: &#34;elasticsearch vector search&#34;, &#34;score&#34;: 620 } ] } 前端真正展示的通常只是 text，但后端需要保留热度、来源、权重等信息，方便排序和调试。
+二、前端为什么要防抖 用户输入时，内容可能是这样变化的：">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">搜索提示词</h1>
+
+    
+      <div class="post-date">March 17, 2026</div>
+    
+
+    <div class="post-content">
+      <p>搜索提示词，也叫搜索补全、自动补全、Autocomplete。用户在搜索框里只输入几个字，系统就返回候选词：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">ela
+</span></span><span class="line"><span class="cl">  ↓
+</span></span><span class="line"><span class="cl">elasticsearch
+</span></span><span class="line"><span class="cl">elasticsearch tutorial
+</span></span><span class="line"><span class="cl">elasticsearch vector search
+</span></span></code></pre></div><p>这件事看起来像是 Elasticsearch 的一个查询功能，但真正上线时，它其实是一个前端、后端、缓存、ES、日志统计一起配合的低延迟系统。</p>
+<p>它的目标非常明确：</p>
+<ul>
+<li>响应要快，通常希望在几十毫秒内返回。</li>
+<li>返回数量要少，一般 5 到 10 条。</li>
+<li>结果要稳定，不要每输入一个字符就剧烈跳动。</li>
+<li>候选词要可控，不能出现黑词、脏词、低质量词。</li>
+<li>热门搜索、历史行为、业务运营词都可能参与排序。</li>
+</ul>
+<p>如果只是在 ES 里随便写个 <code>match</code>，当然也能返回一点东西。只是那样做出来的补全，大概会很努力地证明“能跑”和“好用”之间隔着一条河。</p>
+<h2 id="一整体链路">一、整体链路</h2>
+<p>典型流程如下：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">用户输入
+</span></span><span class="line"><span class="cl">  ↓
+</span></span><span class="line"><span class="cl">前端防抖
+</span></span><span class="line"><span class="cl">  ↓
+</span></span><span class="line"><span class="cl">后端 suggest 接口
+</span></span><span class="line"><span class="cl">  ↓
+</span></span><span class="line"><span class="cl">本地缓存 / Redis
+</span></span><span class="line"><span class="cl">  ↓
+</span></span><span class="line"><span class="cl">Elasticsearch 补全索引
+</span></span><span class="line"><span class="cl">  ↓
+</span></span><span class="line"><span class="cl">业务过滤和排序
+</span></span><span class="line"><span class="cl">  ↓
+</span></span><span class="line"><span class="cl">前端渲染候选词
+</span></span></code></pre></div><p>一次请求示例：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">GET /api/search/suggest?q=elas&amp;size=10
+</span></span></span></code></pre></div><p>后端返回：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;items&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span> <span class="nt">&#34;text&#34;</span><span class="p">:</span> <span class="s2">&#34;elasticsearch&#34;</span><span class="p">,</span> <span class="nt">&#34;score&#34;</span><span class="p">:</span> <span class="mi">1000</span> <span class="p">},</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span> <span class="nt">&#34;text&#34;</span><span class="p">:</span> <span class="s2">&#34;elasticsearch tutorial&#34;</span><span class="p">,</span> <span class="nt">&#34;score&#34;</span><span class="p">:</span> <span class="mi">850</span> <span class="p">},</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span> <span class="nt">&#34;text&#34;</span><span class="p">:</span> <span class="s2">&#34;elasticsearch vector search&#34;</span><span class="p">,</span> <span class="nt">&#34;score&#34;</span><span class="p">:</span> <span class="mi">620</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">]</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>前端真正展示的通常只是 <code>text</code>，但后端需要保留热度、来源、权重等信息，方便排序和调试。</p>
+<h2 id="二前端为什么要防抖">二、前端为什么要防抖</h2>
+<p>用户输入时，内容可能是这样变化的：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">e -&gt; el -&gt; ela -&gt; elas -&gt; elast
+</span></span></code></pre></div><p>如果每次输入都立刻请求后端，会出现几个问题：</p>
+<ul>
+<li>请求量暴增。</li>
+<li>后端和 ES 压力变大。</li>
+<li>旧请求可能比新请求更晚返回，导致候选词闪动。</li>
+<li>用户体验变差。</li>
+</ul>
+<p>因此搜索框通常会做防抖：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">用户停止输入 100 到 300ms 后，再发起请求
+</span></span></code></pre></div><p>防抖规则：</p>
+<ul>
+<li>输入事件触发时启动计时器。</li>
+<li>计时结束前如果又输入，则清除旧计时器。</li>
+<li>直到用户停下来，才执行最后一次请求。</li>
+</ul>
+<p>适合补全的常见参数：</p>
+<table>
+  <thead>
+      <tr>
+          <th>场景</th>
+          <th>防抖时间</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>PC 搜索框</td>
+          <td>100 到 200ms</td>
+      </tr>
+      <tr>
+          <td>移动端输入</td>
+          <td>200 到 300ms</td>
+      </tr>
+      <tr>
+          <td>后端压力较大</td>
+          <td>300ms 左右</td>
+      </tr>
+  </tbody>
+</table>
+<p>防抖不是为了偷懒，而是为了让系统少做无意义的工作。系统已经够辛苦了，不必让它陪用户的每一次手抖。</p>
+<h2 id="三后端接口职责">三、后端接口职责</h2>
+<p>后端 suggest 接口不应该只是 ES 查询代理。它至少要负责：</p>
+<ul>
+<li>参数清洗：去除首尾空格、限制长度。</li>
+<li>黑词过滤：脏词、违规词、不可展示词。</li>
+<li>缓存读取：优先本地缓存或 Redis。</li>
+<li>ES 查询：缓存未命中时召回候选词。</li>
+<li>结果去重：不同来源可能出现相同候选词。</li>
+<li>排序控制：热度、权重、业务规则。</li>
+<li>限制数量：通常返回 5 到 10 条。</li>
+</ul>
+<p>接口处理流程：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">q 为空或太短 -&gt; 直接返回热门词
+</span></span><span class="line"><span class="cl">q 命中黑名单 -&gt; 返回空
+</span></span><span class="line"><span class="cl">q 命中缓存 -&gt; 返回缓存
+</span></span><span class="line"><span class="cl">q 未命中缓存 -&gt; 查询 ES
+</span></span><span class="line"><span class="cl">ES 结果 -&gt; 过滤 -&gt; 排序 -&gt; 缓存 -&gt; 返回
+</span></span></code></pre></div><p>建议对短前缀做更严格控制。比如只输入一个字母 <code>a</code>，可能命中海量候选词，缓存和热词策略比实时查 ES 更重要。</p>
+<h2 id="四缓存策略">四、缓存策略</h2>
+<p>搜索补全非常适合缓存，因为大量用户会输入相同前缀。</p>
+<p>缓存层次：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">本地缓存 Caffeine
+</span></span><span class="line"><span class="cl">  ↓ 未命中
+</span></span><span class="line"><span class="cl">Redis
+</span></span><span class="line"><span class="cl">  ↓ 未命中
+</span></span><span class="line"><span class="cl">Elasticsearch
+</span></span></code></pre></div><p>缓存 key 示例：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">suggest:{lang}:{region}:{prefix}
+</span></span></code></pre></div><p>例如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">suggest:zh:CN:elas
+</span></span></code></pre></div><p>缓存内容：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">[</span>
+</span></span><span class="line"><span class="cl">  <span class="p">{</span> <span class="nt">&#34;text&#34;</span><span class="p">:</span> <span class="s2">&#34;elasticsearch&#34;</span><span class="p">,</span> <span class="nt">&#34;score&#34;</span><span class="p">:</span> <span class="mi">1000</span> <span class="p">},</span>
+</span></span><span class="line"><span class="cl">  <span class="p">{</span> <span class="nt">&#34;text&#34;</span><span class="p">:</span> <span class="s2">&#34;elasticsearch 教程&#34;</span><span class="p">,</span> <span class="nt">&#34;score&#34;</span><span class="p">:</span> <span class="mi">870</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">]</span>
+</span></span></code></pre></div><p>注意事项：</p>
+<ul>
+<li>缓存要区分语言和地区。</li>
+<li>黑词更新后要能清理相关缓存。</li>
+<li>热词变化频繁时 TTL 不宜过长。</li>
+<li>可以对热门前缀预热，例如 <code>j</code>、<code>ja</code>、<code>jav</code>。</li>
+</ul>
+<h2 id="五es-实现方式对比">五、ES 实现方式对比</h2>
+<p>ES 实现补全常见有三种方式：</p>
+<table>
+  <thead>
+      <tr>
+          <th>方案</th>
+          <th>优点</th>
+          <th>缺点</th>
+          <th>适合场景</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>completion</code> suggester</td>
+          <td>查询极快，专为补全设计</td>
+          <td>灵活性较弱，主要做前缀补全</td>
+          <td>纯提示词、热词补全</td>
+      </tr>
+      <tr>
+          <td><code>edge_ngram</code></td>
+          <td>可结合普通查询和排序，灵活</td>
+          <td>索引膨胀，分词设计复杂</td>
+          <td>商品名、标题补全</td>
+      </tr>
+      <tr>
+          <td>搜索日志热词</td>
+          <td>结果更贴近用户行为</td>
+          <td>需要统计链路</td>
+          <td>热搜、趋势词</td>
+      </tr>
+  </tbody>
+</table>
+<p>生产中常常组合使用：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">热词库 / 运营词
+</span></span><span class="line"><span class="cl">  +
+</span></span><span class="line"><span class="cl">completion suggester
+</span></span><span class="line"><span class="cl">  +
+</span></span><span class="line"><span class="cl">edge_ngram 商品名召回
+</span></span><span class="line"><span class="cl">  ↓
+</span></span><span class="line"><span class="cl">合并、去重、排序
+</span></span></code></pre></div><h2 id="六completion-suggester">六、<code>completion</code> suggester</h2>
+<p><code>completion</code> 是 ES 专门为补全设计的字段类型。</p>
+<h3 id="1-创建索引">1. 创建索引</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">PUT /suggest_index
+</span></span></span><span class="line"><span class="cl"><span class="err">{
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;mappings&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;properties&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;title_suggest&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">        &#34;type&#34;: &#34;completion&#34;
+</span></span></span><span class="line"><span class="cl"><span class="err">      },
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;weight&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">        &#34;type&#34;: &#34;integer&#34;
+</span></span></span><span class="line"><span class="cl"><span class="err">      },
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;status&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">        &#34;type&#34;: &#34;keyword&#34;
+</span></span></span><span class="line"><span class="cl"><span class="err">      }
+</span></span></span><span class="line"><span class="cl"><span class="err">    }
+</span></span></span><span class="line"><span class="cl"><span class="err">  }
+</span></span></span><span class="line"><span class="cl"><span class="err">}
+</span></span></span></code></pre></div><h3 id="2-写入候选词">2. 写入候选词</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">PUT /suggest_index/_doc/1
+</span></span></span><span class="line"><span class="cl"><span class="err">{
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;title_suggest&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;input&#34;: [
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;elasticsearch&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;elasticsearch tutorial&#34;
+</span></span></span><span class="line"><span class="cl"><span class="err">    ],
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;weight&#34;: 100
+</span></span></span><span class="line"><span class="cl"><span class="err">  },
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;status&#34;: &#34;ENABLE&#34;
+</span></span></span><span class="line"><span class="cl"><span class="err">}
+</span></span></span></code></pre></div><p><code>input</code> 是可被补全的候选词，<code>weight</code> 用于影响排序。</p>
+<h3 id="3-查询补全">3. 查询补全</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">POST /suggest_index/_search
+</span></span></span><span class="line"><span class="cl"><span class="err">{
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;suggest&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;title_suggest_result&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;prefix&#34;: &#34;elas&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;completion&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">        &#34;field&#34;: &#34;title_suggest&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">        &#34;size&#34;: 5
+</span></span></span><span class="line"><span class="cl"><span class="err">      }
+</span></span></span><span class="line"><span class="cl"><span class="err">    }
+</span></span></span><span class="line"><span class="cl"><span class="err">  }
+</span></span></span><span class="line"><span class="cl"><span class="err">}
+</span></span></span></code></pre></div><p>返回结果中，前端通常只需要 <code>options[].text</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;suggest&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;title_suggest_result&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">      <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&#34;text&#34;</span><span class="p">:</span> <span class="s2">&#34;elas&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&#34;options&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">          <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="nt">&#34;text&#34;</span><span class="p">:</span> <span class="s2">&#34;elasticsearch&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">            <span class="nt">&#34;_score&#34;</span><span class="p">:</span> <span class="mf">100.0</span>
+</span></span><span class="line"><span class="cl">          <span class="p">}</span>
+</span></span><span class="line"><span class="cl">        <span class="p">]</span>
+</span></span><span class="line"><span class="cl">      <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">]</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p><code>completion</code> 适合做词条补全，但如果你需要复杂过滤、召回商品标题、结合类目和业务字段排序，<code>edge_ngram</code> 会更灵活。</p>
+<h2 id="七edge_ngram">七、<code>edge_ngram</code></h2>
+<p><code>edge_ngram</code> 的思想是：写入时把词拆成前缀 token。</p>
+<p>例如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">elastic -&gt; e, el, ela, elas, elast, ...
+</span></span></code></pre></div><p>这样用户输入 <code>elas</code> 时，就能通过倒排索引命中完整词。</p>
+<h3 id="1-创建索引-1">1. 创建索引</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">PUT /autocomplete_index
+</span></span></span><span class="line"><span class="cl"><span class="err">{
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;settings&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;analysis&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;tokenizer&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">        &#34;edge_ngram_tokenizer&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">          &#34;type&#34;: &#34;edge_ngram&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">          &#34;min_gram&#34;: 2,
+</span></span></span><span class="line"><span class="cl"><span class="err">          &#34;max_gram&#34;: 20,
+</span></span></span><span class="line"><span class="cl"><span class="err">          &#34;token_chars&#34;: [&#34;letter&#34;, &#34;digit&#34;]
+</span></span></span><span class="line"><span class="cl"><span class="err">        }
+</span></span></span><span class="line"><span class="cl"><span class="err">      },
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;analyzer&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">        &#34;autocomplete_index_analyzer&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">          &#34;tokenizer&#34;: &#34;edge_ngram_tokenizer&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">          &#34;filter&#34;: [&#34;lowercase&#34;]
+</span></span></span><span class="line"><span class="cl"><span class="err">        },
+</span></span></span><span class="line"><span class="cl"><span class="err">        &#34;autocomplete_search_analyzer&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">          &#34;tokenizer&#34;: &#34;standard&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">          &#34;filter&#34;: [&#34;lowercase&#34;]
+</span></span></span><span class="line"><span class="cl"><span class="err">        }
+</span></span></span><span class="line"><span class="cl"><span class="err">      }
+</span></span></span><span class="line"><span class="cl"><span class="err">    }
+</span></span></span><span class="line"><span class="cl"><span class="err">  },
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;mappings&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;properties&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;title&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">        &#34;type&#34;: &#34;text&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">        &#34;analyzer&#34;: &#34;autocomplete_index_analyzer&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">        &#34;search_analyzer&#34;: &#34;autocomplete_search_analyzer&#34;
+</span></span></span><span class="line"><span class="cl"><span class="err">      },
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;status&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">        &#34;type&#34;: &#34;keyword&#34;
+</span></span></span><span class="line"><span class="cl"><span class="err">      },
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;hot_score&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">        &#34;type&#34;: &#34;integer&#34;
+</span></span></span><span class="line"><span class="cl"><span class="err">      }
+</span></span></span><span class="line"><span class="cl"><span class="err">    }
+</span></span></span><span class="line"><span class="cl"><span class="err">  }
+</span></span></span><span class="line"><span class="cl"><span class="err">}
+</span></span></span></code></pre></div><p><code>analyzer</code> 用于写入阶段生成前缀 token，<code>search_analyzer</code> 用于查询阶段正常分析用户输入。</p>
+<p>不建议把 <code>min_gram</code> 设成 1，除非你确认单字符补全确实必要。单字符会让索引和召回都变得很吵。</p>
+<h3 id="2-写入文档">2. 写入文档</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">PUT /autocomplete_index/_doc/1
+</span></span></span><span class="line"><span class="cl"><span class="err">{
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;title&#34;: &#34;elasticsearch vector search&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;status&#34;: &#34;ENABLE&#34;,
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;hot_score&#34;: 1200
+</span></span></span><span class="line"><span class="cl"><span class="err">}
+</span></span></span></code></pre></div><h3 id="3-查询">3. 查询</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-http" data-lang="http"><span class="line"><span class="cl"><span class="err">POST /autocomplete_index/_search
+</span></span></span><span class="line"><span class="cl"><span class="err">{
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;size&#34;: 10,
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;_source&#34;: [&#34;title&#34;, &#34;hot_score&#34;],
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;query&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">    &#34;bool&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;must&#34;: [
+</span></span></span><span class="line"><span class="cl"><span class="err">        {
+</span></span></span><span class="line"><span class="cl"><span class="err">          &#34;match&#34;: {
+</span></span></span><span class="line"><span class="cl"><span class="err">            &#34;title&#34;: &#34;elas&#34;
+</span></span></span><span class="line"><span class="cl"><span class="err">          }
+</span></span></span><span class="line"><span class="cl"><span class="err">        }
+</span></span></span><span class="line"><span class="cl"><span class="err">      ],
+</span></span></span><span class="line"><span class="cl"><span class="err">      &#34;filter&#34;: [
+</span></span></span><span class="line"><span class="cl"><span class="err">        { &#34;term&#34;: { &#34;status&#34;: &#34;ENABLE&#34; } }
+</span></span></span><span class="line"><span class="cl"><span class="err">      ]
+</span></span></span><span class="line"><span class="cl"><span class="err">    }
+</span></span></span><span class="line"><span class="cl"><span class="err">  },
+</span></span></span><span class="line"><span class="cl"><span class="err">  &#34;sort&#34;: [
+</span></span></span><span class="line"><span class="cl"><span class="err">    { &#34;hot_score&#34;: &#34;desc&#34; },
+</span></span></span><span class="line"><span class="cl"><span class="err">    { &#34;_score&#34;: &#34;desc&#34; }
+</span></span></span><span class="line"><span class="cl"><span class="err">  ]
+</span></span></span><span class="line"><span class="cl"><span class="err">}
+</span></span></span></code></pre></div><p>这种方式可以同时利用相关性分数和热度分数，适合商品、文章、课程等内容标题补全。</p>
+<h2 id="八中文补全怎么做">八、中文补全怎么做</h2>
+<p>中文补全要比英文更麻烦，因为中文没有天然空格。</p>
+<p>常见策略：</p>
+<h3 id="1-中文分词--edge_ngram">1. 中文分词 + edge_ngram</h3>
+<p>先用中文分词器切词，再做前缀。</p>
+<p>适合：</p>
+<ul>
+<li>商品标题。</li>
+<li>文章标题。</li>
+<li>搜索词补全。</li>
+</ul>
+<h3 id="2-拼音补全">2. 拼音补全</h3>
+<p>用户输入：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">pingguo
+</span></span></code></pre></div><p>希望补全：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">苹果手机
+</span></span></code></pre></div><p>这需要拼音分析插件或业务侧生成拼音字段：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;name&#34;</span><span class="p">:</span> <span class="s2">&#34;苹果手机&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;name_pinyin&#34;</span><span class="p">:</span> <span class="s2">&#34;pingguoshouji&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;name_pinyin_abbr&#34;</span><span class="p">:</span> <span class="s2">&#34;pgsj&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>查询时同时查中文字段和拼音字段。</p>
+<h3 id="3-热词兜底">3. 热词兜底</h3>
+<p>中文单字前缀召回噪音很大，短输入时可以直接返回热门词，而不是实时查所有内容。</p>
+<p>例如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">用户输入：手
+</span></span><span class="line"><span class="cl">返回：手机、手机壳、手表、手办
+</span></span></code></pre></div><p>这些候选词更适合来自搜索日志统计，而不是直接从商品标题里硬查。</p>
+<h2 id="九搜索日志与热词统计">九、搜索日志与热词统计</h2>
+<p>提示词不是一份永远不变的静态字典。更常见的做法是从用户搜索行为里生成热词。</p>
+<p>采集数据：</p>
+<ul>
+<li>搜索词。</li>
+<li>搜索次数。</li>
+<li>点击次数。</li>
+<li>点击率。</li>
+<li>下单或转化。</li>
+<li>搜索时间。</li>
+<li>地区和语言。</li>
+</ul>
+<p>统计后得到：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">keyword = &#34;elasticsearch&#34;
+</span></span><span class="line"><span class="cl">search_count = 12000
+</span></span><span class="line"><span class="cl">click_count = 3600
+</span></span><span class="line"><span class="cl">ctr = 0.30
+</span></span></code></pre></div><p>热度分可以简单设计：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">hot_score = search_count * 1.0 + click_count * 3.0 + order_count * 10.0
+</span></span></code></pre></div><p>然后定时写入 suggest 索引。</p>
+<p>流程：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">用户搜索日志
+</span></span><span class="line"><span class="cl">  ↓
+</span></span><span class="line"><span class="cl">日志队列
+</span></span><span class="line"><span class="cl">  ↓
+</span></span><span class="line"><span class="cl">实时或离线统计
+</span></span><span class="line"><span class="cl">  ↓
+</span></span><span class="line"><span class="cl">生成热词表
+</span></span><span class="line"><span class="cl">  ↓
+</span></span><span class="line"><span class="cl">写入 ES suggest 索引
+</span></span><span class="line"><span class="cl">  ↓
+</span></span><span class="line"><span class="cl">补全接口查询
+</span></span></code></pre></div><p>这样用户看到的提示词就会随真实行为变化，而不是靠程序员手写一份词典。坦率地说，让程序员手写热门词，多少有些为难程序员，也为难用户。</p>
+<h2 id="十结果排序与过滤">十、结果排序与过滤</h2>
+<p>补全结果通常不只是按 ES <code>_score</code> 排。</p>
+<p>常见排序信号：</p>
+<ul>
+<li>前缀匹配程度。</li>
+<li>热度。</li>
+<li>点击率。</li>
+<li>转化率。</li>
+<li>运营权重。</li>
+<li>用户历史偏好。</li>
+<li>地区和语言。</li>
+<li>是否黑名单。</li>
+</ul>
+<p>可以用一个简单的排序公式：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">final_score =
+</span></span><span class="line"><span class="cl">  text_score * 0.4
+</span></span><span class="line"><span class="cl">  + hot_score * 0.3
+</span></span><span class="line"><span class="cl">  + ctr_score * 0.2
+</span></span><span class="line"><span class="cl">  + business_boost * 0.1
+</span></span></code></pre></div><p>补全还要做过滤：</p>
+<ul>
+<li>黑词过滤。</li>
+<li>下架商品过滤。</li>
+<li>地区不可售过滤。</li>
+<li>低质量词过滤。</li>
+<li>成人、政治、违规内容过滤。</li>
+</ul>
+<p>过滤必须在返回前做，不能指望前端替你解决。前端不是安全边界。</p>
+<h2 id="十一接口降级">十一、接口降级</h2>
+<p>补全接口是高频接口，要准备降级方案。</p>
+<p>常见降级：</p>
+<ul>
+<li>ES 超时时返回 Redis 热词。</li>
+<li>Redis 故障时返回本地缓存。</li>
+<li>前缀太短时只返回热门词。</li>
+<li>后端压力高时延长前端防抖时间或限制请求频率。</li>
+<li>对异常前缀直接返回空列表。</li>
+</ul>
+<p>示例降级链路：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">本地缓存命中 -&gt; 返回
+</span></span><span class="line"><span class="cl">Redis 命中 -&gt; 返回
+</span></span><span class="line"><span class="cl">ES 查询成功 -&gt; 返回并写缓存
+</span></span><span class="line"><span class="cl">ES 超时 -&gt; 返回默认热词
+</span></span></code></pre></div><p>补全不是核心交易链路，宁可少返回几个候选词，也不要拖垮搜索主链路。</p>
+<h2 id="十二总结">十二、总结</h2>
+<p>搜索提示词可以这样理解：</p>
+<ul>
+<li>前端用防抖减少无效请求。</li>
+<li>后端负责清洗、过滤、缓存、排序和降级。</li>
+<li>ES 可以用 <code>completion</code> 做高性能词条补全。</li>
+<li>也可以用 <code>edge_ngram</code> 做更灵活的标题前缀召回。</li>
+<li>热词来自搜索日志统计，而不是纯手工维护。</li>
+<li>中文补全通常要考虑分词、拼音和短前缀热词兜底。</li>
+<li>生产中要重视黑词过滤、缓存预热和故障降级。</li>
+</ul>
+<p>一个好用的补全系统，表面上只是输入框下面的几行字；背后却是低延迟、高频缓存、搜索质量和业务规则共同妥协的结果。说它简单，未免有些不负责任。</p>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

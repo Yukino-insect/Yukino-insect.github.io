@@ -1,0 +1,1566 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RISC-V 汇编入门：寄存器、指令与一个最小程序 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="如果你从未写过汇编，可以先把它当作一种直接写给 CPU 的极简语言：一条指令通常只做一件小事，例如“两个寄存器相加”“从某个地址读 8 字节”“条件成立就跳到另一行”。它没有 C 语言的变量、数组名和 if 替你遮住细节；代价是更啰嗦，收益是每一步发生了什么都能被准确说清。
+RISC-V 不是某一颗具体 CPU 的品牌，而是一套公开的指令集架构（Instruction Set Architecture，ISA）。ISA 是软件与硬件之间的合同：它规定软件能看见哪些寄存器、每条指令做什么、机器码怎样编码，以及特权状态怎样组织。不同厂商的芯片或 QEMU 这样的模拟器，可以有完全不同的内部实现；只要遵守同一 ISA，程序可见的机器语言规则就相同。
+名称 是什么 类比 RISC-V ISA 指令与状态的规范 汉语的语法和字典 CPU 实现（芯片、QEMU） 依规范取指并执行的硬件或模拟器 说汉语的具体人 汇编器、链接器 将汇编文本组织为机器码的工具 把稿子排版、装订成书的工具 本文学习读 xv6 entry.S 所需的 RISC-V 基础：寄存器、算术指令、内存读写、立即数、跳转与 CSR。目标不是背下整张指令表，而是拿到一段代码时能回答四个问题：数据在哪里？这一条读什么？改什么？下一条会到哪里？ 若还不知道 CPU 怎样取指和执行，可先读 CPU 怎样执行程序：从内存、寄存器到取指译码执行 。
+一、RV64 与扩展名 常见的目标名是：
+rv64imac 部分 含义 rv64 通用整数寄存器的主要宽度为 64 位；指针和普通长整数通常按 64 位处理 i 基础整数指令集 m 乘除法扩展，例如 mul a 原子操作扩展 c 压缩指令扩展；部分指令可以编码为 16 位 因此 xv6 中的 mul 并不是“所有 RISC-V 必然都有”的指令，而依赖 M 扩展。xv6/QEMU 目标包含它，所以可以直接乘法计算栈偏移。RV32I 与 RV64I 都有 32 个通用寄存器，主要区别在每个寄存器的宽度是 32 位还是 64 位；浮点 F/D、向量 V 等也都是扩展，只是本篇暂不需要它们。
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/assembly/02-risc-v%E6%B1%87%E7%BC%96%E5%85%A5%E9%97%A8%E5%AF%84%E5%AD%98%E5%99%A8%E6%8C%87%E4%BB%A4%E4%B8%8E%E4%B8%80%E4%B8%AA%E6%9C%80%E5%B0%8F%E7%A8%8B%E5%BA%8F/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/assembly/02-risc-v%E6%B1%87%E7%BC%96%E5%85%A5%E9%97%A8%E5%AF%84%E5%AD%98%E5%99%A8%E6%8C%87%E4%BB%A4%E4%B8%8E%E4%B8%80%E4%B8%AA%E6%9C%80%E5%B0%8F%E7%A8%8B%E5%BA%8F/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="RISC-V 汇编入门：寄存器、指令与一个最小程序">
+  <meta property="og:description" content="如果你从未写过汇编，可以先把它当作一种直接写给 CPU 的极简语言：一条指令通常只做一件小事，例如“两个寄存器相加”“从某个地址读 8 字节”“条件成立就跳到另一行”。它没有 C 语言的变量、数组名和 if 替你遮住细节；代价是更啰嗦，收益是每一步发生了什么都能被准确说清。
+RISC-V 不是某一颗具体 CPU 的品牌，而是一套公开的指令集架构（Instruction Set Architecture，ISA）。ISA 是软件与硬件之间的合同：它规定软件能看见哪些寄存器、每条指令做什么、机器码怎样编码，以及特权状态怎样组织。不同厂商的芯片或 QEMU 这样的模拟器，可以有完全不同的内部实现；只要遵守同一 ISA，程序可见的机器语言规则就相同。
+名称 是什么 类比 RISC-V ISA 指令与状态的规范 汉语的语法和字典 CPU 实现（芯片、QEMU） 依规范取指并执行的硬件或模拟器 说汉语的具体人 汇编器、链接器 将汇编文本组织为机器码的工具 把稿子排版、装订成书的工具 本文学习读 xv6 entry.S 所需的 RISC-V 基础：寄存器、算术指令、内存读写、立即数、跳转与 CSR。目标不是背下整张指令表，而是拿到一段代码时能回答四个问题：数据在哪里？这一条读什么？改什么？下一条会到哪里？ 若还不知道 CPU 怎样取指和执行，可先读 CPU 怎样执行程序：从内存、寄存器到取指译码执行 。
+一、RV64 与扩展名 常见的目标名是：
+rv64imac 部分 含义 rv64 通用整数寄存器的主要宽度为 64 位；指针和普通长整数通常按 64 位处理 i 基础整数指令集 m 乘除法扩展，例如 mul a 原子操作扩展 c 压缩指令扩展；部分指令可以编码为 16 位 因此 xv6 中的 mul 并不是“所有 RISC-V 必然都有”的指令，而依赖 M 扩展。xv6/QEMU 目标包含它，所以可以直接乘法计算栈偏移。RV32I 与 RV64I 都有 32 个通用寄存器，主要区别在每个寄存器的宽度是 32 位还是 64 位；浮点 F/D、向量 V 等也都是扩展，只是本篇暂不需要它们。">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="assembly">
+    <meta property="article:published_time" content="2026-09-08T18:41:00+08:00">
+    <meta property="article:modified_time" content="2026-09-08T18:41:00+08:00">
+
+  
+  <meta itemprop="name" content="RISC-V 汇编入门：寄存器、指令与一个最小程序">
+  <meta itemprop="description" content="如果你从未写过汇编，可以先把它当作一种直接写给 CPU 的极简语言：一条指令通常只做一件小事，例如“两个寄存器相加”“从某个地址读 8 字节”“条件成立就跳到另一行”。它没有 C 语言的变量、数组名和 if 替你遮住细节；代价是更啰嗦，收益是每一步发生了什么都能被准确说清。
+RISC-V 不是某一颗具体 CPU 的品牌，而是一套公开的指令集架构（Instruction Set Architecture，ISA）。ISA 是软件与硬件之间的合同：它规定软件能看见哪些寄存器、每条指令做什么、机器码怎样编码，以及特权状态怎样组织。不同厂商的芯片或 QEMU 这样的模拟器，可以有完全不同的内部实现；只要遵守同一 ISA，程序可见的机器语言规则就相同。
+名称 是什么 类比 RISC-V ISA 指令与状态的规范 汉语的语法和字典 CPU 实现（芯片、QEMU） 依规范取指并执行的硬件或模拟器 说汉语的具体人 汇编器、链接器 将汇编文本组织为机器码的工具 把稿子排版、装订成书的工具 本文学习读 xv6 entry.S 所需的 RISC-V 基础：寄存器、算术指令、内存读写、立即数、跳转与 CSR。目标不是背下整张指令表，而是拿到一段代码时能回答四个问题：数据在哪里？这一条读什么？改什么？下一条会到哪里？ 若还不知道 CPU 怎样取指和执行，可先读 CPU 怎样执行程序：从内存、寄存器到取指译码执行 。
+一、RV64 与扩展名 常见的目标名是：
+rv64imac 部分 含义 rv64 通用整数寄存器的主要宽度为 64 位；指针和普通长整数通常按 64 位处理 i 基础整数指令集 m 乘除法扩展，例如 mul a 原子操作扩展 c 压缩指令扩展；部分指令可以编码为 16 位 因此 xv6 中的 mul 并不是“所有 RISC-V 必然都有”的指令，而依赖 M 扩展。xv6/QEMU 目标包含它，所以可以直接乘法计算栈偏移。RV32I 与 RV64I 都有 32 个通用寄存器，主要区别在每个寄存器的宽度是 32 位还是 64 位；浮点 F/D、向量 V 等也都是扩展，只是本篇暂不需要它们。">
+  <meta itemprop="datePublished" content="2026-09-08T18:41:00+08:00">
+  <meta itemprop="dateModified" content="2026-09-08T18:41:00+08:00">
+  <meta itemprop="wordCount" content="1014">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="RISC-V 汇编入门：寄存器、指令与一个最小程序">
+  <meta name="twitter:description" content="如果你从未写过汇编，可以先把它当作一种直接写给 CPU 的极简语言：一条指令通常只做一件小事，例如“两个寄存器相加”“从某个地址读 8 字节”“条件成立就跳到另一行”。它没有 C 语言的变量、数组名和 if 替你遮住细节；代价是更啰嗦，收益是每一步发生了什么都能被准确说清。
+RISC-V 不是某一颗具体 CPU 的品牌，而是一套公开的指令集架构（Instruction Set Architecture，ISA）。ISA 是软件与硬件之间的合同：它规定软件能看见哪些寄存器、每条指令做什么、机器码怎样编码，以及特权状态怎样组织。不同厂商的芯片或 QEMU 这样的模拟器，可以有完全不同的内部实现；只要遵守同一 ISA，程序可见的机器语言规则就相同。
+名称 是什么 类比 RISC-V ISA 指令与状态的规范 汉语的语法和字典 CPU 实现（芯片、QEMU） 依规范取指并执行的硬件或模拟器 说汉语的具体人 汇编器、链接器 将汇编文本组织为机器码的工具 把稿子排版、装订成书的工具 本文学习读 xv6 entry.S 所需的 RISC-V 基础：寄存器、算术指令、内存读写、立即数、跳转与 CSR。目标不是背下整张指令表，而是拿到一段代码时能回答四个问题：数据在哪里？这一条读什么？改什么？下一条会到哪里？ 若还不知道 CPU 怎样取指和执行，可先读 CPU 怎样执行程序：从内存、寄存器到取指译码执行 。
+一、RV64 与扩展名 常见的目标名是：
+rv64imac 部分 含义 rv64 通用整数寄存器的主要宽度为 64 位；指针和普通长整数通常按 64 位处理 i 基础整数指令集 m 乘除法扩展，例如 mul a 原子操作扩展 c 压缩指令扩展；部分指令可以编码为 16 位 因此 xv6 中的 mul 并不是“所有 RISC-V 必然都有”的指令，而依赖 M 扩展。xv6/QEMU 目标包含它，所以可以直接乘法计算栈偏移。RV32I 与 RV64I 都有 32 个通用寄存器，主要区别在每个寄存器的宽度是 32 位还是 64 位；浮点 F/D、向量 V 等也都是扩展，只是本篇暂不需要它们。">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">RISC-V 汇编入门：寄存器、指令与一个最小程序</h1>
+
+    
+      <div class="post-date">September 8, 2026</div>
+    
+
+    <div class="post-content">
+      <p>如果你从未写过汇编，可以先把它当作一种直接写给 CPU 的极简语言：一条指令通常只做一件小事，例如“两个寄存器相加”“从某个地址读 8 字节”“条件成立就跳到另一行”。它没有 C 语言的变量、数组名和 <code>if</code> 替你遮住细节；代价是更啰嗦，收益是每一步发生了什么都能被准确说清。</p>
+<p>RISC-V 不是某一颗具体 CPU 的品牌，而是一套公开的<strong>指令集架构</strong>（Instruction Set Architecture，ISA）。ISA 是软件与硬件之间的合同：它规定软件能看见哪些寄存器、每条指令做什么、机器码怎样编码，以及特权状态怎样组织。不同厂商的芯片或 QEMU 这样的模拟器，可以有完全不同的内部实现；只要遵守同一 ISA，程序可见的机器语言规则就相同。</p>
+<table>
+  <thead>
+      <tr>
+          <th>名称</th>
+          <th>是什么</th>
+          <th>类比</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>RISC-V ISA</td>
+          <td>指令与状态的规范</td>
+          <td>汉语的语法和字典</td>
+      </tr>
+      <tr>
+          <td>CPU 实现（芯片、QEMU）</td>
+          <td>依规范取指并执行的硬件或模拟器</td>
+          <td>说汉语的具体人</td>
+      </tr>
+      <tr>
+          <td>汇编器、链接器</td>
+          <td>将汇编文本组织为机器码的工具</td>
+          <td>把稿子排版、装订成书的工具</td>
+      </tr>
+  </tbody>
+</table>
+<p>本文学习读 xv6 <code>entry.S</code> 所需的 RISC-V 基础：寄存器、算术指令、内存读写、立即数、跳转与 CSR。目标不是背下整张指令表，而是拿到一段代码时能回答四个问题：<strong>数据在哪里？这一条读什么？改什么？下一条会到哪里？</strong> 若还不知道 CPU 怎样取指和执行，可先读 <a href="https://yukino-insect.github.io/assembly/01-cpu%E6%80%8E%E6%A0%B7%E6%89%A7%E8%A1%8C%E7%A8%8B%E5%BA%8F%E4%BB%8E%E5%86%85%E5%AD%98%E5%AF%84%E5%AD%98%E5%99%A8%E5%88%B0%E5%8F%96%E6%8C%87%E8%AF%91%E7%A0%81%E6%89%A7%E8%A1%8C/">CPU 怎样执行程序：从内存、寄存器到取指译码执行</a>
+。</p>
+<h2 id="一rv64-与扩展名">一、RV64 与扩展名</h2>
+<p>常见的目标名是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">rv64imac
+</span></span></code></pre></div><table>
+  <thead>
+      <tr>
+          <th>部分</th>
+          <th>含义</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>rv64</code></td>
+          <td>通用整数寄存器的主要宽度为 64 位；指针和普通长整数通常按 64 位处理</td>
+      </tr>
+      <tr>
+          <td><code>i</code></td>
+          <td>基础整数指令集</td>
+      </tr>
+      <tr>
+          <td><code>m</code></td>
+          <td>乘除法扩展，例如 <code>mul</code></td>
+      </tr>
+      <tr>
+          <td><code>a</code></td>
+          <td>原子操作扩展</td>
+      </tr>
+      <tr>
+          <td><code>c</code></td>
+          <td>压缩指令扩展；部分指令可以编码为 16 位</td>
+      </tr>
+  </tbody>
+</table>
+<p>因此 xv6 中的 <code>mul</code> 并不是“所有 RISC-V 必然都有”的指令，而依赖 M 扩展。xv6/QEMU 目标包含它，所以可以直接乘法计算栈偏移。<code>RV32I</code> 与 <code>RV64I</code> 都有 32 个通用寄存器，主要区别在每个寄存器的宽度是 32 位还是 64 位；浮点 <code>F</code>/<code>D</code>、向量 <code>V</code> 等也都是扩展，只是本篇暂不需要它们。</p>
+<h2 id="二执行汇编时持续追踪寄存器内存和-pc">二、执行汇编时，持续追踪寄存器、内存和 PC</h2>
+<p>CPU 执行一条指令时，最常处理三类状态：</p>
+<ul>
+<li><strong>寄存器</strong>：CPU 内部数量很少、读取很快的小格子；RV64 的整数寄存器每个保存 64 位比特。</li>
+<li><strong>内存</strong>：大量按地址编号的字节；程序的指令和数据都放在这里。</li>
+<li><strong>PC（程序计数器）</strong>：保存下一条要取的指令地址。普通执行后前进，分支和跳转会改变它。</li>
+</ul>
+<p>汇编里的 <code>a0</code>、<code>sp</code> 不是内存变量名，而是寄存器别名。<code>addi a0, a0, 1</code> 意为读取 <code>a0</code> 的旧值、加一、写回同一寄存器。若要触碰内存，必须明确写加载（load）或存储（store）指令；这正是 RISC-V 的 <strong>load/store 架构</strong>。以后分析一段程序，请在纸上至少画出“关键寄存器、关键内存地址、PC/下一标签”三栏，不要用“它大概在初始化”代替推理。</p>
+<h2 id="三32-个通用寄存器与-abi-别名">三、32 个通用寄存器与 ABI 别名</h2>
+<p>RISC-V 的通用整数寄存器编号为 <code>x0</code> 到 <code>x31</code>。汇编更常使用 ABI 名称，因为名称说明其在函数调用中的惯例角色。</p>
+<table>
+  <thead>
+      <tr>
+          <th>编号</th>
+          <th>ABI 名</th>
+          <th>常见职责</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>x0</code></td>
+          <td><code>zero</code></td>
+          <td>恒为 0，写入无效</td>
+      </tr>
+      <tr>
+          <td><code>x1</code></td>
+          <td><code>ra</code></td>
+          <td>返回地址；<code>call</code> 通常把“回来该去哪”放在这里</td>
+      </tr>
+      <tr>
+          <td><code>x2</code></td>
+          <td><code>sp</code></td>
+          <td>栈指针；指向当前函数可用的栈区域</td>
+      </tr>
+      <tr>
+          <td><code>x5</code>–<code>x7</code></td>
+          <td><code>t0</code>–<code>t2</code></td>
+          <td>临时寄存器</td>
+      </tr>
+      <tr>
+          <td><code>x8</code>–<code>x9</code></td>
+          <td><code>s0</code>/<code>fp</code>、<code>s1</code></td>
+          <td>被调用者保存寄存器</td>
+      </tr>
+      <tr>
+          <td><code>x10</code>–<code>x17</code></td>
+          <td><code>a0</code>–<code>a7</code></td>
+          <td>参数寄存器，<code>a0</code>/<code>a1</code> 也用于返回值</td>
+      </tr>
+      <tr>
+          <td><code>x18</code>–<code>x27</code></td>
+          <td><code>s2</code>–<code>s11</code></td>
+          <td>被调用者保存寄存器</td>
+      </tr>
+      <tr>
+          <td><code>x28</code>–<code>x31</code></td>
+          <td><code>t3</code>–<code>t6</code></td>
+          <td>临时寄存器</td>
+      </tr>
+  </tbody>
+</table>
+<p><code>a0</code>、<code>t0</code>、<code>s0</code> 的硬件能力并无本质不同：都能放一个 64 位值或地址。不同点是 ABI 约定谁负责保留旧值：<code>a</code> 和 <code>t</code> 通常可被被调用函数覆盖，<code>s</code> 若被函数使用则需要在返回前恢复。<code>sp</code> 和 <code>ra</code> 则有特殊的函数调用意义。</p>
+<p>这份“谁保存”的规则不是硬件自动施加的保护。函数若使用 <code>s0</code>，必须在进入时把旧 <code>s0</code> 存到栈上、返回前恢复；它却可自由覆盖 <code>t0</code>、<code>a0</code>。所以看见 <code>a0</code> 不要只念“第十号寄存器”，而应想到它常承载第一个参数或返回值。函数调用与栈帧会在 <a href="https://yukino-insect.github.io/assembly/04-%E5%87%BD%E6%95%B0%E8%B0%83%E7%94%A8%E4%B8%8E%E6%A0%88risc-v-abispra-%E5%92%8C%E6%A0%88%E5%B8%A7/">函数调用与栈：RISC-V ABI、sp、ra 和栈帧</a>
+ 中完整说明。</p>
+<h3 id="zero-为什么很有用"><code>zero</code> 为什么很有用</h3>
+<p><code>x0</code> 总是读为 0：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-asm" data-lang="asm"><span class="line"><span class="cl"><span class="nf">add</span>     <span class="no">a0</span><span class="p">,</span> <span class="no">a1</span><span class="p">,</span> <span class="no">zero</span>  <span class="c1"># a0 = a1
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nf">beq</span>     <span class="no">a0</span><span class="p">,</span> <span class="no">zero</span><span class="p">,</span> <span class="no">L</span>   <span class="c1"># 若 a0 为 0 则跳转
+</span></span></span></code></pre></div><p>硬件提供这个固定零值，让复制、比较零和构造某些伪指令更简单。</p>
+<h2 id="四怎样读一条-risc-v-指令">四、怎样读一条 RISC-V 指令</h2>
+<p>很多算术指令遵循：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">操作  目标寄存器, 源寄存器 1, 源寄存器 2/立即数
+</span></span></code></pre></div><h3 id="寄存器算术">寄存器算术</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-asm" data-lang="asm"><span class="line"><span class="cl"><span class="nf">add</span>     <span class="no">sp</span><span class="p">,</span> <span class="no">sp</span><span class="p">,</span> <span class="no">a0</span>
+</span></span><span class="line"><span class="cl"><span class="nf">mul</span>     <span class="no">a0</span><span class="p">,</span> <span class="no">a0</span><span class="p">,</span> <span class="no">a1</span>
+</span></span></code></pre></div><p>分别是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">sp = sp + a0
+</span></span><span class="line"><span class="cl">a0 = a0 * a1
+</span></span></code></pre></div><p>目的寄存器写在前面，源和目的可以是同一个寄存器。CPU 会先读取旧操作数，再将结果写入目的寄存器。</p>
+<h3 id="带立即数的运算">带立即数的运算</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-asm" data-lang="asm"><span class="line"><span class="cl"><span class="nf">addi</span>    <span class="no">a1</span><span class="p">,</span> <span class="no">a1</span><span class="p">,</span> <span class="mi">1</span>
+</span></span></code></pre></div><p>即：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">a1 = a1 + 1
+</span></span></code></pre></div><p>末尾 <code>i</code> 表示 immediate，立即数直接编码在指令中。<code>addi</code> 的立即数字段按 <strong>12 位有符号数</strong>解释，范围是 <code>-2048</code> 到 <code>2047</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-asm" data-lang="asm"><span class="line"><span class="cl"><span class="nf">addi</span>    <span class="no">t0</span><span class="p">,</span> <span class="no">zero</span><span class="p">,</span> <span class="p">-</span><span class="mi">1</span>   <span class="c1"># t0 = -1
+</span></span></span></code></pre></div><p>寄存器本身只保存比特，没有“正数”“负数”或“地址”的类型标签。RV64 中 <code>-1</code> 的补码表示是 <code>0xffffffffffffffff</code>；同一串位按有符号数或无符号数读取，会得到不同的数学意义。比较指令也因此分为 <code>blt</code>（有符号小于）和 <code>bltu</code>（无符号小于）。特别大的常量通常写作 <code>li t0, 4096</code>，但这一行可能被汇编器展开为两条或更多真实机器指令。</p>
+<h3 id="加载与存储">加载与存储</h3>
+<p>RISC-V 使用 load/store 指令读写内存：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-asm" data-lang="asm"><span class="line"><span class="cl"><span class="nf">ld</span>      <span class="no">a0</span><span class="p">,</span> <span class="mi">8</span><span class="p">(</span><span class="no">sp</span><span class="p">)</span>    <span class="c1"># a0 = 内存[sp + 8] 的 64 位值
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nf">sd</span>      <span class="no">ra</span><span class="p">,</span> <span class="mi">8</span><span class="p">(</span><span class="no">sp</span><span class="p">)</span>    <span class="c1"># 内存[sp + 8] = ra 的 64 位值
+</span></span></span></code></pre></div><p><code>ld</code>/<code>sd</code> 中的 <code>d</code> 表示 doubleword（64 位）；32 位常见 <code>lw</code>/<code>sw</code>。<code>8(sp)</code> 表示地址 <code>sp + 8</code>，不是“调用名为 sp 的函数”。这是<strong>基址加偏移</strong>寻址。</p>
+<table>
+  <thead>
+      <tr>
+          <th>指令</th>
+          <th>读/写宽度</th>
+          <th>加载后如何放进 64 位寄存器</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>lb</code> / <code>sb</code></td>
+          <td>1 字节</td>
+          <td><code>lb</code> 符号扩展；<code>lbu</code> 零扩展</td>
+      </tr>
+      <tr>
+          <td><code>lh</code> / <code>sh</code></td>
+          <td>2 字节</td>
+          <td><code>lh</code> 符号扩展；<code>lhu</code> 零扩展</td>
+      </tr>
+      <tr>
+          <td><code>lw</code> / <code>sw</code></td>
+          <td>4 字节</td>
+          <td><code>lw</code> 符号扩展；<code>lwu</code> 零扩展</td>
+      </tr>
+      <tr>
+          <td><code>ld</code> / <code>sd</code></td>
+          <td>8 字节</td>
+          <td>64 位原样读写</td>
+      </tr>
+  </tbody>
+</table>
+<p>若内存的一个字节为 <code>0xff</code>，<code>lbu</code> 会得到 <code>255</code>，<code>lb</code> 会把它当作有符号 8 位数，得到 <code>-1</code>。读错数据宽度或符号，往往不是华丽的灾难，却足够让底层代码静悄悄地错下去。</p>
+<h3 id="分支与跳转">分支与跳转</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-asm" data-lang="asm"><span class="line"><span class="cl"><span class="nf">beq</span>     <span class="no">a0</span><span class="p">,</span> <span class="no">zero</span><span class="p">,</span> <span class="no">done</span>
+</span></span></code></pre></div><p>若 <code>a0</code> 等于 0，PC 跳到标签 <code>done</code>；否则顺序执行。<code>beq</code> 的名称可读为 branch if equal。标签只是一种供汇编器计算地址的名字，不会单独变成一条 CPU 指令。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-asm" data-lang="asm"><span class="line"><span class="cl"><span class="nf">bne</span>     <span class="no">a0</span><span class="p">,</span> <span class="no">zero</span><span class="p">,</span> <span class="no">loop</span>      <span class="c1"># a0 != 0 时跳转
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nf">blt</span>     <span class="no">a0</span><span class="p">,</span> <span class="no">a1</span><span class="p">,</span> <span class="no">smaller</span>     <span class="c1"># 按有符号数比较
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nf">bltu</span>    <span class="no">a0</span><span class="p">,</span> <span class="no">a1</span><span class="p">,</span> <span class="no">usmaller</span>    <span class="c1"># 按无符号数比较
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nf">j</span>       <span class="no">spin</span>                <span class="c1"># 无条件跳转，不保存返回位置
+</span></span></span></code></pre></div><p>分支通常不修改参与比较的寄存器，却会决定“下一条”在哪里。分析循环时，最容易遗漏的不是算术，而是 PC 走了哪个分支。</p>
+<h2 id="五lilacall-是什么">五、<code>li</code>、<code>la</code>、<code>call</code> 是什么</h2>
+<p>下列写法常是汇编器伪指令，表达意图而非固定的一条硬件编码：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-asm" data-lang="asm"><span class="line"><span class="cl"><span class="nf">li</span>      <span class="no">a0</span><span class="p">,</span> <span class="mi">4096</span>     <span class="c1"># a0 = 4096
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nf">la</span>      <span class="no">sp</span><span class="p">,</span> <span class="no">stack0</span>   <span class="c1"># sp = stack0 这个符号的地址
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nf">call</span>    <span class="no">start</span>        <span class="c1"># 保存返回地址并跳到 start
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nf">j</span>       <span class="no">spin</span>         <span class="c1"># 无条件跳到 spin
+</span></span></span></code></pre></div><p><code>li</code> 是 load immediate，<code>la</code> 是 load address。关键区别是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">la sp, stack0：取得 stack0 在内存中的地址
+</span></span><span class="line"><span class="cl">ld a0, 0(sp)：读取该地址处保存的数据
+</span></span></code></pre></div><p>不要把“装入地址”误解为“读取地址中的内容”。例如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-asm" data-lang="asm"><span class="line"><span class="cl"><span class="nf">la</span>      <span class="no">sp</span><span class="p">,</span> <span class="no">stack0</span>   <span class="c1"># sp = 地址(stack0)，没有访问该地址保存的数据
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nf">ld</span>      <span class="no">t0</span><span class="p">,</span> <span class="mi">0</span><span class="p">(</span><span class="no">sp</span><span class="p">)</span>    <span class="c1"># t0 = 地址 stack0 处的 8 字节数据
+</span></span></span></code></pre></div><p><code>call</code> 和 <code>j</code> 也可能根据目标距离展开为不同基础指令；如果需要确认真实机器码，应查看反汇编。<code>call</code> 的核心语义是把返回位置写进 <code>ra</code>，再将 PC 改为 <code>start</code> 的地址；它不是“CPU 特别认识 C 函数”的魔法。</p>
+<h3 id="为什么反汇编和源代码长得不完全一样">为什么反汇编和源代码长得不完全一样</h3>
+<p>源代码里既有真实 CPU 指令，也有汇编器提供的伪指令。伪指令表达意图，汇编器根据常量大小、目标距离和链接结果选择实际编码：</p>
+<table>
+  <thead>
+      <tr>
+          <th>源代码</th>
+          <th>意图</th>
+          <th>常见的真实形式（概念上）</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>mv rd, rs</code></td>
+          <td>复制寄存器</td>
+          <td><code>addi rd, rs, 0</code></td>
+      </tr>
+      <tr>
+          <td><code>nop</code></td>
+          <td>什么也不做</td>
+          <td><code>addi zero, zero, 0</code></td>
+      </tr>
+      <tr>
+          <td><code>li rd, 7</code></td>
+          <td>装小常量</td>
+          <td>一条 <code>addi</code></td>
+      </tr>
+      <tr>
+          <td><code>li rd, 4096</code></td>
+          <td>装较大常量</td>
+          <td>常为 <code>lui</code> 配合 <code>addi</code></td>
+      </tr>
+      <tr>
+          <td><code>la rd, symbol</code></td>
+          <td>取符号地址</td>
+          <td>多条 PC 相对指令和重定位</td>
+      </tr>
+      <tr>
+          <td><code>j label</code></td>
+          <td>无返回跳转</td>
+          <td><code>jal zero, label</code></td>
+      </tr>
+  </tbody>
+</table>
+<p>因此“我写了一行，为什么 <code>objdump -d</code> 显示两行”并不是编译器背叛了你。读源代码时先理解意图；调试地址、异常和性能时再以最终反汇编为准，例如 <code>riscv64-unknown-elf-objdump -d kernel/kernel</code>。</p>
+<h2 id="六csrcpu-的控制状态寄存器">六、CSR：CPU 的控制状态寄存器</h2>
+<p><code>mhartid</code> 并不位于 <code>x0</code>–<code>x31</code> 通用寄存器中，而属于 CSR（Control and Status Register）。CSR 保存处理器控制与状态，如当前硬件线程 ID、异常入口、特权级状态和地址转换配置。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-asm" data-lang="asm"><span class="line"><span class="cl"><span class="nf">csrr</span>    <span class="no">a1</span><span class="p">,</span> <span class="no">mhartid</span>
+</span></span></code></pre></div><p>读作：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">a1 = CSR[mhartid]
+</span></span></code></pre></div><p>这条指令从 CPU 控制状态读取当前 hart 的编号。CSR 是否可读写与当前特权级有关；xv6 最早期入口位于 M 模式，因而可以访问这类机器态信息。CSR 不是普通内存，不能以为 <code>ld a1, mhartid</code> 会得到相同效果；它们有单独的访问指令和权限规则。</p>
+<h2 id="七一个最小例子逐行跟踪寄存器">七、一个最小例子：逐行跟踪寄存器</h2>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-asm" data-lang="asm"><span class="line"><span class="cl"><span class="nf">li</span>      <span class="no">a0</span><span class="p">,</span> <span class="mi">7</span>
+</span></span><span class="line"><span class="cl"><span class="nf">li</span>      <span class="no">a1</span><span class="p">,</span> <span class="mi">5</span>
+</span></span><span class="line"><span class="cl"><span class="nf">add</span>     <span class="no">a2</span><span class="p">,</span> <span class="no">a0</span><span class="p">,</span> <span class="no">a1</span>
+</span></span><span class="line"><span class="cl"><span class="nf">addi</span>    <span class="no">a2</span><span class="p">,</span> <span class="no">a2</span><span class="p">,</span> <span class="mi">1</span>
+</span></span></code></pre></div><table>
+  <thead>
+      <tr>
+          <th>指令执行后</th>
+          <th><code>a0</code></th>
+          <th><code>a1</code></th>
+          <th><code>a2</code></th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>初始</td>
+          <td>未知</td>
+          <td>未知</td>
+          <td>未知</td>
+      </tr>
+      <tr>
+          <td><code>li a0, 7</code></td>
+          <td>7</td>
+          <td>未知</td>
+          <td>未知</td>
+      </tr>
+      <tr>
+          <td><code>li a1, 5</code></td>
+          <td>7</td>
+          <td>5</td>
+          <td>未知</td>
+      </tr>
+      <tr>
+          <td><code>add a2, a0, a1</code></td>
+          <td>7</td>
+          <td>5</td>
+          <td>12</td>
+      </tr>
+      <tr>
+          <td><code>addi a2, a2, 1</code></td>
+          <td>7</td>
+          <td>5</td>
+          <td>13</td>
+      </tr>
+  </tbody>
+</table>
+<p>这就是读汇编最可靠的基本方法：对关键片段画表，逐条更新寄存器。不要过早把连续多条指令压缩成“它大概是在初始化”，因为那正是错误最容易藏起来的地方。</p>
+<h3 id="再进一步带内存和分支的可手工执行程序">再进一步：带内存和分支的可手工执行程序</h3>
+<p>下面的程序计算内存中两个 64 位数之和，将结果写到第三个位置；若和为零则走 <code>zero_sum</code> 路径。假设 <code>a0</code> 已经保存数组首地址，三个连续位置依次是 <code>left</code>、<code>right</code>、<code>result</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-asm" data-lang="asm"><span class="line"><span class="cl">    <span class="nf">ld</span>      <span class="no">t0</span><span class="p">,</span> <span class="mi">0</span><span class="p">(</span><span class="no">a0</span><span class="p">)</span>            <span class="c1"># t0 = left
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nf">ld</span>      <span class="no">t1</span><span class="p">,</span> <span class="mi">8</span><span class="p">(</span><span class="no">a0</span><span class="p">)</span>            <span class="c1"># t1 = right
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nf">add</span>     <span class="no">t2</span><span class="p">,</span> <span class="no">t0</span><span class="p">,</span> <span class="no">t1</span>           <span class="c1"># t2 = left + right
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nf">sd</span>      <span class="no">t2</span><span class="p">,</span> <span class="mi">16</span><span class="p">(</span><span class="no">a0</span><span class="p">)</span>           <span class="c1"># result = t2
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nf">beq</span>     <span class="no">t2</span><span class="p">,</span> <span class="no">zero</span><span class="p">,</span> <span class="no">zero_sum</span>   <span class="c1"># 结果为零则跳转
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nf">li</span>      <span class="no">a0</span><span class="p">,</span> <span class="mi">1</span>                <span class="c1"># 非零路径
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nf">j</span>       <span class="no">done</span>
+</span></span><span class="line"><span class="cl"><span class="nl">zero_sum:</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">li</span>      <span class="no">a0</span><span class="p">,</span> <span class="mi">0</span>                <span class="c1"># 零路径
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nl">done:</span>
+</span></span></code></pre></div><p>设初始 <code>a0 = 0x1000</code>，<code>Mem64[0x1000] = 7</code>，<code>Mem64[0x1008] = -7</code>。<code>—</code> 表示尚未写入或与本步无关。</p>
+<table>
+  <thead>
+      <tr>
+          <th>执行完的指令</th>
+          <th style="text-align: right"><code>a0</code></th>
+          <th style="text-align: right"><code>t0</code></th>
+          <th style="text-align: right"><code>t1</code></th>
+          <th style="text-align: right"><code>t2</code></th>
+          <th style="text-align: right"><code>Mem64[0x1010]</code></th>
+          <th>下一位置</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>初始</td>
+          <td style="text-align: right"><code>0x1000</code></td>
+          <td style="text-align: right">—</td>
+          <td style="text-align: right">—</td>
+          <td style="text-align: right">—</td>
+          <td style="text-align: right">未知</td>
+          <td>第一条 <code>ld</code></td>
+      </tr>
+      <tr>
+          <td><code>ld t0, 0(a0)</code></td>
+          <td style="text-align: right"><code>0x1000</code></td>
+          <td style="text-align: right">7</td>
+          <td style="text-align: right">—</td>
+          <td style="text-align: right">—</td>
+          <td style="text-align: right">未知</td>
+          <td>下一条</td>
+      </tr>
+      <tr>
+          <td><code>ld t1, 8(a0)</code></td>
+          <td style="text-align: right"><code>0x1000</code></td>
+          <td style="text-align: right">7</td>
+          <td style="text-align: right">-7</td>
+          <td style="text-align: right">—</td>
+          <td style="text-align: right">未知</td>
+          <td>下一条</td>
+      </tr>
+      <tr>
+          <td><code>add t2, t0, t1</code></td>
+          <td style="text-align: right"><code>0x1000</code></td>
+          <td style="text-align: right">7</td>
+          <td style="text-align: right">-7</td>
+          <td style="text-align: right">0</td>
+          <td style="text-align: right">未知</td>
+          <td>下一条</td>
+      </tr>
+      <tr>
+          <td><code>sd t2, 16(a0)</code></td>
+          <td style="text-align: right"><code>0x1000</code></td>
+          <td style="text-align: right">7</td>
+          <td style="text-align: right">-7</td>
+          <td style="text-align: right">0</td>
+          <td style="text-align: right">0</td>
+          <td>下一条</td>
+      </tr>
+      <tr>
+          <td><code>beq t2, zero, zero_sum</code></td>
+          <td style="text-align: right"><code>0x1000</code></td>
+          <td style="text-align: right">7</td>
+          <td style="text-align: right">-7</td>
+          <td style="text-align: right">0</td>
+          <td style="text-align: right">0</td>
+          <td><code>zero_sum</code></td>
+      </tr>
+      <tr>
+          <td><code>li a0, 0</code></td>
+          <td style="text-align: right">0</td>
+          <td style="text-align: right">7</td>
+          <td style="text-align: right">-7</td>
+          <td style="text-align: right">0</td>
+          <td style="text-align: right">0</td>
+          <td><code>done</code></td>
+      </tr>
+  </tbody>
+</table>
+<p>这张表包含读汇编的全部基本动作：<code>a0</code> 开始是<strong>地址</strong>，最后又被改为普通数值 0；真正改变内存的是 <code>sd</code>；<code>beq</code> 不改 <code>t2</code>，却让 CPU 越过了 <code>li a0, 1</code>。寄存器不自带类型，值的意义取决于指令如何使用它。能手工填出这类表格，你已经在分析程序，而不只是朗读助记符。</p>
+<h2 id="八代回-xv6-的栈初始化代码">八、代回 xv6 的栈初始化代码</h2>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-asm" data-lang="asm"><span class="line"><span class="cl"><span class="nf">la</span>      <span class="no">sp</span><span class="p">,</span> <span class="no">stack0</span>
+</span></span><span class="line"><span class="cl"><span class="nf">li</span>      <span class="no">a0</span><span class="p">,</span> <span class="mi">1024</span><span class="p">*</span><span class="mi">4</span>
+</span></span><span class="line"><span class="cl"><span class="nf">csrr</span>    <span class="no">a1</span><span class="p">,</span> <span class="no">mhartid</span>
+</span></span><span class="line"><span class="cl"><span class="nf">addi</span>    <span class="no">a1</span><span class="p">,</span> <span class="no">a1</span><span class="p">,</span> <span class="mi">1</span>
+</span></span><span class="line"><span class="cl"><span class="nf">mul</span>     <span class="no">a0</span><span class="p">,</span> <span class="no">a0</span><span class="p">,</span> <span class="no">a1</span>
+</span></span><span class="line"><span class="cl"><span class="nf">add</span>     <span class="no">sp</span><span class="p">,</span> <span class="no">sp</span><span class="p">,</span> <span class="no">a0</span>
+</span></span></code></pre></div><p>到这里你已能直接翻译为：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">sp = 地址(stack0)
+</span></span><span class="line"><span class="cl">a0 = 4096
+</span></span><span class="line"><span class="cl">a1 = 当前 hart ID
+</span></span><span class="line"><span class="cl">a1 = a1 + 1
+</span></span><span class="line"><span class="cl">a0 = 4096 * a1
+</span></span><span class="line"><span class="cl">sp = sp + a0
+</span></span></code></pre></div><p>若 <code>stack0 = 0x80010000</code>、当前 <code>mhartid = 1</code>，最后 <code>sp = 0x80010000 + 4096 × 2 = 0x80012000</code>。不同 hart 因硬件编号不同而得到不同的栈顶。为什么这个结果恰好是正确的栈顶、为什么 <code>sp</code> 必须先设好再 <code>call</code>，会在函数调用与栈一文中得到解释。</p>
+<h2 id="九常见陷阱">九、常见陷阱</h2>
+<ol>
+<li><strong>把 ABI 名称当成硬件类型。</strong> <code>a0</code>、<code>t0</code>、<code>s0</code> 都能做算术；区别只是跨函数调用时谁必须保留值。</li>
+<li><strong>把 <code>la</code> 当作读内存。</strong> <code>la</code> 得到地址，<code>ld</code> 才读取地址中的数据。</li>
+<li><strong>忽略 RV64 的宽度和符号扩展。</strong> <code>lw</code> 只读 4 字节并符号扩展；无符号 32 位数应使用 <code>lwu</code>，指针与 64 位数据通常使用 <code>ld</code>。</li>
+<li><strong>以为 <code>add</code> 会操作内存。</strong> 它只读写寄存器；内存读写必须显式 <code>ld</code>/<code>sd</code>。</li>
+<li><strong>忘记 <code>x0</code> 写不进去。</strong> <code>addi zero, zero, 1</code> 的结果会被硬件丢弃。</li>
+<li><strong>把分支当函数调用。</strong> <code>beq</code> 不保存返回位置；回到哪里完全由程序控制流安排。</li>
+<li><strong>相信伪指令必为一条机器指令。</strong> <code>li</code>、<code>la</code>、<code>call</code> 的展开取决于常量与链接结果，精确分析时看反汇编。</li>
+<li><strong>把数值天然看成有类型。</strong> <code>0x1000</code> 可被当作整数也可被当作地址；<code>-1</code> 与 64 位全 1 是同一比特模式的不同解释。</li>
+</ol>
+<h2 id="十练习与答案">十、练习与答案</h2>
+<h3 id="练习-1零寄存器">练习 1：零寄存器</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-asm" data-lang="asm"><span class="line"><span class="cl"><span class="nf">li</span>      <span class="no">t0</span><span class="p">,</span> <span class="mi">3</span>
+</span></span><span class="line"><span class="cl"><span class="nf">addi</span>    <span class="no">t0</span><span class="p">,</span> <span class="no">t0</span><span class="p">,</span> <span class="p">-</span><span class="mi">5</span>
+</span></span><span class="line"><span class="cl"><span class="nf">add</span>     <span class="no">a0</span><span class="p">,</span> <span class="no">t0</span><span class="p">,</span> <span class="no">zero</span>
+</span></span><span class="line"><span class="cl"><span class="nf">addi</span>    <span class="no">zero</span><span class="p">,</span> <span class="no">zero</span><span class="p">,</span> <span class="mi">9</span>
+</span></span></code></pre></div><p>最后 <code>t0</code>、<code>a0</code>、<code>zero</code> 分别是多少？</p>
+<h3 id="练习-2地址和数据">练习 2：地址和数据</h3>
+<p>假设 <code>sp = 0x2000</code>，<code>Mem64[0x2008] = 42</code>。执行：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-asm" data-lang="asm"><span class="line"><span class="cl"><span class="nf">ld</span>      <span class="no">a0</span><span class="p">,</span> <span class="mi">8</span><span class="p">(</span><span class="no">sp</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nf">addi</span>    <span class="no">a0</span><span class="p">,</span> <span class="no">a0</span><span class="p">,</span> <span class="mi">1</span>
+</span></span><span class="line"><span class="cl"><span class="nf">sd</span>      <span class="no">a0</span><span class="p">,</span> <span class="mi">16</span><span class="p">(</span><span class="no">sp</span><span class="p">)</span>
+</span></span></code></pre></div><p>最后哪个地址被写入了什么？</p>
+<h3 id="练习-3分支路径">练习 3：分支路径</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-asm" data-lang="asm"><span class="line"><span class="cl"><span class="nf">li</span>      <span class="no">a0</span><span class="p">,</span> <span class="mi">0</span>
+</span></span><span class="line"><span class="cl"><span class="nf">beq</span>     <span class="no">a0</span><span class="p">,</span> <span class="no">zero</span><span class="p">,</span> <span class="no">yes</span>
+</span></span><span class="line"><span class="cl"><span class="nf">li</span>      <span class="no">a1</span><span class="p">,</span> <span class="mi">1</span>
+</span></span><span class="line"><span class="cl"><span class="nf">j</span>       <span class="no">done</span>
+</span></span><span class="line"><span class="cl"><span class="nl">yes:</span>
+</span></span><span class="line"><span class="cl"><span class="nf">li</span>      <span class="no">a1</span><span class="p">,</span> <span class="mi">2</span>
+</span></span><span class="line"><span class="cl"><span class="nl">done:</span>
+</span></span></code></pre></div><p>最后 <code>a1</code> 是多少？哪些指令没有执行？</p>
+<h3 id="答案">答案</h3>
+<ol>
+<li><code>t0 = -2</code>，<code>a0 = -2</code>，<code>zero = 0</code>；最后一条试图写入 <code>x0</code>，其结果被丢弃。</li>
+<li><code>ld</code> 从 <code>0x2008</code> 读到 <code>42</code>，所以 <code>a0 = 43</code>；<code>sd</code> 把 64 位值 <code>43</code> 写到 <code>0x2010</code>。</li>
+<li><code>a1 = 2</code>；<code>beq</code> 跳到 <code>yes</code>，所以 <code>li a1, 1</code> 和随后的 <code>j done</code> 都没有执行。</li>
+</ol>
+<h2 id="小结">小结</h2>
+<ul>
+<li>RISC-V 是 ISA；<code>rv64imac</code> 表示位宽和目标实现的扩展。</li>
+<li><code>sp</code>、<code>ra</code>、<code>a0</code>、<code>a1</code> 是通用寄存器的 ABI 名称，约定了常见职责。</li>
+<li><code>add</code>、<code>addi</code>、<code>mul</code> 操作寄存器；<code>ld</code>、<code>sd</code> 在寄存器与内存间搬运数据。</li>
+<li><code>li</code>、<code>la</code>、<code>call</code>、<code>j</code> 通常是伪指令，帮助表达常见意图。</li>
+<li><code>csrr a1, mhartid</code> 从 CSR 读取当前硬件线程编号。</li>
+<li>初学阶段最有效的分析工具不是背指令表，而是逐行写出寄存器的新值。</li>
+</ul>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

@@ -1,0 +1,1451 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kafka 高级特性 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="Kafka 的高级特性主要围绕可靠性和吞吐展开：幂等生产、事务、顺序、重试、死信、日志压缩、积压治理。
+先把一个常见误解说清楚：Kafka 的 exactly-once 不是说“你的整个业务世界都精确一次”。它主要解决的是 Kafka 内部生产、消费 offset 和再生产之间的一致性。外部数据库、HTTP 接口、缓存变更仍然需要业务自己保证幂等和补偿。
+一、消息投递语义 Kafka 常见投递语义：
+语义 含义 代价 At most once 最多一次，可能丢失，不重复 可靠性低 At least once 至少一次，不丢但可能重复 需要幂等 Exactly once Kafka 内部读写链路精确一次 配置和事务成本更高 普通业务消费最常见的是至少一次：
+poll -&gt; 处理业务 -&gt; commit offset 如果处理成功但提交 offset 前宕机，消息会被重新消费。这不是 Kafka 出错，而是至少一次语义的正常结果。
+二、幂等生产者 幂等生产者用于避免生产者重试导致同一分区内写入重复消息。
+配置：
+enable.idempotence=true acks=all retries=3 开启后，Producer 会为每个分区维护序列号。Broker 可以根据 Producer ID 和序列号识别重复写入。
+幂等生产者能解决：
+发送请求成功写入 Broker。 ACK 在网络中丢失。 Producer 误以为失败并重试。 Broker 识别重复请求，不重复追加日志。 它不能解决：
+业务代码自己调用了两次发送。 两个不同 Producer 发送了相同业务事件。 消费者重复消费。 所以消息 key 和业务幂等仍然必须存在。
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/mq/kafka-%E9%AB%98%E7%BA%A7%E7%89%B9%E6%80%A7/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/mq/kafka-%E9%AB%98%E7%BA%A7%E7%89%B9%E6%80%A7/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="Kafka 高级特性">
+  <meta property="og:description" content="Kafka 的高级特性主要围绕可靠性和吞吐展开：幂等生产、事务、顺序、重试、死信、日志压缩、积压治理。
+先把一个常见误解说清楚：Kafka 的 exactly-once 不是说“你的整个业务世界都精确一次”。它主要解决的是 Kafka 内部生产、消费 offset 和再生产之间的一致性。外部数据库、HTTP 接口、缓存变更仍然需要业务自己保证幂等和补偿。
+一、消息投递语义 Kafka 常见投递语义：
+语义 含义 代价 At most once 最多一次，可能丢失，不重复 可靠性低 At least once 至少一次，不丢但可能重复 需要幂等 Exactly once Kafka 内部读写链路精确一次 配置和事务成本更高 普通业务消费最常见的是至少一次：
+poll -&gt; 处理业务 -&gt; commit offset 如果处理成功但提交 offset 前宕机，消息会被重新消费。这不是 Kafka 出错，而是至少一次语义的正常结果。
+二、幂等生产者 幂等生产者用于避免生产者重试导致同一分区内写入重复消息。
+配置：
+enable.idempotence=true acks=all retries=3 开启后，Producer 会为每个分区维护序列号。Broker 可以根据 Producer ID 和序列号识别重复写入。
+幂等生产者能解决：
+发送请求成功写入 Broker。 ACK 在网络中丢失。 Producer 误以为失败并重试。 Broker 识别重复请求，不重复追加日志。 它不能解决：
+业务代码自己调用了两次发送。 两个不同 Producer 发送了相同业务事件。 消费者重复消费。 所以消息 key 和业务幂等仍然必须存在。">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="mq">
+    <meta property="article:published_time" content="2026-08-22T16:14:00+08:00">
+    <meta property="article:modified_time" content="2026-08-22T16:14:00+08:00">
+
+  
+  <meta itemprop="name" content="Kafka 高级特性">
+  <meta itemprop="description" content="Kafka 的高级特性主要围绕可靠性和吞吐展开：幂等生产、事务、顺序、重试、死信、日志压缩、积压治理。
+先把一个常见误解说清楚：Kafka 的 exactly-once 不是说“你的整个业务世界都精确一次”。它主要解决的是 Kafka 内部生产、消费 offset 和再生产之间的一致性。外部数据库、HTTP 接口、缓存变更仍然需要业务自己保证幂等和补偿。
+一、消息投递语义 Kafka 常见投递语义：
+语义 含义 代价 At most once 最多一次，可能丢失，不重复 可靠性低 At least once 至少一次，不丢但可能重复 需要幂等 Exactly once Kafka 内部读写链路精确一次 配置和事务成本更高 普通业务消费最常见的是至少一次：
+poll -&gt; 处理业务 -&gt; commit offset 如果处理成功但提交 offset 前宕机，消息会被重新消费。这不是 Kafka 出错，而是至少一次语义的正常结果。
+二、幂等生产者 幂等生产者用于避免生产者重试导致同一分区内写入重复消息。
+配置：
+enable.idempotence=true acks=all retries=3 开启后，Producer 会为每个分区维护序列号。Broker 可以根据 Producer ID 和序列号识别重复写入。
+幂等生产者能解决：
+发送请求成功写入 Broker。 ACK 在网络中丢失。 Producer 误以为失败并重试。 Broker 识别重复请求，不重复追加日志。 它不能解决：
+业务代码自己调用了两次发送。 两个不同 Producer 发送了相同业务事件。 消费者重复消费。 所以消息 key 和业务幂等仍然必须存在。">
+  <meta itemprop="datePublished" content="2026-08-22T16:14:00+08:00">
+  <meta itemprop="dateModified" content="2026-08-22T16:14:00+08:00">
+  <meta itemprop="wordCount" content="575">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Kafka 高级特性">
+  <meta name="twitter:description" content="Kafka 的高级特性主要围绕可靠性和吞吐展开：幂等生产、事务、顺序、重试、死信、日志压缩、积压治理。
+先把一个常见误解说清楚：Kafka 的 exactly-once 不是说“你的整个业务世界都精确一次”。它主要解决的是 Kafka 内部生产、消费 offset 和再生产之间的一致性。外部数据库、HTTP 接口、缓存变更仍然需要业务自己保证幂等和补偿。
+一、消息投递语义 Kafka 常见投递语义：
+语义 含义 代价 At most once 最多一次，可能丢失，不重复 可靠性低 At least once 至少一次，不丢但可能重复 需要幂等 Exactly once Kafka 内部读写链路精确一次 配置和事务成本更高 普通业务消费最常见的是至少一次：
+poll -&gt; 处理业务 -&gt; commit offset 如果处理成功但提交 offset 前宕机，消息会被重新消费。这不是 Kafka 出错，而是至少一次语义的正常结果。
+二、幂等生产者 幂等生产者用于避免生产者重试导致同一分区内写入重复消息。
+配置：
+enable.idempotence=true acks=all retries=3 开启后，Producer 会为每个分区维护序列号。Broker 可以根据 Producer ID 和序列号识别重复写入。
+幂等生产者能解决：
+发送请求成功写入 Broker。 ACK 在网络中丢失。 Producer 误以为失败并重试。 Broker 识别重复请求，不重复追加日志。 它不能解决：
+业务代码自己调用了两次发送。 两个不同 Producer 发送了相同业务事件。 消费者重复消费。 所以消息 key 和业务幂等仍然必须存在。">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">Kafka 高级特性</h1>
+
+    
+      <div class="post-date">August 22, 2026</div>
+    
+
+    <div class="post-content">
+      <p>Kafka 的高级特性主要围绕可靠性和吞吐展开：幂等生产、事务、顺序、重试、死信、日志压缩、积压治理。</p>
+<p>先把一个常见误解说清楚：Kafka 的 exactly-once 不是说“你的整个业务世界都精确一次”。它主要解决的是 Kafka 内部生产、消费 offset 和再生产之间的一致性。外部数据库、HTTP 接口、缓存变更仍然需要业务自己保证幂等和补偿。</p>
+<h2 id="一消息投递语义">一、消息投递语义</h2>
+<p>Kafka 常见投递语义：</p>
+<table>
+  <thead>
+      <tr>
+          <th>语义</th>
+          <th>含义</th>
+          <th>代价</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>At most once</td>
+          <td>最多一次，可能丢失，不重复</td>
+          <td>可靠性低</td>
+      </tr>
+      <tr>
+          <td>At least once</td>
+          <td>至少一次，不丢但可能重复</td>
+          <td>需要幂等</td>
+      </tr>
+      <tr>
+          <td>Exactly once</td>
+          <td>Kafka 内部读写链路精确一次</td>
+          <td>配置和事务成本更高</td>
+      </tr>
+  </tbody>
+</table>
+<p>普通业务消费最常见的是至少一次：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">poll -&gt; 处理业务 -&gt; commit offset
+</span></span></code></pre></div><p>如果处理成功但提交 offset 前宕机，消息会被重新消费。这不是 Kafka 出错，而是至少一次语义的正常结果。</p>
+<h2 id="二幂等生产者">二、幂等生产者</h2>
+<p>幂等生产者用于避免生产者重试导致同一分区内写入重复消息。</p>
+<p>配置：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-properties" data-lang="properties"><span class="line"><span class="cl"><span class="na">enable.idempotence</span><span class="o">=</span><span class="s">true</span>
+</span></span><span class="line"><span class="cl"><span class="na">acks</span><span class="o">=</span><span class="s">all</span>
+</span></span><span class="line"><span class="cl"><span class="na">retries</span><span class="o">=</span><span class="s">3</span>
+</span></span></code></pre></div><p>开启后，Producer 会为每个分区维护序列号。Broker 可以根据 Producer ID 和序列号识别重复写入。</p>
+<p>幂等生产者能解决：</p>
+<ul>
+<li>发送请求成功写入 Broker。</li>
+<li>ACK 在网络中丢失。</li>
+<li>Producer 误以为失败并重试。</li>
+<li>Broker 识别重复请求，不重复追加日志。</li>
+</ul>
+<p>它不能解决：</p>
+<ul>
+<li>业务代码自己调用了两次发送。</li>
+<li>两个不同 Producer 发送了相同业务事件。</li>
+<li>消费者重复消费。</li>
+</ul>
+<p>所以消息 key 和业务幂等仍然必须存在。</p>
+<h2 id="三producer-可靠性配置">三、Producer 可靠性配置</h2>
+<p>关键业务常用配置：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-properties" data-lang="properties"><span class="line"><span class="cl"><span class="na">acks</span><span class="o">=</span><span class="s">all</span>
+</span></span><span class="line"><span class="cl"><span class="na">enable.idempotence</span><span class="o">=</span><span class="s">true</span>
+</span></span><span class="line"><span class="cl"><span class="na">retries</span><span class="o">=</span><span class="s">2147483647</span>
+</span></span><span class="line"><span class="cl"><span class="na">delivery.timeout.ms</span><span class="o">=</span><span class="s">120000</span>
+</span></span><span class="line"><span class="cl"><span class="na">request.timeout.ms</span><span class="o">=</span><span class="s">30000</span>
+</span></span><span class="line"><span class="cl"><span class="na">max.in.flight.requests.per.connection</span><span class="o">=</span><span class="s">5</span>
+</span></span></code></pre></div><p>Broker 侧建议：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-properties" data-lang="properties"><span class="line"><span class="cl"><span class="na">replication.factor</span><span class="o">=</span><span class="s">3</span>
+</span></span><span class="line"><span class="cl"><span class="na">min.insync.replicas</span><span class="o">=</span><span class="s">2</span>
+</span></span><span class="line"><span class="cl"><span class="na">unclean.leader.election.enable</span><span class="o">=</span><span class="s">false</span>
+</span></span></code></pre></div><p>含义：</p>
+<ul>
+<li><code>acks=all</code>：等待 ISR 中副本确认。</li>
+<li><code>min.insync.replicas=2</code>：至少两个同步副本才允许成功写入。</li>
+<li><code>unclean.leader.election.enable=false</code>：避免选举落后副本导致数据丢失。</li>
+<li><code>enable.idempotence=true</code>：避免生产重试重复写入。</li>
+</ul>
+<p>可靠性越强，延迟和可用性压力越高。系统设计里很少有免费的午餐，有的只是账单被推迟。</p>
+<h2 id="四kafka-事务">四、Kafka 事务</h2>
+<p>Kafka 事务可以把多条写入和消费 offset 放进同一个事务中。</p>
+<p>典型读处理写场景：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">consume input-topic
+</span></span><span class="line"><span class="cl">  -&gt; process
+</span></span><span class="line"><span class="cl">  -&gt; produce output-topic
+</span></span><span class="line"><span class="cl">  -&gt; commit consumed offsets in transaction
+</span></span></code></pre></div><p>如果事务提交成功：</p>
+<ul>
+<li>输出消息对下游可见。</li>
+<li>输入消息 offset 一起提交。</li>
+</ul>
+<p>如果事务回滚：</p>
+<ul>
+<li>输出消息不可见。</li>
+<li>输入 offset 不提交，后续可以重新处理。</li>
+</ul>
+<p>配置：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-properties" data-lang="properties"><span class="line"><span class="cl"><span class="na">transactional.id</span><span class="o">=</span><span class="s">order-app-1</span>
+</span></span><span class="line"><span class="cl"><span class="na">enable.idempotence</span><span class="o">=</span><span class="s">true</span>
+</span></span><span class="line"><span class="cl"><span class="na">acks</span><span class="o">=</span><span class="s">all</span>
+</span></span></code></pre></div><p>Spring Kafka 中可以配置：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-yaml" data-lang="yaml"><span class="line"><span class="cl"><span class="nt">spring</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">kafka</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nt">producer</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">      </span><span class="nt">transaction-id-prefix</span><span class="p">:</span><span class="w"> </span><span class="l">order-tx-</span><span class="w">
+</span></span></span></code></pre></div><p>代码：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">kafkaTemplate</span><span class="p">.</span><span class="na">executeInTransaction</span><span class="p">(</span><span class="n">operations</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">operations</span><span class="p">.</span><span class="na">send</span><span class="p">(</span><span class="s">&#34;order-result-topic&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">event</span><span class="p">.</span><span class="na">getOrderId</span><span class="p">(),</span><span class="w"> </span><span class="n">resultEvent</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">operations</span><span class="p">.</span><span class="na">send</span><span class="p">(</span><span class="s">&#34;order-audit-topic&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">event</span><span class="p">.</span><span class="na">getOrderId</span><span class="p">(),</span><span class="w"> </span><span class="n">auditEvent</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="kc">true</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">});</span><span class="w">
+</span></span></span></code></pre></div><h2 id="五事务与数据库">五、事务与数据库</h2>
+<p>Kafka 事务不能自动覆盖数据库事务。</p>
+<p>下面这段代码仍然有一致性风险：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="nd">@Transactional</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">public</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">createOrder</span><span class="p">(</span><span class="n">Order</span><span class="w"> </span><span class="n">order</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">orderRepository</span><span class="p">.</span><span class="na">save</span><span class="p">(</span><span class="n">order</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">kafkaTemplate</span><span class="p">.</span><span class="na">send</span><span class="p">(</span><span class="s">&#34;order-topic&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">order</span><span class="p">.</span><span class="na">getId</span><span class="p">(),</span><span class="w"> </span><span class="n">order</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>可能出现：</p>
+<ul>
+<li>数据库提交成功，Kafka 发送失败。</li>
+<li>Kafka 发送成功，数据库提交失败。</li>
+<li>应用在两个动作之间宕机。</li>
+</ul>
+<p>常见解决方案是 Outbox：</p>
+<ol>
+<li>在同一个数据库事务里写业务表和本地消息表。</li>
+<li>后台任务扫描本地消息表。</li>
+<li>发送 Kafka。</li>
+<li>发送成功后标记消息已发送。</li>
+<li>下游消费仍然按业务 key 幂等。</li>
+</ol>
+<p>示例表：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="k">CREATE</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">outbox_event</span><span class="w"> </span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">id</span><span class="w"> </span><span class="nb">BIGINT</span><span class="w"> </span><span class="k">PRIMARY</span><span class="w"> </span><span class="k">KEY</span><span class="w"> </span><span class="n">AUTO_INCREMENT</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">aggregate_id</span><span class="w"> </span><span class="nb">VARCHAR</span><span class="p">(</span><span class="mi">128</span><span class="p">)</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">event_type</span><span class="w"> </span><span class="nb">VARCHAR</span><span class="p">(</span><span class="mi">64</span><span class="p">)</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">payload</span><span class="w"> </span><span class="n">JSON</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">status</span><span class="w"> </span><span class="nb">VARCHAR</span><span class="p">(</span><span class="mi">32</span><span class="p">)</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">created_at</span><span class="w"> </span><span class="n">DATETIME</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">updated_at</span><span class="w"> </span><span class="n">DATETIME</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">UNIQUE</span><span class="w"> </span><span class="k">KEY</span><span class="w"> </span><span class="n">uk_event</span><span class="w"> </span><span class="p">(</span><span class="n">aggregate_id</span><span class="p">,</span><span class="w"> </span><span class="n">event_type</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><p>Outbox 不花哨，但很可靠。可靠的东西通常没有那么戏剧化，像雪一样安静地落在地上，然后把坑填平。</p>
+<h2 id="六顺序消息">六、顺序消息</h2>
+<p>Kafka 的顺序边界是 Partition。</p>
+<p>要保证同一业务对象有序：</p>
+<ul>
+<li>Producer 使用稳定 key，比如 <code>orderId</code>。</li>
+<li>相同 key 的消息进入同一 Partition。</li>
+<li>Consumer 对同一 Partition 按 poll 顺序处理。</li>
+<li>不要在业务线程池里打乱同一 key 的处理顺序。</li>
+</ul>
+<p>示例：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">kafkaTemplate</span><span class="p">.</span><span class="na">send</span><span class="p">(</span><span class="s">&#34;order-status-topic&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">event</span><span class="p">.</span><span class="na">getOrderId</span><span class="p">(),</span><span class="w"> </span><span class="n">event</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><p>不能保证全局顺序：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">partition-0: A1 A2 A3
+</span></span><span class="line"><span class="cl">partition-1: B1 B2 B3
+</span></span></code></pre></div><p>不同 Partition 之间没有全局先后关系。如果要求整个 Topic 全局有序，只能使用一个 Partition，但吞吐和可用性都会受限。</p>
+<h2 id="七消费者幂等">七、消费者幂等</h2>
+<p>消费者幂等是 Kafka 业务可靠性的基础。</p>
+<p>常用方案：</p>
+<ul>
+<li>数据库唯一键。</li>
+<li>Redis <code>SETNX</code>。</li>
+<li>业务状态机。</li>
+<li>消费日志表。</li>
+<li>幂等接口。</li>
+</ul>
+<p>消费日志表示例：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="k">CREATE</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">kafka_consume_log</span><span class="w"> </span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">id</span><span class="w"> </span><span class="nb">BIGINT</span><span class="w"> </span><span class="k">PRIMARY</span><span class="w"> </span><span class="k">KEY</span><span class="w"> </span><span class="n">AUTO_INCREMENT</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">consumer_group</span><span class="w"> </span><span class="nb">VARCHAR</span><span class="p">(</span><span class="mi">128</span><span class="p">)</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">topic</span><span class="w"> </span><span class="nb">VARCHAR</span><span class="p">(</span><span class="mi">128</span><span class="p">)</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">message_key</span><span class="w"> </span><span class="nb">VARCHAR</span><span class="p">(</span><span class="mi">128</span><span class="p">)</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">status</span><span class="w"> </span><span class="nb">VARCHAR</span><span class="p">(</span><span class="mi">32</span><span class="p">)</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">created_at</span><span class="w"> </span><span class="n">DATETIME</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">updated_at</span><span class="w"> </span><span class="n">DATETIME</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">UNIQUE</span><span class="w"> </span><span class="k">KEY</span><span class="w"> </span><span class="n">uk_consume</span><span class="w"> </span><span class="p">(</span><span class="n">consumer_group</span><span class="p">,</span><span class="w"> </span><span class="n">topic</span><span class="p">,</span><span class="w"> </span><span class="n">message_key</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><p>消费逻辑：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="nd">@Transactional</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">public</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">consume</span><span class="p">(</span><span class="n">OrderPaidEvent</span><span class="w"> </span><span class="n">event</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kt">boolean</span><span class="w"> </span><span class="n">inserted</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">consumeLogRepository</span><span class="p">.</span><span class="na">tryInsert</span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="s">&#34;inventory-order-group&#34;</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="s">&#34;order-topic&#34;</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">event</span><span class="p">.</span><span class="na">getOrderId</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">inserted</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">inventoryService</span><span class="p">.</span><span class="na">deduct</span><span class="p">(</span><span class="n">event</span><span class="p">.</span><span class="na">getOrderId</span><span class="p">());</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">consumeLogRepository</span><span class="p">.</span><span class="na">markSuccess</span><span class="p">(</span><span class="n">event</span><span class="p">.</span><span class="na">getOrderId</span><span class="p">());</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>如果业务状态天然幂等，也可以直接依赖状态机：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">UNPAID -&gt; PAID -&gt; SHIPPED
+</span></span></code></pre></div><p>重复收到 <code>PAID</code> 事件时，如果订单已经是 <code>PAID</code> 或更后续状态，就直接忽略。</p>
+<h2 id="八重试与死信主题">八、重试与死信主题</h2>
+<p>Kafka 本身没有像 RocketMQ 那样的消费重试等级队列。Spring Kafka 通常通过错误处理器、重试主题或死信主题实现。</p>
+<p>简单重试 + DLT：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="nd">@Bean</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">public</span><span class="w"> </span><span class="n">DefaultErrorHandler</span><span class="w"> </span><span class="nf">errorHandler</span><span class="p">(</span><span class="n">KafkaTemplate</span><span class="o">&lt;</span><span class="n">Object</span><span class="p">,</span><span class="w"> </span><span class="n">Object</span><span class="o">&gt;</span><span class="w"> </span><span class="n">kafkaTemplate</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">DeadLetterPublishingRecoverer</span><span class="w"> </span><span class="n">recoverer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">DeadLetterPublishingRecoverer</span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">kafkaTemplate</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">(</span><span class="n">record</span><span class="p">,</span><span class="w"> </span><span class="n">ex</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">TopicPartition</span><span class="p">(</span><span class="n">record</span><span class="p">.</span><span class="na">topic</span><span class="p">()</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="s">&#34;.DLT&#34;</span><span class="p">,</span><span class="w"> </span><span class="n">record</span><span class="p">.</span><span class="na">partition</span><span class="p">())</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">DefaultErrorHandler</span><span class="p">(</span><span class="n">recoverer</span><span class="p">,</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">FixedBackOff</span><span class="p">(</span><span class="n">1000L</span><span class="p">,</span><span class="w"> </span><span class="n">3L</span><span class="p">));</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>设计建议：</p>
+<ul>
+<li>临时错误可以重试。</li>
+<li>永久错误不要无限重试。</li>
+<li>DLT 消息必须可观测、可查询、可重新投递。</li>
+<li>DLT 主题分区数不要少于原 Topic。</li>
+</ul>
+<p>对于需要多级延迟重试的场景，可以设计：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">order-topic
+</span></span><span class="line"><span class="cl">  -&gt; order-topic.retry.1m
+</span></span><span class="line"><span class="cl">  -&gt; order-topic.retry.5m
+</span></span><span class="line"><span class="cl">  -&gt; order-topic.retry.30m
+</span></span><span class="line"><span class="cl">  -&gt; order-topic.DLT
+</span></span></code></pre></div><p>Spring Kafka 也提供非阻塞重试主题能力，可以减少监听线程被阻塞的时间。</p>
+<h2 id="九延迟消息">九、延迟消息</h2>
+<p>Kafka 不以原生延迟消息为核心能力。常见实现方式有：</p>
+<ul>
+<li>Spring Kafka retry topic。</li>
+<li>单独的延迟调度服务。</li>
+<li>时间轮服务。</li>
+<li>数据库定时扫描。</li>
+<li>Kafka Streams 按时间窗口处理。</li>
+</ul>
+<p>订单超时关闭这类业务，不建议强行把 Kafka 当定时器。更稳妥的方式通常是：</p>
+<ol>
+<li>订单创建时写入过期时间。</li>
+<li>调度任务扫描到期未支付订单。</li>
+<li>发送关闭事件或直接关闭。</li>
+<li>消费端再次校验订单状态。</li>
+</ol>
+<p>如果一定要用 Kafka 做延迟重试，至少要把重试 Topic、时间粒度、最大重试次数和 DLT 都设计清楚。</p>
+<h2 id="十日志压缩">十、日志压缩</h2>
+<p>Kafka 的 <code>cleanup.policy=compact</code> 可以按 key 保留最新值。</p>
+<p>适合：</p>
+<ul>
+<li>用户状态快照。</li>
+<li>商品库存快照。</li>
+<li>配置变更。</li>
+<li>维表同步。</li>
+</ul>
+<p>示例：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-properties" data-lang="properties"><span class="line"><span class="cl"><span class="na">cleanup.policy</span><span class="o">=</span><span class="s">compact</span>
+</span></span></code></pre></div><p>如果写入：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">key=user-1 value={&#34;name&#34;:&#34;A&#34;}
+</span></span><span class="line"><span class="cl">key=user-1 value={&#34;name&#34;:&#34;B&#34;}
+</span></span><span class="line"><span class="cl">key=user-2 value={&#34;name&#34;:&#34;C&#34;}
+</span></span></code></pre></div><p>压缩后最终会尽量保留 <code>user-1</code> 的最新值和 <code>user-2</code> 的最新值。</p>
+<p>不适合：</p>
+<ul>
+<li>支付流水。</li>
+<li>审计日志。</li>
+<li>需要完整历史的业务事件。</li>
+</ul>
+<h2 id="十一积压治理">十一、积压治理</h2>
+<p>Kafka 消费积压通常表现为 consumer lag 持续升高。</p>
+<p>常见原因：</p>
+<ul>
+<li>消费者数量少于 Partition 数。</li>
+<li>单条消息处理太慢。</li>
+<li>下游数据库或接口慢。</li>
+<li>单个 key 过热，导致单分区积压。</li>
+<li>Rebalance 频繁。</li>
+<li>批量参数太小。</li>
+</ul>
+<p>治理思路：</p>
+<ol>
+<li>先确认是所有分区积压，还是单分区积压。</li>
+<li>如果所有分区积压，增加消费者实例或优化处理逻辑。</li>
+<li>如果单分区积压，检查热点 key。</li>
+<li>如果下游慢，优先治理下游，而不是盲目加消费者。</li>
+<li>如果 Partition 数不足，评估扩分区对顺序和 key 分布的影响。</li>
+</ol>
+<p>扩 Partition 要小心。Partition 数增加后，相同 key 的取模结果可能变化，后续消息可能进入新分区，从而破坏该 key 的历史顺序连续性。</p>
+<h2 id="十二监控指标">十二、监控指标</h2>
+<p>生产环境至少关注：</p>
+<ul>
+<li>Producer 发送失败率。</li>
+<li>Producer 请求延迟。</li>
+<li>Broker 磁盘使用率。</li>
+<li>Broker 网络吞吐。</li>
+<li>Under replicated partitions。</li>
+<li>Offline partitions。</li>
+<li>Consumer lag。</li>
+<li>Rebalance 次数。</li>
+<li>消费处理耗时。</li>
+<li>DLT 消息数量。</li>
+</ul>
+<p>Kafka 很擅长吞吐，但吞吐不是免死金牌。监控缺失时，高吞吐只是更快地把问题推向下游。</p>
+<h2 id="十三生产建议">十三、生产建议</h2>
+<p>上线 Kafka 业务前确认：</p>
+<ul>
+<li>Topic 分区数和副本数合理。</li>
+<li>关键消息使用 <code>acks=all</code> 和幂等生产者。</li>
+<li>消息 key 使用稳定业务 ID。</li>
+<li>消费者关闭自动提交 offset。</li>
+<li>处理成功后再提交 offset。</li>
+<li>消费逻辑幂等。</li>
+<li>错误处理和 DLT 已配置。</li>
+<li>DLT 有告警和处理流程。</li>
+<li>消费耗时小于 <code>max.poll.interval.ms</code>。</li>
+<li>外部数据库一致性使用 Outbox 或补偿机制。</li>
+</ul>
+<h2 id="十四一句话总结">十四、一句话总结</h2>
+<p>Kafka 的高级特性不是为了让系统“绝对不会出错”，而是让系统在网络抖动、进程宕机、重复投递和下游失败时仍然知道该怎么继续。成熟系统的美感，大概就在这种不慌不忙里。</p>
+<h2 id="参考资料">参考资料</h2>
+<ul>
+<li><a href="https://kafka.apache.org/documentation/#semantics">Apache Kafka：Message Delivery Semantics</a>
+</li>
+<li><a href="https://kafka.apache.org/documentation/#producerconfigs">Apache Kafka：Producer Configs</a>
+</li>
+<li><a href="https://kafka.apache.org/documentation/#compaction">Apache Kafka：Log Compaction</a>
+</li>
+<li><a href="https://docs.spring.io/spring-kafka/reference/retrytopic.html">Spring Kafka：Non-Blocking Retries</a>
+</li>
+<li><a href="https://docs.spring.io/spring-kafka/reference/kafka/transactions.html">Spring Kafka：Transactions</a>
+</li>
+</ul>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

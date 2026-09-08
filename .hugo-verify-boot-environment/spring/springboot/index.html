@@ -1,0 +1,1449 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Spring Boot | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="Spring Boot 是 Spring 生态的工程化框架。它并没有替代 Spring Framework，而是把 Spring 应用常见的依赖管理、自动配置、内嵌服务器、配置加载、监控和测试支持整理成一套默认方案。
+一句话概括：Spring Framework 提供能力，Spring Boot 负责把这些能力按约定组装成可启动的应用。
+一、Spring Boot 解决的问题 传统 Spring 项目常见问题如下：
+问题 典型表现 Spring Boot 的处理方式 依赖版本难统一 Spring MVC、Jackson、Tomcat、Validation 版本互相牵制 通过 Boot BOM 统一依赖版本 配置样板太多 XML 或 Java Config 注册大量基础 Bean 通过自动配置按条件创建默认 Bean Web 部署繁琐 打 WAR 包部署到外部 Tomcat 默认内嵌 Tomcat、Jetty 或 Undertow 配置入口分散 不同模块各有配置方式 使用 application.yml / application.properties 运维观测不足 健康检查、指标、环境信息要自己做 通过 Actuator 暴露运维端点 测试启动麻烦 手动准备容器和依赖 提供 @SpringBootTest、切片测试等工具 这些问题不是业务问题，却会持续消耗项目精力。Boot 的价值就在这里：把重复工程问题做成默认方案。
+二、启动入口 一个最小 Spring Boot 应用通常长这样：
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/spring/springboot/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/spring/springboot/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="Spring Boot">
+  <meta property="og:description" content="Spring Boot 是 Spring 生态的工程化框架。它并没有替代 Spring Framework，而是把 Spring 应用常见的依赖管理、自动配置、内嵌服务器、配置加载、监控和测试支持整理成一套默认方案。
+一句话概括：Spring Framework 提供能力，Spring Boot 负责把这些能力按约定组装成可启动的应用。
+一、Spring Boot 解决的问题 传统 Spring 项目常见问题如下：
+问题 典型表现 Spring Boot 的处理方式 依赖版本难统一 Spring MVC、Jackson、Tomcat、Validation 版本互相牵制 通过 Boot BOM 统一依赖版本 配置样板太多 XML 或 Java Config 注册大量基础 Bean 通过自动配置按条件创建默认 Bean Web 部署繁琐 打 WAR 包部署到外部 Tomcat 默认内嵌 Tomcat、Jetty 或 Undertow 配置入口分散 不同模块各有配置方式 使用 application.yml / application.properties 运维观测不足 健康检查、指标、环境信息要自己做 通过 Actuator 暴露运维端点 测试启动麻烦 手动准备容器和依赖 提供 @SpringBootTest、切片测试等工具 这些问题不是业务问题，却会持续消耗项目精力。Boot 的价值就在这里：把重复工程问题做成默认方案。
+二、启动入口 一个最小 Spring Boot 应用通常长这样：">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="spring">
+    <meta property="article:published_time" content="2025-09-20T20:32:27+08:00">
+    <meta property="article:modified_time" content="2025-09-20T20:32:27+08:00">
+
+  
+  <meta itemprop="name" content="Spring Boot">
+  <meta itemprop="description" content="Spring Boot 是 Spring 生态的工程化框架。它并没有替代 Spring Framework，而是把 Spring 应用常见的依赖管理、自动配置、内嵌服务器、配置加载、监控和测试支持整理成一套默认方案。
+一句话概括：Spring Framework 提供能力，Spring Boot 负责把这些能力按约定组装成可启动的应用。
+一、Spring Boot 解决的问题 传统 Spring 项目常见问题如下：
+问题 典型表现 Spring Boot 的处理方式 依赖版本难统一 Spring MVC、Jackson、Tomcat、Validation 版本互相牵制 通过 Boot BOM 统一依赖版本 配置样板太多 XML 或 Java Config 注册大量基础 Bean 通过自动配置按条件创建默认 Bean Web 部署繁琐 打 WAR 包部署到外部 Tomcat 默认内嵌 Tomcat、Jetty 或 Undertow 配置入口分散 不同模块各有配置方式 使用 application.yml / application.properties 运维观测不足 健康检查、指标、环境信息要自己做 通过 Actuator 暴露运维端点 测试启动麻烦 手动准备容器和依赖 提供 @SpringBootTest、切片测试等工具 这些问题不是业务问题，却会持续消耗项目精力。Boot 的价值就在这里：把重复工程问题做成默认方案。
+二、启动入口 一个最小 Spring Boot 应用通常长这样：">
+  <meta itemprop="datePublished" content="2025-09-20T20:32:27+08:00">
+  <meta itemprop="dateModified" content="2025-09-20T20:32:27+08:00">
+  <meta itemprop="wordCount" content="490">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Spring Boot">
+  <meta name="twitter:description" content="Spring Boot 是 Spring 生态的工程化框架。它并没有替代 Spring Framework，而是把 Spring 应用常见的依赖管理、自动配置、内嵌服务器、配置加载、监控和测试支持整理成一套默认方案。
+一句话概括：Spring Framework 提供能力，Spring Boot 负责把这些能力按约定组装成可启动的应用。
+一、Spring Boot 解决的问题 传统 Spring 项目常见问题如下：
+问题 典型表现 Spring Boot 的处理方式 依赖版本难统一 Spring MVC、Jackson、Tomcat、Validation 版本互相牵制 通过 Boot BOM 统一依赖版本 配置样板太多 XML 或 Java Config 注册大量基础 Bean 通过自动配置按条件创建默认 Bean Web 部署繁琐 打 WAR 包部署到外部 Tomcat 默认内嵌 Tomcat、Jetty 或 Undertow 配置入口分散 不同模块各有配置方式 使用 application.yml / application.properties 运维观测不足 健康检查、指标、环境信息要自己做 通过 Actuator 暴露运维端点 测试启动麻烦 手动准备容器和依赖 提供 @SpringBootTest、切片测试等工具 这些问题不是业务问题，却会持续消耗项目精力。Boot 的价值就在这里：把重复工程问题做成默认方案。
+二、启动入口 一个最小 Spring Boot 应用通常长这样：">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">Spring Boot</h1>
+
+    
+      <div class="post-date">September 20, 2025</div>
+    
+
+    <div class="post-content">
+      <p>Spring Boot 是 Spring 生态的工程化框架。它并没有替代 Spring Framework，而是把 Spring 应用常见的依赖管理、自动配置、内嵌服务器、配置加载、监控和测试支持整理成一套默认方案。</p>
+<p>一句话概括：<strong>Spring Framework 提供能力，Spring Boot 负责把这些能力按约定组装成可启动的应用</strong>。</p>
+<h2 id="一spring-boot-解决的问题">一、Spring Boot 解决的问题</h2>
+<p>传统 Spring 项目常见问题如下：</p>
+<table>
+  <thead>
+      <tr>
+          <th>问题</th>
+          <th>典型表现</th>
+          <th>Spring Boot 的处理方式</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>依赖版本难统一</td>
+          <td>Spring MVC、Jackson、Tomcat、Validation 版本互相牵制</td>
+          <td>通过 Boot BOM 统一依赖版本</td>
+      </tr>
+      <tr>
+          <td>配置样板太多</td>
+          <td>XML 或 Java Config 注册大量基础 Bean</td>
+          <td>通过自动配置按条件创建默认 Bean</td>
+      </tr>
+      <tr>
+          <td>Web 部署繁琐</td>
+          <td>打 WAR 包部署到外部 Tomcat</td>
+          <td>默认内嵌 Tomcat、Jetty 或 Undertow</td>
+      </tr>
+      <tr>
+          <td>配置入口分散</td>
+          <td>不同模块各有配置方式</td>
+          <td>使用 <code>application.yml</code> / <code>application.properties</code></td>
+      </tr>
+      <tr>
+          <td>运维观测不足</td>
+          <td>健康检查、指标、环境信息要自己做</td>
+          <td>通过 Actuator 暴露运维端点</td>
+      </tr>
+      <tr>
+          <td>测试启动麻烦</td>
+          <td>手动准备容器和依赖</td>
+          <td>提供 <code>@SpringBootTest</code>、切片测试等工具</td>
+      </tr>
+  </tbody>
+</table>
+<p>这些问题不是业务问题，却会持续消耗项目精力。Boot 的价值就在这里：把重复工程问题做成默认方案。</p>
+<h2 id="二启动入口">二、启动入口</h2>
+<p>一个最小 Spring Boot 应用通常长这样：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="nd">@SpringBootApplication</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">Application</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kd">static</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">main</span><span class="p">(</span><span class="n">String</span><span class="o">[]</span><span class="w"> </span><span class="n">args</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">SpringApplication</span><span class="p">.</span><span class="na">run</span><span class="p">(</span><span class="n">Application</span><span class="p">.</span><span class="na">class</span><span class="p">,</span><span class="w"> </span><span class="n">args</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p><code>@SpringBootApplication</code> 是组合注解，核心包含三部分：</p>
+<table>
+  <thead>
+      <tr>
+          <th>注解</th>
+          <th>作用</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>@SpringBootConfiguration</code></td>
+          <td>标记当前类是 Boot 配置类，本质是 <code>@Configuration</code></td>
+      </tr>
+      <tr>
+          <td><code>@EnableAutoConfiguration</code></td>
+          <td>开启自动配置，导入符合条件的自动配置类</td>
+      </tr>
+      <tr>
+          <td><code>@ComponentScan</code></td>
+          <td>默认扫描启动类所在包及其子包</td>
+      </tr>
+  </tbody>
+</table>
+<p>因此启动类通常应该放在项目根包下。否则组件扫描范围变小，某些 <code>@Controller</code>、<code>@Service</code> 找不到，表面像框架失灵，实际只是包结构把自己绊倒了。</p>
+<h2 id="三springapplicationrun-做了什么">三、<code>SpringApplication.run</code> 做了什么</h2>
+<p><code>SpringApplication.run</code> 不是单纯创建一个对象。它会完成应用启动的主流程：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">创建 SpringApplication
+</span></span><span class="line"><span class="cl"> -&gt; 推断应用类型
+</span></span><span class="line"><span class="cl"> -&gt; 准备 Environment
+</span></span><span class="line"><span class="cl"> -&gt; 加载配置文件
+</span></span><span class="line"><span class="cl"> -&gt; 创建 ApplicationContext
+</span></span><span class="line"><span class="cl"> -&gt; 执行上下文初始化器
+</span></span><span class="line"><span class="cl"> -&gt; 刷新容器 refresh()
+</span></span><span class="line"><span class="cl"> -&gt; 创建 Bean
+</span></span><span class="line"><span class="cl"> -&gt; 启动内嵌 Web 服务器
+</span></span><span class="line"><span class="cl"> -&gt; 发布启动事件
+</span></span><span class="line"><span class="cl"> -&gt; 执行 ApplicationRunner / CommandLineRunner
+</span></span></code></pre></div><p>其中最关键的是两件事：</p>
+<ul>
+<li><strong>准备环境</strong>：加载命令行参数、系统环境变量、配置文件、Profile 等配置源。</li>
+<li><strong>刷新容器</strong>：执行 Spring Framework 的 <code>ApplicationContext#refresh()</code>，完成 BeanFactory 准备、BeanDefinition 加载、BeanPostProcessor 注册、单例 Bean 创建等工作。</li>
+</ul>
+<p>Boot 的启动最终还是回到 Spring 容器生命周期。它只是把入口整理得更顺手。</p>
+<h2 id="四自动配置">四、自动配置</h2>
+<p>自动配置是 Spring Boot 最重要的机制。</p>
+<p>它的基本思想是：</p>
+<blockquote>
+<p>如果 classpath 中存在某类依赖，并且用户没有自己定义对应 Bean，Boot 就提供一套合理默认配置。</p></blockquote>
+<p>例如引入 <code>spring-boot-starter-web</code> 后，Boot 会根据条件自动配置：</p>
+<ul>
+<li><code>DispatcherServlet</code></li>
+<li>Spring MVC 基础组件</li>
+<li>Jackson JSON 转换器</li>
+<li>Bean Validation 集成</li>
+<li>内嵌 Tomcat</li>
+<li>静态资源映射</li>
+<li>默认错误处理</li>
+</ul>
+<h3 id="1-自动配置导入方式">1. 自动配置导入方式</h3>
+<p>Spring Boot 2.7 和 3.x 主要通过下面的文件声明自动配置类：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports
+</span></span></code></pre></div><p>早期版本常见的是 <code>spring.factories</code>。如果在维护旧项目，看到它也不用惊讶，只是时代留下的接口。框架史有时也像考古，遗憾的是灰尘还会进 CI。</p>
+<h3 id="2-条件注解">2. 条件注解</h3>
+<p>自动配置类通常不会无条件生效，而是配合条件注解：</p>
+<table>
+  <thead>
+      <tr>
+          <th>注解</th>
+          <th>含义</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>@ConditionalOnClass</code></td>
+          <td>classpath 中存在指定类时生效</td>
+      </tr>
+      <tr>
+          <td><code>@ConditionalOnMissingClass</code></td>
+          <td>classpath 中不存在指定类时生效</td>
+      </tr>
+      <tr>
+          <td><code>@ConditionalOnBean</code></td>
+          <td>容器中存在指定 Bean 时生效</td>
+      </tr>
+      <tr>
+          <td><code>@ConditionalOnMissingBean</code></td>
+          <td>容器中不存在指定 Bean 时生效</td>
+      </tr>
+      <tr>
+          <td><code>@ConditionalOnProperty</code></td>
+          <td>配置项满足条件时生效</td>
+      </tr>
+      <tr>
+          <td><code>@ConditionalOnWebApplication</code></td>
+          <td>当前是 Web 应用时生效</td>
+      </tr>
+  </tbody>
+</table>
+<p>例如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="nd">@AutoConfiguration</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nd">@ConditionalOnClass</span><span class="p">(</span><span class="n">RedisTemplate</span><span class="p">.</span><span class="na">class</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">RedisAutoConfiguration</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nd">@Bean</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nd">@ConditionalOnMissingBean</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="n">RedisTemplate</span><span class="o">&lt;</span><span class="n">Object</span><span class="p">,</span><span class="w"> </span><span class="n">Object</span><span class="o">&gt;</span><span class="w"> </span><span class="nf">redisTemplate</span><span class="p">(</span><span class="n">RedisConnectionFactory</span><span class="w"> </span><span class="n">factory</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">RedisTemplate</span><span class="o">&lt;</span><span class="n">Object</span><span class="p">,</span><span class="w"> </span><span class="n">Object</span><span class="o">&gt;</span><span class="w"> </span><span class="n">template</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">RedisTemplate</span><span class="o">&lt;&gt;</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">template</span><span class="p">.</span><span class="na">setConnectionFactory</span><span class="p">(</span><span class="n">factory</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">template</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>这段配置表达的是：只有项目里有 Redis 相关类，并且用户没有自己定义 <code>RedisTemplate</code> 时，Boot 才创建默认 Bean。</p>
+<h2 id="五起步依赖">五、起步依赖</h2>
+<p>Starter 本质上是一组依赖集合，目的是让开发者不用逐个挑选兼容版本。</p>
+<p>常见 Starter：</p>
+<table>
+  <thead>
+      <tr>
+          <th>Starter</th>
+          <th>提供能力</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>spring-boot-starter-web</code></td>
+          <td>Spring MVC、Jackson、Validation 集成、内嵌 Tomcat</td>
+      </tr>
+      <tr>
+          <td><code>spring-boot-starter-validation</code></td>
+          <td>Bean Validation 和 Hibernate Validator</td>
+      </tr>
+      <tr>
+          <td><code>spring-boot-starter-aop</code></td>
+          <td>Spring AOP 和 AspectJ 注解支持</td>
+      </tr>
+      <tr>
+          <td><code>spring-boot-starter-data-redis</code></td>
+          <td>Redis 客户端、连接工厂、Template 支持</td>
+      </tr>
+      <tr>
+          <td><code>spring-boot-starter-security</code></td>
+          <td>Spring Security 过滤器链和安全配置</td>
+      </tr>
+      <tr>
+          <td><code>spring-boot-starter-test</code></td>
+          <td>JUnit、AssertJ、Mockito、Spring Test</td>
+      </tr>
+      <tr>
+          <td><code>spring-boot-starter-actuator</code></td>
+          <td>健康检查、指标、环境信息等端点</td>
+      </tr>
+  </tbody>
+</table>
+<p>Starter 不等于自动配置类。Starter 负责把依赖引进来，自动配置负责根据依赖和条件创建 Bean。两者经常配套出现，但职责不同。</p>
+<h2 id="六配置加载">六、配置加载</h2>
+<p>Spring Boot 统一使用 <code>Environment</code> 管理配置。常见配置源包括：</p>
+<ul>
+<li>命令行参数</li>
+<li>Java 系统属性</li>
+<li>操作系统环境变量</li>
+<li><code>application.yml</code></li>
+<li><code>application.properties</code></li>
+<li>Profile 配置，例如 <code>application-prod.yml</code></li>
+<li><code>@PropertySource</code></li>
+<li>默认配置</li>
+</ul>
+<p>应用中常用两种方式读取配置：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="nd">@Value</span><span class="p">(</span><span class="s">&#34;${app.name}&#34;</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">private</span><span class="w"> </span><span class="n">String</span><span class="w"> </span><span class="n">appName</span><span class="p">;</span><span class="w">
+</span></span></span></code></pre></div><p>更推荐用于结构化配置的是 <code>@ConfigurationProperties</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="nd">@ConfigurationProperties</span><span class="p">(</span><span class="n">prefix</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&#34;storage&#34;</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">StorageProperties</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="n">String</span><span class="w"> </span><span class="n">endpoint</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="n">String</span><span class="w"> </span><span class="n">bucket</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="n">String</span><span class="w"> </span><span class="nf">getEndpoint</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">endpoint</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">setEndpoint</span><span class="p">(</span><span class="n">String</span><span class="w"> </span><span class="n">endpoint</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">this</span><span class="p">.</span><span class="na">endpoint</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">endpoint</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="n">String</span><span class="w"> </span><span class="nf">getBucket</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">bucket</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">setBucket</span><span class="p">(</span><span class="n">String</span><span class="w"> </span><span class="n">bucket</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">this</span><span class="p">.</span><span class="na">bucket</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">bucket</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p><code>@Value</code> 适合少量简单值，<code>@ConfigurationProperties</code> 更适合一组有层次的业务配置。</p>
+<h2 id="七内嵌服务器">七、内嵌服务器</h2>
+<p>Boot Web 应用默认以 JAR 方式运行，并在应用内部启动 Web 服务器。</p>
+<p>常见选择：</p>
+<ul>
+<li>Tomcat：默认选择，Servlet 栈最常见。</li>
+<li>Jetty：轻量，某些场景下资源占用更低。</li>
+<li>Undertow：基于 XNIO，性能和吞吐表现较好。</li>
+<li>Netty：WebFlux 响应式栈常用，不属于 Servlet 容器。</li>
+</ul>
+<p>对 Spring MVC 应用来说，启动流程大致是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">SpringApplication.run()
+</span></span><span class="line"><span class="cl"> -&gt; 创建 ServletWebServerApplicationContext
+</span></span><span class="line"><span class="cl"> -&gt; refresh()
+</span></span><span class="line"><span class="cl"> -&gt; 创建 WebServer
+</span></span><span class="line"><span class="cl"> -&gt; 启动 Tomcat
+</span></span><span class="line"><span class="cl"> -&gt; 注册 DispatcherServlet
+</span></span><span class="line"><span class="cl"> -&gt; 应用开始接收请求
+</span></span></code></pre></div><p>所以内嵌 Tomcat 并不是“先启动一个外部容器再部署应用”，而是 Spring Boot 在应用进程里创建并启动服务器。</p>
+<h2 id="八actuator">八、Actuator</h2>
+<p>Actuator 提供生产环境常用的观测端点，例如：</p>
+<table>
+  <thead>
+      <tr>
+          <th>端点</th>
+          <th>作用</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>/actuator/health</code></td>
+          <td>健康检查</td>
+      </tr>
+      <tr>
+          <td><code>/actuator/info</code></td>
+          <td>应用信息</td>
+      </tr>
+      <tr>
+          <td><code>/actuator/metrics</code></td>
+          <td>指标</td>
+      </tr>
+      <tr>
+          <td><code>/actuator/env</code></td>
+          <td>环境配置</td>
+      </tr>
+      <tr>
+          <td><code>/actuator/beans</code></td>
+          <td>Bean 列表</td>
+      </tr>
+      <tr>
+          <td><code>/actuator/loggers</code></td>
+          <td>日志级别查看和调整</td>
+      </tr>
+  </tbody>
+</table>
+<p>生产环境不要随便暴露所有端点，尤其是 <code>env</code>、<code>beans</code>、<code>heapdump</code> 这类敏感端点。能被观测是好事，被过度观测就成了事故预告。</p>
+<h2 id="九测试支持">九、测试支持</h2>
+<p>Boot 为测试提供了多种层级：</p>
+<table>
+  <thead>
+      <tr>
+          <th>注解</th>
+          <th>适用场景</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>@SpringBootTest</code></td>
+          <td>启动完整 Spring 容器，做集成测试</td>
+      </tr>
+      <tr>
+          <td><code>@WebMvcTest</code></td>
+          <td>只测试 MVC 层</td>
+      </tr>
+      <tr>
+          <td><code>@DataJpaTest</code></td>
+          <td>只测试 JPA 持久层</td>
+      </tr>
+      <tr>
+          <td><code>@JsonTest</code></td>
+          <td>测试 JSON 序列化和反序列化</td>
+      </tr>
+      <tr>
+          <td><code>@MockBean</code></td>
+          <td>用 mock Bean 替换容器中的真实 Bean</td>
+      </tr>
+  </tbody>
+</table>
+<p>能用单元测试解决的问题，不要急着启动完整 Spring 容器。完整容器更接近真实环境，但代价是慢、重、故障原因更复杂。</p>
+<h2 id="十总结">十、总结</h2>
+<p>Spring Boot 的核心可以归纳成五句话：</p>
+<ul>
+<li><code>@SpringBootApplication</code> 是启动入口，负责配置、自动配置和组件扫描。</li>
+<li>Starter 解决依赖组合和版本协调问题。</li>
+<li>自动配置根据 classpath、配置项和容器状态创建默认 Bean。</li>
+<li>配置加载把不同来源的配置统一放进 <code>Environment</code>。</li>
+<li>内嵌服务器让应用可以直接以可执行 JAR 的方式运行。</li>
+</ul>
+<p>理解 Boot 时不要只看它“省了多少配置”。真正重要的是：它用一套稳定约定，把 Spring 应用从“能运行”推进到“可维护、可部署、可观测”。这才是 Boot 存在的理由。</p>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

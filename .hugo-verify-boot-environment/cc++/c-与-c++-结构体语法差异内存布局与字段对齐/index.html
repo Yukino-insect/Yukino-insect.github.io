@@ -1,0 +1,2011 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>C 与 C&#43;&#43; 结构体：语法差异、内存布局与字段对齐 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="结构体是 C 和 C&#43;&#43; 里都非常基础、也非常容易被低估的东西。
+它看起来只是“把几个字段放在一起”，但实际牵涉到类型系统、对象模型、内存布局、字段对齐、ABI、序列化、网络协议、二进制文件格式等一串问题。若只是记住“结构体里可以放变量”，未免太粗糙了。
+这篇文章系统整理三件事：
+C 和 C&#43;&#43; 结构体有什么相同点。 C 和 C&#43;&#43; 结构体有什么不同点。 结构体在内存中怎么布局，为什么会出现字段对齐和填充字节。 一、结构体解决了什么问题 结构体的核心作用是：把多个相关的数据组合成一个新的复合类型。
+例如，一个学生有学号、年龄、成绩：
+struct Student { int id; int age; double score; }; 相比单独维护多个变量：
+int id; int age; double score; 结构体的意义在于：
+把相关字段组织在同一个对象里。 让函数参数更清晰。 可以创建数组、指针、链表、树等复杂数据结构。 可以表达二进制数据格式或硬件寄存器布局。 例如：
+struct Student students[100]; 这表示有 100 个 Student 对象，每个对象内部都有 id、age、score 三个字段。
+二、C 和 C&#43;&#43; 结构体的相同点 先说共同点。因为 C&#43;&#43; 继承了大量 C 的语法，所以简单结构体在两门语言中看起来很像。
+1. 都可以定义一组成员字段 C：
+struct Point { int x; int y; }; C&#43;&#43;：
+struct Point { int x; int y; }; 这两个例子在语法上几乎一样，都表示 Point 由两个 int 成员组成。
+2. 都可以创建结构体变量 C 中通常这样写：
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/cc&#43;&#43;/c-%E4%B8%8E-c&#43;&#43;-%E7%BB%93%E6%9E%84%E4%BD%93%E8%AF%AD%E6%B3%95%E5%B7%AE%E5%BC%82%E5%86%85%E5%AD%98%E5%B8%83%E5%B1%80%E4%B8%8E%E5%AD%97%E6%AE%B5%E5%AF%B9%E9%BD%90/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/cc&#43;&#43;/c-%E4%B8%8E-c&#43;&#43;-%E7%BB%93%E6%9E%84%E4%BD%93%E8%AF%AD%E6%B3%95%E5%B7%AE%E5%BC%82%E5%86%85%E5%AD%98%E5%B8%83%E5%B1%80%E4%B8%8E%E5%AD%97%E6%AE%B5%E5%AF%B9%E9%BD%90/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="C 与 C&#43;&#43; 结构体：语法差异、内存布局与字段对齐">
+  <meta property="og:description" content="结构体是 C 和 C&#43;&#43; 里都非常基础、也非常容易被低估的东西。
+它看起来只是“把几个字段放在一起”，但实际牵涉到类型系统、对象模型、内存布局、字段对齐、ABI、序列化、网络协议、二进制文件格式等一串问题。若只是记住“结构体里可以放变量”，未免太粗糙了。
+这篇文章系统整理三件事：
+C 和 C&#43;&#43; 结构体有什么相同点。 C 和 C&#43;&#43; 结构体有什么不同点。 结构体在内存中怎么布局，为什么会出现字段对齐和填充字节。 一、结构体解决了什么问题 结构体的核心作用是：把多个相关的数据组合成一个新的复合类型。
+例如，一个学生有学号、年龄、成绩：
+struct Student { int id; int age; double score; }; 相比单独维护多个变量：
+int id; int age; double score; 结构体的意义在于：
+把相关字段组织在同一个对象里。 让函数参数更清晰。 可以创建数组、指针、链表、树等复杂数据结构。 可以表达二进制数据格式或硬件寄存器布局。 例如：
+struct Student students[100]; 这表示有 100 个 Student 对象，每个对象内部都有 id、age、score 三个字段。
+二、C 和 C&#43;&#43; 结构体的相同点 先说共同点。因为 C&#43;&#43; 继承了大量 C 的语法，所以简单结构体在两门语言中看起来很像。
+1. 都可以定义一组成员字段 C：
+struct Point { int x; int y; }; C&#43;&#43;：
+struct Point { int x; int y; }; 这两个例子在语法上几乎一样，都表示 Point 由两个 int 成员组成。
+2. 都可以创建结构体变量 C 中通常这样写：">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="c&amp;c&#43;&#43;">
+    <meta property="article:published_time" content="2026-08-22T20:44:55+08:00">
+    <meta property="article:modified_time" content="2026-08-22T20:44:55+08:00">
+
+  
+  <meta itemprop="name" content="C 与 C&#43;&#43; 结构体：语法差异、内存布局与字段对齐">
+  <meta itemprop="description" content="结构体是 C 和 C&#43;&#43; 里都非常基础、也非常容易被低估的东西。
+它看起来只是“把几个字段放在一起”，但实际牵涉到类型系统、对象模型、内存布局、字段对齐、ABI、序列化、网络协议、二进制文件格式等一串问题。若只是记住“结构体里可以放变量”，未免太粗糙了。
+这篇文章系统整理三件事：
+C 和 C&#43;&#43; 结构体有什么相同点。 C 和 C&#43;&#43; 结构体有什么不同点。 结构体在内存中怎么布局，为什么会出现字段对齐和填充字节。 一、结构体解决了什么问题 结构体的核心作用是：把多个相关的数据组合成一个新的复合类型。
+例如，一个学生有学号、年龄、成绩：
+struct Student { int id; int age; double score; }; 相比单独维护多个变量：
+int id; int age; double score; 结构体的意义在于：
+把相关字段组织在同一个对象里。 让函数参数更清晰。 可以创建数组、指针、链表、树等复杂数据结构。 可以表达二进制数据格式或硬件寄存器布局。 例如：
+struct Student students[100]; 这表示有 100 个 Student 对象，每个对象内部都有 id、age、score 三个字段。
+二、C 和 C&#43;&#43; 结构体的相同点 先说共同点。因为 C&#43;&#43; 继承了大量 C 的语法，所以简单结构体在两门语言中看起来很像。
+1. 都可以定义一组成员字段 C：
+struct Point { int x; int y; }; C&#43;&#43;：
+struct Point { int x; int y; }; 这两个例子在语法上几乎一样，都表示 Point 由两个 int 成员组成。
+2. 都可以创建结构体变量 C 中通常这样写：">
+  <meta itemprop="datePublished" content="2026-08-22T20:44:55+08:00">
+  <meta itemprop="dateModified" content="2026-08-22T20:44:55+08:00">
+  <meta itemprop="wordCount" content="2006">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="C 与 C&#43;&#43; 结构体：语法差异、内存布局与字段对齐">
+  <meta name="twitter:description" content="结构体是 C 和 C&#43;&#43; 里都非常基础、也非常容易被低估的东西。
+它看起来只是“把几个字段放在一起”，但实际牵涉到类型系统、对象模型、内存布局、字段对齐、ABI、序列化、网络协议、二进制文件格式等一串问题。若只是记住“结构体里可以放变量”，未免太粗糙了。
+这篇文章系统整理三件事：
+C 和 C&#43;&#43; 结构体有什么相同点。 C 和 C&#43;&#43; 结构体有什么不同点。 结构体在内存中怎么布局，为什么会出现字段对齐和填充字节。 一、结构体解决了什么问题 结构体的核心作用是：把多个相关的数据组合成一个新的复合类型。
+例如，一个学生有学号、年龄、成绩：
+struct Student { int id; int age; double score; }; 相比单独维护多个变量：
+int id; int age; double score; 结构体的意义在于：
+把相关字段组织在同一个对象里。 让函数参数更清晰。 可以创建数组、指针、链表、树等复杂数据结构。 可以表达二进制数据格式或硬件寄存器布局。 例如：
+struct Student students[100]; 这表示有 100 个 Student 对象，每个对象内部都有 id、age、score 三个字段。
+二、C 和 C&#43;&#43; 结构体的相同点 先说共同点。因为 C&#43;&#43; 继承了大量 C 的语法，所以简单结构体在两门语言中看起来很像。
+1. 都可以定义一组成员字段 C：
+struct Point { int x; int y; }; C&#43;&#43;：
+struct Point { int x; int y; }; 这两个例子在语法上几乎一样，都表示 Point 由两个 int 成员组成。
+2. 都可以创建结构体变量 C 中通常这样写：">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">C 与 C&#43;&#43; 结构体：语法差异、内存布局与字段对齐</h1>
+
+    
+      <div class="post-date">August 22, 2026</div>
+    
+
+    <div class="post-content">
+      <p>结构体是 C 和 C++ 里都非常基础、也非常容易被低估的东西。</p>
+<p>它看起来只是“把几个字段放在一起”，但实际牵涉到类型系统、对象模型、内存布局、字段对齐、ABI、序列化、网络协议、二进制文件格式等一串问题。若只是记住“结构体里可以放变量”，未免太粗糙了。</p>
+<p>这篇文章系统整理三件事：</p>
+<ul>
+<li>C 和 C++ 结构体有什么相同点。</li>
+<li>C 和 C++ 结构体有什么不同点。</li>
+<li>结构体在内存中怎么布局，为什么会出现字段对齐和填充字节。</li>
+</ul>
+<h2 id="一结构体解决了什么问题">一、结构体解决了什么问题</h2>
+<p>结构体的核心作用是：<strong>把多个相关的数据组合成一个新的复合类型</strong>。</p>
+<p>例如，一个学生有学号、年龄、成绩：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">struct</span> <span class="n">Student</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">id</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">age</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">double</span> <span class="n">score</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><p>相比单独维护多个变量：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">id</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">age</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="kt">double</span> <span class="n">score</span><span class="p">;</span>
+</span></span></code></pre></div><p>结构体的意义在于：</p>
+<ul>
+<li>把相关字段组织在同一个对象里。</li>
+<li>让函数参数更清晰。</li>
+<li>可以创建数组、指针、链表、树等复杂数据结构。</li>
+<li>可以表达二进制数据格式或硬件寄存器布局。</li>
+</ul>
+<p>例如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">struct</span> <span class="n">Student</span> <span class="n">students</span><span class="p">[</span><span class="mi">100</span><span class="p">];</span>
+</span></span></code></pre></div><p>这表示有 100 个 <code>Student</code> 对象，每个对象内部都有 <code>id</code>、<code>age</code>、<code>score</code> 三个字段。</p>
+<h2 id="二c-和-c-结构体的相同点">二、C 和 C++ 结构体的相同点</h2>
+<p>先说共同点。因为 C++ 继承了大量 C 的语法，所以简单结构体在两门语言中看起来很像。</p>
+<h3 id="1-都可以定义一组成员字段">1. 都可以定义一组成员字段</h3>
+<p>C：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">struct</span> <span class="n">Point</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">x</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">y</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><p>C++：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">struct</span> <span class="nc">Point</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">x</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">y</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><p>这两个例子在语法上几乎一样，都表示 <code>Point</code> 由两个 <code>int</code> 成员组成。</p>
+<h3 id="2-都可以创建结构体变量">2. 都可以创建结构体变量</h3>
+<p>C 中通常这样写：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">struct</span> <span class="n">Point</span> <span class="n">p</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="n">p</span><span class="p">.</span><span class="n">x</span> <span class="o">=</span> <span class="mi">10</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="n">p</span><span class="p">.</span><span class="n">y</span> <span class="o">=</span> <span class="mi">20</span><span class="p">;</span>
+</span></span></code></pre></div><p>C++ 中也可以这样写：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="n">Point</span> <span class="n">p</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="n">p</span><span class="p">.</span><span class="n">x</span> <span class="o">=</span> <span class="mi">10</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="n">p</span><span class="p">.</span><span class="n">y</span> <span class="o">=</span> <span class="mi">20</span><span class="p">;</span>
+</span></span></code></pre></div><p>注意这里已经出现了一个小差异：C 里通常要写 <code>struct Point</code>，而 C++ 里可以直接写 <code>Point</code>。这个差异后面会展开。</p>
+<h3 id="3-都可以通过--和---访问成员">3. 都可以通过 <code>.</code> 和 <code>-&gt;</code> 访问成员</h3>
+<p>当变量本身是结构体对象时，用 <code>.</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">struct</span> <span class="n">Point</span> <span class="n">p</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="n">p</span><span class="p">.</span><span class="n">x</span> <span class="o">=</span> <span class="mi">10</span><span class="p">;</span>
+</span></span></code></pre></div><p>当变量是结构体指针时，用 <code>-&gt;</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">struct</span> <span class="n">Point</span> <span class="o">*</span><span class="n">ptr</span> <span class="o">=</span> <span class="o">&amp;</span><span class="n">p</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="n">ptr</span><span class="o">-&gt;</span><span class="n">x</span> <span class="o">=</span> <span class="mi">20</span><span class="p">;</span>
+</span></span></code></pre></div><p><code>ptr-&gt;x</code> 本质上等价于：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="p">(</span><span class="o">*</span><span class="n">ptr</span><span class="p">).</span><span class="n">x</span>
+</span></span></code></pre></div><p>因为 <code>.</code> 的优先级比 <code>*</code> 高，所以必须写成 <code>(*ptr).x</code>，不能写成 <code>*ptr.x</code>。</p>
+<h3 id="4-都会受到内存布局和对齐规则影响">4. 都会受到内存布局和对齐规则影响</h3>
+<p>无论是 C 还是 C++，结构体对象最终都要放在内存里。字段不是简单无缝拼接，编译器经常会在字段之间插入填充字节。</p>
+<p>例如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">struct</span> <span class="n">Example</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">char</span> <span class="n">c</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">i</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><p>很多平台上 <code>sizeof(struct Example)</code> 不是 <code>1 + 4 = 5</code>，而是 <code>8</code>。</p>
+<p>原因不是编译器闲得无聊，而是为了让 <code>int</code> 放在适合它访问的地址上。这个问题后文会详细讲。</p>
+<h2 id="三c-结构体的特点">三、C 结构体的特点</h2>
+<p>C 的结构体主要是纯数据聚合。它偏向“数据组织”，不提供完整的面向对象能力。</p>
+<h3 id="1-c-中类型名通常要带-struct">1. C 中类型名通常要带 <code>struct</code></h3>
+<p>在 C 里：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">struct</span> <span class="n">Student</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">id</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">age</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">struct</span> <span class="n">Student</span> <span class="n">s</span><span class="p">;</span>
+</span></span></code></pre></div><p>这里的完整类型名是 <code>struct Student</code>，不能直接写：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">Student</span> <span class="n">s</span><span class="p">;</span> <span class="c1">// C 中不合法，除非做了 typedef
+</span></span></span></code></pre></div><p>如果想直接使用 <code>Student</code>，通常会配合 <code>typedef</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">Student</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">id</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">age</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">Student</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">Student</span> <span class="n">s</span><span class="p">;</span>
+</span></span></code></pre></div><p>还有一种常见写法是匿名结构体配合 <code>typedef</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">id</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">age</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">Student</span><span class="p">;</span>
+</span></span></code></pre></div><p>这种写法可以直接使用 <code>Student</code>，但因为没有结构体标签名，不适合直接写自引用结构体。</p>
+<p>比如链表节点更常见的写法是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">Node</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">value</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">struct</span> <span class="n">Node</span> <span class="o">*</span><span class="n">next</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">Node</span><span class="p">;</span>
+</span></span></code></pre></div><p>在结构体内部，<code>Node</code> 这个 typedef 名还没有完全建立，所以自引用指针要写 <code>struct Node *next</code>。</p>
+<h3 id="2-c-结构体不能定义成员函数">2. C 结构体不能定义成员函数</h3>
+<p>C 中结构体内部只能声明数据成员，不能写成员函数：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">struct</span> <span class="n">Counter</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">value</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="kt">void</span> <span class="nf">add</span><span class="p">()</span> <span class="p">{</span> <span class="c1">// C 中不合法
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="n">value</span><span class="o">++</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><p>C 通常把“数据”和“操作数据的函数”分开写：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">struct</span> <span class="n">Counter</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">value</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">counter_add</span><span class="p">(</span><span class="k">struct</span> <span class="n">Counter</span> <span class="o">*</span><span class="n">counter</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">counter</span><span class="o">-&gt;</span><span class="n">value</span><span class="o">++</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>这种风格非常清晰，也很直接。代价是调用者需要显式把对象指针传进去。</p>
+<h3 id="3-c-结构体没有构造函数和析构函数">3. C 结构体没有构造函数和析构函数</h3>
+<p>C 中创建结构体对象时，不会自动调用构造函数：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">struct</span> <span class="n">Student</span> <span class="n">s</span><span class="p">;</span>
+</span></span></code></pre></div><p>如果这是局部变量，里面的字段默认是未初始化的。也就是说，字段值可能是任意内容。</p>
+<p>可以手动初始化：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">struct</span> <span class="n">Student</span> <span class="n">s</span> <span class="o">=</span> <span class="p">{</span><span class="mi">1</span><span class="p">,</span> <span class="mi">18</span><span class="p">};</span>
+</span></span></code></pre></div><p>也可以写初始化函数：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">student_init</span><span class="p">(</span><span class="k">struct</span> <span class="n">Student</span> <span class="o">*</span><span class="n">student</span><span class="p">,</span> <span class="kt">int</span> <span class="n">id</span><span class="p">,</span> <span class="kt">int</span> <span class="n">age</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">student</span><span class="o">-&gt;</span><span class="n">id</span> <span class="o">=</span> <span class="n">id</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">student</span><span class="o">-&gt;</span><span class="n">age</span> <span class="o">=</span> <span class="n">age</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>C 也没有析构函数。如果结构体内部持有动态内存、文件句柄、socket 等资源，需要手动释放：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">struct</span> <span class="n">Buffer</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">char</span> <span class="o">*</span><span class="n">data</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">size</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">buffer_destroy</span><span class="p">(</span><span class="k">struct</span> <span class="n">Buffer</span> <span class="o">*</span><span class="n">buffer</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">free</span><span class="p">(</span><span class="n">buffer</span><span class="o">-&gt;</span><span class="n">data</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="n">buffer</span><span class="o">-&gt;</span><span class="n">data</span> <span class="o">=</span> <span class="nb">NULL</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">buffer</span><span class="o">-&gt;</span><span class="n">size</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>这就是 C 的风格：权力交给你，责任也交给你。听起来很公平，实际写错时也很公平。</p>
+<h3 id="4-c-支持位域和柔性数组成员">4. C 支持位域和柔性数组成员</h3>
+<p>C 结构体可以使用位域：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">struct</span> <span class="n">Flags</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">unsigned</span> <span class="kt">int</span> <span class="nl">readable</span> <span class="p">:</span> <span class="mi">1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">unsigned</span> <span class="kt">int</span> <span class="nl">writable</span> <span class="p">:</span> <span class="mi">1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">unsigned</span> <span class="kt">int</span> <span class="nl">executable</span> <span class="p">:</span> <span class="mi">1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><p>位域常用于压缩标志位、描述硬件寄存器等场景。</p>
+<p>C99 还支持柔性数组成员：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">struct</span> <span class="n">Packet</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">length</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">char</span> <span class="n">data</span><span class="p">[];</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><p><code>data</code> 不占固定大小，通常配合一次性动态分配使用：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">struct</span> <span class="n">Packet</span> <span class="o">*</span><span class="n">packet</span> <span class="o">=</span> <span class="nf">malloc</span><span class="p">(</span><span class="k">sizeof</span><span class="p">(</span><span class="k">struct</span> <span class="n">Packet</span><span class="p">)</span> <span class="o">+</span> <span class="mi">100</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="n">packet</span><span class="o">-&gt;</span><span class="n">length</span> <span class="o">=</span> <span class="mi">100</span><span class="p">;</span>
+</span></span></code></pre></div><p>柔性数组成员必须放在结构体最后。C++ 标准中没有 C 风格柔性数组成员，虽然有些编译器会作为扩展支持。写跨语言、跨编译器代码时，不应该依赖它。</p>
+<h2 id="四c-结构体的特点">四、C++ 结构体的特点</h2>
+<p>C++ 中的 <code>struct</code> 已经不只是“数据包”。它本质上和 <code>class</code> 很接近，只是默认访问权限不同。</p>
+<h3 id="1-c-中可以直接使用结构体类型名">1. C++ 中可以直接使用结构体类型名</h3>
+<p>C++：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">struct</span> <span class="nc">Student</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">id</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">age</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">Student</span> <span class="n">s</span><span class="p">;</span>
+</span></span></code></pre></div><p>在 C++ 中，<code>Student</code> 可以直接作为类型名使用，不需要写成 <code>struct Student</code>。</p>
+<p>当然，写成下面这样也可以：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">struct</span> <span class="nc">Student</span> <span class="n">s</span><span class="p">;</span>
+</span></span></code></pre></div><p>只是 C++ 程序通常不会这么写。</p>
+<h3 id="2-c-结构体可以有成员函数">2. C++ 结构体可以有成员函数</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">struct</span> <span class="nc">Counter</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">value</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="kt">void</span> <span class="nf">add</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="n">value</span><span class="o">++</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">Counter</span> <span class="n">counter</span><span class="p">{</span><span class="mi">0</span><span class="p">};</span>
+</span></span><span class="line"><span class="cl"><span class="n">counter</span><span class="p">.</span><span class="n">add</span><span class="p">();</span>
+</span></span></code></pre></div><p>成员函数内部可以直接访问成员字段，因为它隐式接收一个 <code>this</code> 指针。</p>
+<p>概念上可以粗略理解为：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="kt">void</span> <span class="n">Counter</span><span class="o">::</span><span class="n">add</span><span class="p">(</span><span class="n">Counter</span> <span class="o">*</span><span class="k">this</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">this</span><span class="o">-&gt;</span><span class="n">value</span><span class="o">++</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>这只是帮助理解，真实语法并不是这样写。</p>
+<h3 id="3-c-结构体可以有构造函数和析构函数">3. C++ 结构体可以有构造函数和析构函数</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">struct</span> <span class="nc">Student</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">id</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">age</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">Student</span><span class="p">(</span><span class="kt">int</span> <span class="n">id</span><span class="p">,</span> <span class="kt">int</span> <span class="n">age</span><span class="p">)</span> <span class="o">:</span> <span class="n">id</span><span class="p">(</span><span class="n">id</span><span class="p">),</span> <span class="n">age</span><span class="p">(</span><span class="n">age</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">Student</span> <span class="nf">s</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">18</span><span class="p">);</span>
+</span></span></code></pre></div><p>如果结构体管理资源，还可以写析构函数：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">struct</span> <span class="nc">FileHolder</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">FILE</span> <span class="o">*</span><span class="n">file</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">explicit</span> <span class="nf">FileHolder</span><span class="p">(</span><span class="n">FILE</span> <span class="o">*</span><span class="n">file</span><span class="p">)</span> <span class="o">:</span> <span class="n">file</span><span class="p">(</span><span class="n">file</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="o">~</span><span class="n">FileHolder</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">if</span> <span class="p">(</span><span class="n">file</span> <span class="o">!=</span> <span class="k">nullptr</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="n">fclose</span><span class="p">(</span><span class="n">file</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><p>这就是 C++ 常说的 RAII：对象创建时获取资源，对象销毁时释放资源。</p>
+<h3 id="4-c-结构体可以有访问控制">4. C++ 结构体可以有访问控制</h3>
+<p>C++ 的结构体可以写 <code>public</code>、<code>private</code>、<code>protected</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">struct</span> <span class="nc">User</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="k">public</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">id</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">private</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">passwordHash</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><p><code>struct</code> 的默认访问权限是 <code>public</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">struct</span> <span class="nc">A</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">x</span><span class="p">;</span> <span class="c1">// public
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">};</span>
+</span></span></code></pre></div><p>而 <code>class</code> 的默认访问权限是 <code>private</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">B</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">x</span><span class="p">;</span> <span class="c1">// private
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">};</span>
+</span></span></code></pre></div><p>所以在 C++ 中，<code>struct</code> 和 <code>class</code> 的主要语法差别是：</p>
+<table>
+  <thead>
+      <tr>
+          <th>关键字</th>
+          <th>默认成员访问权限</th>
+          <th>默认继承访问权限</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>struct</code></td>
+          <td><code>public</code></td>
+          <td><code>public</code></td>
+      </tr>
+      <tr>
+          <td><code>class</code></td>
+          <td><code>private</code></td>
+          <td><code>private</code></td>
+      </tr>
+  </tbody>
+</table>
+<p>除此之外，二者都可以有构造函数、析构函数、成员函数、静态成员、继承、虚函数、模板等能力。</p>
+<h3 id="5-c-结构体可以继承">5. C++ 结构体可以继承</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">struct</span> <span class="nc">Shape</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">virtual</span> <span class="kt">double</span> <span class="nf">area</span><span class="p">()</span> <span class="k">const</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">virtual</span> <span class="o">~</span><span class="n">Shape</span><span class="p">()</span> <span class="o">=</span> <span class="k">default</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">struct</span> <span class="nc">Circle</span> <span class="o">:</span> <span class="n">Shape</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">double</span> <span class="n">radius</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">explicit</span> <span class="nf">Circle</span><span class="p">(</span><span class="kt">double</span> <span class="n">radius</span><span class="p">)</span> <span class="o">:</span> <span class="n">radius</span><span class="p">(</span><span class="n">radius</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="kt">double</span> <span class="nf">area</span><span class="p">()</span> <span class="k">const</span> <span class="k">override</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="mf">3.1415926</span> <span class="o">*</span> <span class="n">radius</span> <span class="o">*</span> <span class="n">radius</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><p>这已经是完整的面向对象写法了。换句话说，C++ 的 <code>struct</code> 不是“低配 class”，而是默认公开的 <code>class</code>。</p>
+<h2 id="五c-和-c-结构体差异总结">五、C 和 C++ 结构体差异总结</h2>
+<p>可以用一张表收束一下：</p>
+<table>
+  <thead>
+      <tr>
+          <th>对比项</th>
+          <th>C 结构体</th>
+          <th>C++ 结构体</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>类型名使用</td>
+          <td>通常要写 <code>struct Student</code>，除非 <code>typedef</code></td>
+          <td>可以直接写 <code>Student</code></td>
+      </tr>
+      <tr>
+          <td>成员函数</td>
+          <td>不支持</td>
+          <td>支持</td>
+      </tr>
+      <tr>
+          <td>构造函数 / 析构函数</td>
+          <td>不支持</td>
+          <td>支持</td>
+      </tr>
+      <tr>
+          <td>访问控制</td>
+          <td>不支持 <code>public/private/protected</code></td>
+          <td>支持，默认 <code>public</code></td>
+      </tr>
+      <tr>
+          <td>继承</td>
+          <td>不支持</td>
+          <td>支持，默认 <code>public</code> 继承</td>
+      </tr>
+      <tr>
+          <td>虚函数</td>
+          <td>不支持</td>
+          <td>支持</td>
+      </tr>
+      <tr>
+          <td>运算符重载</td>
+          <td>不支持</td>
+          <td>支持</td>
+      </tr>
+      <tr>
+          <td>模板</td>
+          <td>不支持</td>
+          <td>支持</td>
+      </tr>
+      <tr>
+          <td>默认成员初始化</td>
+          <td>不支持</td>
+          <td>支持</td>
+      </tr>
+      <tr>
+          <td>柔性数组成员</td>
+          <td>C99 支持</td>
+          <td>标准 C++ 不支持</td>
+      </tr>
+      <tr>
+          <td>空结构体</td>
+          <td>标准 C 不允许空结构体</td>
+          <td>C++ 允许，大小至少为 1</td>
+      </tr>
+  </tbody>
+</table>
+<p>例如 C++ 中可以写：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">struct</span> <span class="nc">Config</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">port</span> <span class="o">=</span> <span class="mi">8080</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">bool</span> <span class="n">debug</span> <span class="o">=</span> <span class="nb">false</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">Config</span> <span class="n">config</span><span class="p">;</span>
+</span></span></code></pre></div><p>而 C 中不能这样给成员写默认值。</p>
+<h2 id="六结构体的内存布局">六、结构体的内存布局</h2>
+<p>结构体对象在内存中通常按成员声明顺序排列。编译器会为每个成员选择一个合适的偏移量，让它满足对齐要求。</p>
+<p>先看一个简单例子：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">struct</span> <span class="n">A</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">x</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">y</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><p>假设 <code>int</code> 占 4 字节，并要求按 4 字节对齐，那么布局通常是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">偏移量:  0   1   2   3   4   5   6   7
+</span></span><span class="line"><span class="cl">内容:   x   x   x   x   y   y   y   y
+</span></span></code></pre></div><p>所以：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">sizeof</span><span class="p">(</span><span class="k">struct</span> <span class="n">A</span><span class="p">)</span> <span class="o">==</span> <span class="mi">8</span>
+</span></span></code></pre></div><p>这个例子没有填充字节，因为两个 <code>int</code> 都自然满足 4 字节对齐。</p>
+<h3 id="1-成员偏移量">1. 成员偏移量</h3>
+<p>结构体中每个成员都有一个相对于结构体起始地址的偏移量。</p>
+<p>例如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">struct</span> <span class="n">Point</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">x</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">y</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><p>如果 <code>Point</code> 对象的起始地址是 <code>1000</code>，并且 <code>int</code> 占 4 字节，那么：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">p.x 地址 = 1000 + 0
+</span></span><span class="line"><span class="cl">p.y 地址 = 1000 + 4
+</span></span></code></pre></div><p>可以用 <code>offsetof</code> 查看成员偏移量：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;stddef.h&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;stdio.h&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="k">struct</span> <span class="n">Point</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">x</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">y</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">main</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">printf</span><span class="p">(</span><span class="s">&#34;%zu</span><span class="se">\n</span><span class="s">&#34;</span><span class="p">,</span> <span class="nf">offsetof</span><span class="p">(</span><span class="k">struct</span> <span class="n">Point</span><span class="p">,</span> <span class="n">x</span><span class="p">));</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">printf</span><span class="p">(</span><span class="s">&#34;%zu</span><span class="se">\n</span><span class="s">&#34;</span><span class="p">,</span> <span class="nf">offsetof</span><span class="p">(</span><span class="k">struct</span> <span class="n">Point</span><span class="p">,</span> <span class="n">y</span><span class="p">));</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">printf</span><span class="p">(</span><span class="s">&#34;%zu</span><span class="se">\n</span><span class="s">&#34;</span><span class="p">,</span> <span class="k">sizeof</span><span class="p">(</span><span class="k">struct</span> <span class="n">Point</span><span class="p">));</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>在 C++ 中，<code>offsetof</code> 主要适用于标准布局类型。如果一个类型有复杂继承、虚函数、不同访问控制区混排等情况，就不要轻率拿它当普通 C 结构体看待。</p>
+<h3 id="2-字段并不总是紧挨着">2. 字段并不总是紧挨着</h3>
+<p>看这个例子：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">struct</span> <span class="n">B</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">char</span> <span class="n">c</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">i</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">short</span> <span class="n">s</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><p>假设：</p>
+<ul>
+<li><code>char</code> 大小为 1 字节，对齐要求为 1。</li>
+<li><code>short</code> 大小为 2 字节，对齐要求为 2。</li>
+<li><code>int</code> 大小为 4 字节，对齐要求为 4。</li>
+<li>整个结构体的对齐要求取成员中最大的对齐要求，也就是 4。</li>
+</ul>
+<p>布局通常是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">偏移量:  0   1   2   3   4   5   6   7   8   9   10  11
+</span></span><span class="line"><span class="cl">内容:   c   pad pad pad i   i   i   i   s   s   pad pad
+</span></span></code></pre></div><p>于是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">sizeof</span><span class="p">(</span><span class="k">struct</span> <span class="n">B</span><span class="p">)</span> <span class="o">==</span> <span class="mi">12</span>
+</span></span></code></pre></div><p>为什么不是 <code>1 + 4 + 2 = 7</code>？</p>
+<p>因为 <code>i</code> 是 <code>int</code>，通常要求从 4 的倍数地址开始。<code>c</code> 占了偏移量 <code>0</code>，下一个可用位置是 <code>1</code>，但 <code>1</code> 不是 4 的倍数，所以编译器在 <code>c</code> 后面插入 3 个填充字节，让 <code>i</code> 从偏移量 <code>4</code> 开始。</p>
+<p><code>s</code> 放在偏移量 <code>8</code>，满足 2 字节对齐。<code>s</code> 占两个字节后到偏移量 <code>10</code>。但整个结构体大小还要是结构体对齐要求的整数倍，也就是 4 的整数倍，所以末尾再补 2 个填充字节，最终大小为 12。</p>
+<h3 id="3-结构体末尾为什么也要填充">3. 结构体末尾为什么也要填充</h3>
+<p>末尾填充常常被忽略，但它很重要。</p>
+<p>考虑数组：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">struct</span> <span class="n">B</span> <span class="n">arr</span><span class="p">[</span><span class="mi">2</span><span class="p">];</span>
+</span></span></code></pre></div><p>数组元素必须连续存放：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">arr[0] 起始地址
+</span></span><span class="line"><span class="cl">arr[1] 起始地址 = arr[0] 起始地址 + sizeof(struct B)
+</span></span></code></pre></div><p>如果 <code>sizeof(struct B)</code> 是 10，那么 <code>arr[1]</code> 的起始地址可能不是 4 的倍数。这样 <code>arr[1].i</code> 就可能无法满足 <code>int</code> 的对齐要求。</p>
+<p>所以编译器会把结构体总大小补齐到结构体对齐要求的整数倍。这样数组中的每一个元素都能保持正确对齐。</p>
+<p>这一点非常关键：<strong>结构体末尾的填充，是为了保证结构体数组里的下一个元素也能正确对齐。</strong></p>
+<h2 id="七什么是字段对齐">七、什么是字段对齐</h2>
+<p>字段对齐指的是：某种类型的对象通常需要放在特定倍数的地址上。</p>
+<p>常见情况可以粗略理解为：</p>
+<table>
+  <thead>
+      <tr>
+          <th>类型</th>
+          <th>常见大小</th>
+          <th>常见对齐要求</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>char</code></td>
+          <td>1</td>
+          <td>1</td>
+      </tr>
+      <tr>
+          <td><code>short</code></td>
+          <td>2</td>
+          <td>2</td>
+      </tr>
+      <tr>
+          <td><code>int</code></td>
+          <td>4</td>
+          <td>4</td>
+      </tr>
+      <tr>
+          <td><code>float</code></td>
+          <td>4</td>
+          <td>4</td>
+      </tr>
+      <tr>
+          <td><code>double</code></td>
+          <td>8</td>
+          <td>8 或 4</td>
+      </tr>
+      <tr>
+          <td>指针</td>
+          <td>4 或 8</td>
+          <td>4 或 8</td>
+      </tr>
+  </tbody>
+</table>
+<p>这张表只是常见平台上的情况，不是所有平台的绝对真理。具体大小和对齐要求会受到 CPU 架构、操作系统、编译器、ABI、编译选项影响。</p>
+<p>可以用下面方式查看：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;stdio.h&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;stdalign.h&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">main</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">printf</span><span class="p">(</span><span class="s">&#34;sizeof(int) = %zu</span><span class="se">\n</span><span class="s">&#34;</span><span class="p">,</span> <span class="k">sizeof</span><span class="p">(</span><span class="kt">int</span><span class="p">));</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">printf</span><span class="p">(</span><span class="s">&#34;alignof(int) = %zu</span><span class="se">\n</span><span class="s">&#34;</span><span class="p">,</span> <span class="nf">alignof</span><span class="p">(</span><span class="kt">int</span><span class="p">));</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">printf</span><span class="p">(</span><span class="s">&#34;sizeof(double) = %zu</span><span class="se">\n</span><span class="s">&#34;</span><span class="p">,</span> <span class="k">sizeof</span><span class="p">(</span><span class="kt">double</span><span class="p">));</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">printf</span><span class="p">(</span><span class="s">&#34;alignof(double) = %zu</span><span class="se">\n</span><span class="s">&#34;</span><span class="p">,</span> <span class="nf">alignof</span><span class="p">(</span><span class="kt">double</span><span class="p">));</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>C++ 中可以使用：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;iostream&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">std</span><span class="o">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="s">&#34;sizeof(int) = &#34;</span> <span class="o">&lt;&lt;</span> <span class="k">sizeof</span><span class="p">(</span><span class="kt">int</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="sc">&#39;\n&#39;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">std</span><span class="o">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="s">&#34;alignof(int) = &#34;</span> <span class="o">&lt;&lt;</span> <span class="k">alignof</span><span class="p">(</span><span class="kt">int</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="sc">&#39;\n&#39;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">std</span><span class="o">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="s">&#34;sizeof(double) = &#34;</span> <span class="o">&lt;&lt;</span> <span class="k">sizeof</span><span class="p">(</span><span class="kt">double</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="sc">&#39;\n&#39;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">std</span><span class="o">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="s">&#34;alignof(double) = &#34;</span> <span class="o">&lt;&lt;</span> <span class="k">alignof</span><span class="p">(</span><span class="kt">double</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="sc">&#39;\n&#39;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><h2 id="八为什么需要字段对齐">八、为什么需要字段对齐</h2>
+<p>字段对齐不是语法洁癖，而是底层硬件和 ABI 共同塑造出来的规则。</p>
+<h3 id="1-cpu-访问对齐数据更高效">1. CPU 访问对齐数据更高效</h3>
+<p>CPU 从内存读取数据时，通常不是一个字节一个字节随意读取，而是按一定宽度读取。</p>
+<p>如果一个 4 字节整数放在 4 字节边界上：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">地址:   0   1   2   3   4   5   6   7
+</span></span><span class="line"><span class="cl">内容:   .   .   .   .   i   i   i   i
+</span></span></code></pre></div><p>CPU 可能一次内存访问就能读到完整的 <code>int</code>。</p>
+<p>如果这个 <code>int</code> 从偏移量 <code>3</code> 开始：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">地址:   0   1   2   3   4   5   6   7
+</span></span><span class="line"><span class="cl">内容:   .   .   .   i   i   i   i   .
+</span></span></code></pre></div><p>它可能跨过了硬件读取边界，需要两次读取再拼接，性能会变差。</p>
+<h3 id="2-某些架构不允许未对齐访问">2. 某些架构不允许未对齐访问</h3>
+<p>有些 CPU 架构允许未对齐访问，只是慢一点；有些架构可能直接触发硬件异常。</p>
+<p>因此，编译器默认会尽量让成员自然对齐，以保证程序在目标平台上能正确、高效地运行。</p>
+<h3 id="3-abi-需要统一布局规则">3. ABI 需要统一布局规则</h3>
+<p>ABI 可以理解为二进制层面的约定，包括：</p>
+<ul>
+<li>函数参数如何传递。</li>
+<li>返回值如何放置。</li>
+<li>结构体成员如何排列和对齐。</li>
+<li>不同编译单元之间如何链接。</li>
+</ul>
+<p>如果一个库和另一个程序对同一个结构体的布局理解不同，传参和读写字段就会全部错位。那种错误通常不喧哗，只会安静地制造灾难。</p>
+<p>所以结构体布局必须遵守目标平台 ABI 的规则。</p>
+<h3 id="4-数组元素也要保持对齐">4. 数组元素也要保持对齐</h3>
+<p>前面已经说过，结构体末尾填充是为了保证数组里的每个元素都对齐。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">struct</span> <span class="n">B</span> <span class="n">arr</span><span class="p">[</span><span class="mi">10</span><span class="p">];</span>
+</span></span></code></pre></div><p>如果 <code>arr[0]</code> 对齐了，而 <code>sizeof(struct B)</code> 没有按结构体对齐要求补齐，那么 <code>arr[1]</code>、<code>arr[2]</code> 后续元素就可能逐渐错位。</p>
+<p>所以 <code>sizeof(struct)</code> 经常比所有成员大小之和更大。</p>
+<h2 id="九字段顺序会影响结构体大小">九、字段顺序会影响结构体大小</h2>
+<p>字段顺序不同，结构体大小可能不同。</p>
+<p>例如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">struct</span> <span class="n">Bad</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">char</span> <span class="n">c</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">i</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">short</span> <span class="n">s</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><p>常见布局：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">偏移量:  0   1   2   3   4   5   6   7   8   9   10  11
+</span></span><span class="line"><span class="cl">内容:   c   pad pad pad i   i   i   i   s   s   pad pad
+</span></span><span class="line"><span class="cl">大小:   12 字节
+</span></span></code></pre></div><p>如果调整字段顺序：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">struct</span> <span class="n">Good</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">i</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">short</span> <span class="n">s</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">char</span> <span class="n">c</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><p>常见布局：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">偏移量:  0   1   2   3   4   5   6   7
+</span></span><span class="line"><span class="cl">内容:   i   i   i   i   s   s   c   pad
+</span></span><span class="line"><span class="cl">大小:   8 字节
+</span></span></code></pre></div><p>只是调整顺序，就可能从 12 字节变成 8 字节。</p>
+<p>一般经验是：<strong>把对齐要求大的字段放前面，对齐要求小的字段放后面，通常可以减少填充。</strong></p>
+<p>例如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">struct</span> <span class="n">Better</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">double</span> <span class="n">d</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">i</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">short</span> <span class="n">s</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">char</span> <span class="n">c</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><p>不过也不要机械排序。真实工程里还要考虑：</p>
+<ul>
+<li>字段的逻辑分组。</li>
+<li>ABI 兼容性。</li>
+<li>是否已经被外部二进制协议使用。</li>
+<li>是否需要保持和旧版本结构体布局一致。</li>
+<li>CPU 缓存局部性和热点字段位置。</li>
+</ul>
+<p>如果一个结构体已经是公开接口的一部分，随便调整字段顺序就是在改二进制契约。这种事最好三思，最好再三思。</p>
+<h2 id="十结构体嵌套时如何对齐">十、结构体嵌套时如何对齐</h2>
+<p>结构体里面可以嵌套另一个结构体：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">struct</span> <span class="n">Inner</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">char</span> <span class="n">c</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">i</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">struct</span> <span class="n">Outer</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">char</span> <span class="n">tag</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">struct</span> <span class="n">Inner</span> <span class="n">inner</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">short</span> <span class="n">s</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><p>假设 <code>Inner</code> 的大小是 8，对齐要求是 4：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">struct Inner:
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">偏移量:  0   1   2   3   4   5   6   7
+</span></span><span class="line"><span class="cl">内容:   c   pad pad pad i   i   i   i
+</span></span><span class="line"><span class="cl">大小:   8 字节，对齐要求 4
+</span></span></code></pre></div><p>那么 <code>Outer</code> 中的 <code>inner</code> 也要从满足 4 字节对齐的位置开始：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">struct Outer:
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">偏移量:  0   1   2   3   4 ... 11  12  13  14  15
+</span></span><span class="line"><span class="cl">内容:   tag pad pad pad inner   s   s   pad pad
+</span></span><span class="line"><span class="cl">大小:   16 字节，对齐要求 4
+</span></span></code></pre></div><p>也就是说，嵌套结构体作为成员时，它整体像一个普通字段一样参与对齐。它的对齐要求通常就是它内部成员对齐要求的最大值。</p>
+<h2 id="十一位域的内存布局要谨慎">十一、位域的内存布局要谨慎</h2>
+<p>位域可以节省空间：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">struct</span> <span class="n">Permission</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">unsigned</span> <span class="kt">int</span> <span class="nl">read</span> <span class="p">:</span> <span class="mi">1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">unsigned</span> <span class="kt">int</span> <span class="nl">write</span> <span class="p">:</span> <span class="mi">1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">unsigned</span> <span class="kt">int</span> <span class="nl">exec</span> <span class="p">:</span> <span class="mi">1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><p>但是位域布局有不少实现相关细节，例如：</p>
+<ul>
+<li>位域从低位还是高位开始分配。</li>
+<li>跨存储单元时如何处理。</li>
+<li>不同基础类型的位域是否共用同一存储单元。</li>
+<li>位域整体对齐方式。</li>
+</ul>
+<p>所以位域适合在同一编译器、同一平台、同一 ABI 下做内部压缩。若要描述跨平台网络协议或文件格式，直接依赖 C/C++ 位域布局就不太稳妥。</p>
+<p>更稳妥的做法是手动使用掩码：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#define PERM_READ  0x01
+</span></span></span><span class="line"><span class="cl"><span class="cp">#define PERM_WRITE 0x02
+</span></span></span><span class="line"><span class="cl"><span class="cp">#define PERM_EXEC  0x04
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="kt">unsigned</span> <span class="kt">char</span> <span class="n">flags</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="n">flags</span> <span class="o">|=</span> <span class="n">PERM_READ</span><span class="p">;</span>
+</span></span></code></pre></div><p>这样二进制含义更明确。</p>
+<h2 id="十二结构体和二进制数据">十二、结构体和二进制数据</h2>
+<p>很多人会想把结构体直接写入文件：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="nf">fwrite</span><span class="p">(</span><span class="o">&amp;</span><span class="n">student</span><span class="p">,</span> <span class="k">sizeof</span> <span class="n">student</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">file</span><span class="p">);</span>
+</span></span></code></pre></div><p>或者从网络接收一段字节后强转成结构体：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">struct</span> <span class="n">Header</span> <span class="o">*</span><span class="n">header</span> <span class="o">=</span> <span class="p">(</span><span class="k">struct</span> <span class="n">Header</span> <span class="o">*</span><span class="p">)</span><span class="n">buffer</span><span class="p">;</span>
+</span></span></code></pre></div><p>这种做法在受控场景里可能能跑，但必须知道它的风险：</p>
+<ul>
+<li>结构体中可能有填充字节。</li>
+<li>填充字节的值不一定稳定。</li>
+<li>不同平台的字节序可能不同。</li>
+<li>不同编译器的对齐规则可能不同。</li>
+<li><code>int</code>、<code>long</code>、指针等类型大小可能不同。</li>
+<li>强转后的地址可能不满足结构体对齐要求。</li>
+<li>C++ 中复杂对象不能当普通字节块随便读写。</li>
+</ul>
+<p>如果是网络协议、磁盘文件格式、跨语言通信，通常应该显式序列化字段，而不是直接依赖结构体内存布局。</p>
+<p>例如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">buffer</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="kt">unsigned</span> <span class="kt">char</span><span class="p">)(</span><span class="n">length</span> <span class="o">&gt;&gt;</span> <span class="mi">8</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="n">buffer</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="kt">unsigned</span> <span class="kt">char</span><span class="p">)(</span><span class="n">length</span> <span class="o">&amp;</span> <span class="mh">0xff</span><span class="p">);</span>
+</span></span></code></pre></div><p>或者使用成熟的序列化格式，例如 Protocol Buffers、FlatBuffers、MessagePack、JSON 等。选择哪一种，要看性能、可读性、兼容性和生态，而不是一时兴起。</p>
+<h2 id="十三填充字节带来的常见问题">十三、填充字节带来的常见问题</h2>
+<h3 id="1-memcmp-比较结构体可能出错">1. <code>memcmp</code> 比较结构体可能出错</h3>
+<p>看似可以这样比较两个结构体：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">if</span> <span class="p">(</span><span class="nf">memcmp</span><span class="p">(</span><span class="o">&amp;</span><span class="n">a</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">b</span><span class="p">,</span> <span class="k">sizeof</span> <span class="n">a</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// equal
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span></code></pre></div><p>但如果结构体里有填充字节，填充字节的内容可能不同，即使所有有效字段都相等，<code>memcmp</code> 也可能认为不同。</p>
+<p>更可靠的方式是逐字段比较：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">if</span> <span class="p">(</span><span class="n">a</span><span class="p">.</span><span class="n">id</span> <span class="o">==</span> <span class="n">b</span><span class="p">.</span><span class="n">id</span> <span class="o">&amp;&amp;</span> <span class="n">a</span><span class="p">.</span><span class="n">age</span> <span class="o">==</span> <span class="n">b</span><span class="p">.</span><span class="n">age</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// equal
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span></code></pre></div><p>在 C++ 中则可以定义 <code>operator==</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">struct</span> <span class="nc">Student</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">id</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">age</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="kt">bool</span> <span class="k">operator</span><span class="o">==</span><span class="p">(</span><span class="k">const</span> <span class="n">Student</span> <span class="o">&amp;</span><span class="n">other</span><span class="p">)</span> <span class="k">const</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="n">id</span> <span class="o">==</span> <span class="n">other</span><span class="p">.</span><span class="n">id</span> <span class="o">&amp;&amp;</span> <span class="n">age</span> <span class="o">==</span> <span class="n">other</span><span class="p">.</span><span class="n">age</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><p>C++20 以后，很多简单结构体还可以使用默认比较：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">struct</span> <span class="nc">Student</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">id</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">age</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="kt">bool</span> <span class="k">operator</span><span class="o">==</span><span class="p">(</span><span class="k">const</span> <span class="n">Student</span> <span class="o">&amp;</span><span class="p">)</span> <span class="k">const</span> <span class="o">=</span> <span class="k">default</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><h3 id="2-结构体清零不等于语义初始化">2. 结构体清零不等于语义初始化</h3>
+<p>C 中经常看到：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="nf">memset</span><span class="p">(</span><span class="o">&amp;</span><span class="n">obj</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="k">sizeof</span> <span class="n">obj</span><span class="p">);</span>
+</span></span></code></pre></div><p>对于只包含整数、字符数组等简单字段的结构体，这通常可行。但如果结构体里有指针、浮点数、平台相关句柄，或者在 C++ 中包含非平凡对象，就不能想当然。</p>
+<p>C++ 中尤其要谨慎：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">struct</span> <span class="nc">User</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="n">name</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">age</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">User</span> <span class="n">user</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="n">std</span><span class="o">::</span><span class="n">memset</span><span class="p">(</span><span class="o">&amp;</span><span class="n">user</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="k">sizeof</span> <span class="n">user</span><span class="p">);</span> <span class="c1">// 错误
+</span></span></span></code></pre></div><p><code>std::string</code> 是有内部状态的对象，不能用 <code>memset</code> 粗暴清零。C++ 应该依靠构造函数、默认成员初始化或标准库容器自己的初始化规则。</p>
+<h3 id="3-直接发送结构体可能破坏兼容性">3. 直接发送结构体可能破坏兼容性</h3>
+<p>如果把结构体直接作为网络消息：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="nf">send</span><span class="p">(</span><span class="n">fd</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">message</span><span class="p">,</span> <span class="k">sizeof</span> <span class="n">message</span><span class="p">,</span> <span class="mi">0</span><span class="p">);</span>
+</span></span></code></pre></div><p>那么只要结构体字段顺序、编译器、编译选项、平台字节序变化，就可能导致接收端解析错误。</p>
+<p>这类问题在“本机测试一切正常，换环境就失效”的场景里很常见。它不神秘，只是你把编译器内部布局当成了公开协议。</p>
+<h2 id="十四强制改变对齐pack-和-alignas">十四、强制改变对齐：pack 和 alignas</h2>
+<p>有时确实需要控制结构体布局，例如：</p>
+<ul>
+<li>解析硬件寄存器。</li>
+<li>映射某个固定二进制文件头。</li>
+<li>与已有 C ABI 对接。</li>
+<li>节省大量结构体数组的内存。</li>
+</ul>
+<p>这时可能会看到 <code>#pragma pack</code>、<code>__attribute__((packed))</code>、<code>alignas</code> 等机制。</p>
+<h3 id="1-pragma-pack">1. <code>#pragma pack</code></h3>
+<p>在 MSVC 和不少编译器中，可以使用：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#pragma pack(push, 1)
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="k">struct</span> <span class="n">PackedHeader</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">char</span> <span class="n">tag</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">length</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="cp">#pragma pack(pop)
+</span></span></span></code></pre></div><p><code>pack(1)</code> 表示按 1 字节对齐，编译器会尽量减少填充。这样 <code>PackedHeader</code> 可能只占 5 字节。</p>
+<p>但是代价也很明显：</p>
+<ul>
+<li>成员可能未对齐，访问速度下降。</li>
+<li>某些平台可能不支持未对齐访问。</li>
+<li>对结构体指针强转后访问成员可能有风险。</li>
+<li>代码可移植性下降。</li>
+</ul>
+<p>所以 <code>pack</code> 应该用在边界很清楚的地方，并且范围要尽量小。写了 <code>push</code> 就要记得 <code>pop</code>，否则后面的结构体布局都会被影响。那就不是“优化”，而是给未来的人布置考试。</p>
+<h3 id="2-alignas">2. <code>alignas</code></h3>
+<p>C++ 中可以用 <code>alignas</code> 增大对齐要求：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">struct</span> <span class="nf">alignas</span><span class="p">(</span><span class="mi">64</span><span class="p">)</span> <span class="n">CacheLineData</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">value</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><p>这表示 <code>CacheLineData</code> 对象至少按 64 字节对齐。</p>
+<p>这种写法常见于性能敏感代码，例如避免多个线程频繁修改的数据落在同一个缓存行里，引发伪共享。</p>
+<p>C11 也有 <code>_Alignas</code>，C23 中也引入了更接近 C++ 的 <code>alignas</code> 写法。不过实际工程中还要看编译器支持情况。</p>
+<h3 id="3-不要滥用强制对齐">3. 不要滥用强制对齐</h3>
+<p>默认对齐规则已经是编译器和平台 ABI 给出的正常选择。强行压缩或扩大对齐都应该有明确理由。</p>
+<p>可以这样判断：</p>
+<ul>
+<li>如果只是普通业务结构体，不要手动 pack。</li>
+<li>如果要跨进程、跨语言、跨网络传输，不要直接依赖结构体布局。</li>
+<li>如果是硬件寄存器、文件头、协议头，先确认规范，再精确控制字段大小、字节序和对齐。</li>
+<li>如果是性能优化，先测量，再决定是否调整布局。</li>
+</ul>
+<h2 id="十五c-中的标准布局类型">十五、C++ 中的标准布局类型</h2>
+<p>如果希望 C++ 结构体尽量像 C 结构体一样可预测，应当关注 <strong>standard-layout type</strong>，也就是标准布局类型。</p>
+<p>大致来说，一个简单的 C++ 结构体：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">struct</span> <span class="nc">Point</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">x</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">y</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><p>通常是标准布局类型。</p>
+<p>但如果加入虚函数、复杂继承、混合访问控制等，类型布局就不再适合按 C 结构体来理解：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">struct</span> <span class="nc">Base</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">virtual</span> <span class="kt">void</span> <span class="nf">f</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">struct</span> <span class="nc">Derived</span> <span class="o">:</span> <span class="n">Base</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">x</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><p>带虚函数的对象通常会有额外的虚表指针，内存布局和普通结构体不同：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Derived 对象可能类似：
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">偏移量 0: 虚表指针
+</span></span><span class="line"><span class="cl">偏移量 8: x
+</span></span></code></pre></div><p>这只是常见实现上的示意，不是所有编译器都必须一模一样。但结论很明确：一旦进入 C++ 对象模型，结构体就不再只是字段拼接。</p>
+<p>如果要把 C++ 类型传给 C 接口，通常应该使用简单的标准布局结构体，并用固定宽度整数类型：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;cstdint&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="k">struct</span> <span class="nc">Header</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span> <span class="n">magic</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">std</span><span class="o">::</span><span class="kt">uint16_t</span> <span class="n">version</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">std</span><span class="o">::</span><span class="kt">uint16_t</span> <span class="n">flags</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><p>必要时还可以用 <code>static_assert</code> 检查大小和偏移量：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;cstddef&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;cstdint&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="k">struct</span> <span class="nc">Header</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span> <span class="n">magic</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">std</span><span class="o">::</span><span class="kt">uint16_t</span> <span class="n">version</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">std</span><span class="o">::</span><span class="kt">uint16_t</span> <span class="n">flags</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">static_assert</span><span class="p">(</span><span class="k">sizeof</span><span class="p">(</span><span class="n">Header</span><span class="p">)</span> <span class="o">==</span> <span class="mi">8</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="k">static_assert</span><span class="p">(</span><span class="n">offsetof</span><span class="p">(</span><span class="n">Header</span><span class="p">,</span> <span class="n">magic</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="k">static_assert</span><span class="p">(</span><span class="n">offsetof</span><span class="p">(</span><span class="n">Header</span><span class="p">,</span> <span class="n">version</span><span class="p">)</span> <span class="o">==</span> <span class="mi">4</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="k">static_assert</span><span class="p">(</span><span class="n">offsetof</span><span class="p">(</span><span class="n">Header</span><span class="p">,</span> <span class="n">flags</span><span class="p">)</span> <span class="o">==</span> <span class="mi">6</span><span class="p">);</span>
+</span></span></code></pre></div><p>这种检查比“我感觉应该是 8 字节”可靠得多。感觉这种东西，在内存布局面前并没有什么尊严。</p>
+<h2 id="十六如何估算结构体大小">十六、如何估算结构体大小</h2>
+<p>估算结构体大小可以按这个步骤：</p>
+<ol>
+<li>找出每个成员的大小和对齐要求。</li>
+<li>从偏移量 0 开始放第一个成员。</li>
+<li>放下一个成员前，先看当前偏移量是否满足该成员对齐要求。</li>
+<li>如果不满足，就插入填充字节，直到满足。</li>
+<li>所有成员放完后，把结构体总大小补齐到结构体自身对齐要求的整数倍。</li>
+</ol>
+<p>例如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">struct</span> <span class="n">Demo</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">char</span> <span class="n">a</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">double</span> <span class="n">b</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">c</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">char</span> <span class="n">d</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><p>假设：</p>
+<ul>
+<li><code>char</code> 大小 1，对齐 1。</li>
+<li><code>int</code> 大小 4，对齐 4。</li>
+<li><code>double</code> 大小 8，对齐 8。</li>
+<li>结构体整体对齐要求为 8。</li>
+</ul>
+<p>计算过程：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">偏移量 0: a，占 1 字节
+</span></span><span class="line"><span class="cl">偏移量 1-7: 填充 7 字节，让 b 从 8 开始
+</span></span><span class="line"><span class="cl">偏移量 8-15: b，占 8 字节
+</span></span><span class="line"><span class="cl">偏移量 16-19: c，占 4 字节
+</span></span><span class="line"><span class="cl">偏移量 20: d，占 1 字节
+</span></span><span class="line"><span class="cl">偏移量 21-23: 末尾填充 3 字节，让总大小成为 8 的倍数
+</span></span></code></pre></div><p>所以：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">sizeof(struct Demo) == 24
+</span></span></code></pre></div><p>如果调整顺序：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">struct</span> <span class="n">Demo2</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">double</span> <span class="n">b</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">c</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">char</span> <span class="n">a</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">char</span> <span class="n">d</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><p>布局可能变成：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">偏移量 0-7: b，占 8 字节
+</span></span><span class="line"><span class="cl">偏移量 8-11: c，占 4 字节
+</span></span><span class="line"><span class="cl">偏移量 12: a，占 1 字节
+</span></span><span class="line"><span class="cl">偏移量 13: d，占 1 字节
+</span></span><span class="line"><span class="cl">偏移量 14-15: 末尾填充 2 字节
+</span></span></code></pre></div><p>于是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">sizeof(struct Demo2) == 16
+</span></span></code></pre></div><p>同样的字段，只是顺序不同，大小就从 24 变成 16。</p>
+<h2 id="十七结构体使用建议">十七、结构体使用建议</h2>
+<h3 id="1-普通业务数据">1. 普通业务数据</h3>
+<p>普通业务数据结构体应该优先考虑可读性：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">struct</span> <span class="nc">UserProfile</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">id</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="n">name</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">age</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><p>不必为了节省几个字节，把字段顺序改到毫无语义。除非这个结构体会创建几百万个实例，否则可读性通常更重要。</p>
+<h3 id="2-大量数组数据">2. 大量数组数据</h3>
+<p>如果结构体会出现在巨大数组里，就要关注大小：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">struct</span> <span class="n">Record</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">char</span> <span class="n">type</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">id</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">short</span> <span class="n">status</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><p>假设每个对象浪费 4 字节，数组有一千万个元素，就会浪费约 40 MB。这个数量就值得认真调整字段顺序了。</p>
+<h3 id="3-二进制接口">3. 二进制接口</h3>
+<p>如果结构体用于 ABI、文件格式或网络协议，要明确：</p>
+<ul>
+<li>使用固定宽度类型，例如 <code>uint32_t</code>、<code>uint16_t</code>。</li>
+<li>明确字节序。</li>
+<li>明确对齐和填充。</li>
+<li>使用 <code>static_assert</code> 检查 <code>sizeof</code> 和 <code>offsetof</code>。</li>
+<li>不要把含指针、虚函数、<code>std::string</code>、<code>std::vector</code> 的 C++ 类型直接当二进制格式。</li>
+</ul>
+<h3 id="4-c-和-c-混合编程">4. C 和 C++ 混合编程</h3>
+<p>如果头文件要同时给 C 和 C++ 使用，常见写法是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#ifdef __cplusplus
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span><span class="k">extern</span> <span class="s">&#34;C&#34;</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="cp">#endif
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">Student</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">id</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">age</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">Student</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">student_print</span><span class="p">(</span><span class="k">const</span> <span class="n">Student</span> <span class="o">*</span><span class="n">student</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="cp">#ifdef __cplusplus
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="cp">#endif
+</span></span></span></code></pre></div><p><code>extern &quot;C&quot;</code> 解决的是 C++ 函数名改编问题，不会自动让复杂 C++ 对象变成 C 对象。能暴露给 C 的类型，最好保持简单。</p>
+<h2 id="十八总结">十八、总结</h2>
+<p>C 和 C++ 的结构体有共同基础：都能把多个字段组合成一个复合类型，都可以通过 <code>.</code> 和 <code>-&gt;</code> 访问成员，也都会受到内存布局和字段对齐影响。</p>
+<p>但二者的定位不同：</p>
+<ul>
+<li>C 的 <code>struct</code> 主要是纯数据聚合。</li>
+<li>C++ 的 <code>struct</code> 本质上接近 <code>class</code>，只是默认成员和继承是 <code>public</code>。</li>
+<li>C++ 结构体可以有成员函数、构造函数、析构函数、访问控制、继承、虚函数、模板等能力。</li>
+</ul>
+<p>内存布局方面，要记住几个核心规则：</p>
+<ul>
+<li>成员通常按声明顺序放置。</li>
+<li>每个成员要满足自己的对齐要求。</li>
+<li>编译器可能在成员之间插入填充字节。</li>
+<li>结构体末尾也可能有填充字节。</li>
+<li>结构体总大小通常会补齐到结构体自身对齐要求的整数倍。</li>
+<li>字段顺序会影响结构体大小。</li>
+<li>二进制协议和文件格式不要轻率依赖结构体原始内存布局。</li>
+</ul>
+<p>一句话概括：<strong>结构体是语法上最朴素的复合类型之一，但它的真正边界在类型系统和内存模型里。理解字段对齐和填充之后，<code>sizeof</code> 变大就不再奇怪；真正奇怪的，反而是以前我们竟然期待它刚好等于所有字段大小之和。</strong></p>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

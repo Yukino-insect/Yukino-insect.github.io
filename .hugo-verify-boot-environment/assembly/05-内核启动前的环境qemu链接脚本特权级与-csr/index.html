@@ -1,0 +1,1589 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>内核启动前的环境：QEMU、链接脚本、特权级与 CSR | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="普通应用程序从操作系统获得一个已经准备好的世界：内存映射存在、栈已经分配、CPU 已处于合适的权限级别。内核启动恰好相反。它必须先回答“代码被放在哪里、CPU 从哪里取第一条指令、当前有什么权限、怎样进入日常内核模式”，然后才谈得上执行 main()。
+xv6 的 entry.S 只解决最小的一步——建立早期栈并调用 start()。理解其中的 0x80000000、_entry、mhartid、Machine 模式与 mret，需要先建立这一章的启动环境地图。
+〇、先把舞台看清：普通程序、裸机与启动链 你平时写的 main() 并不是程序真正的第一行 在桌面操作系统上写一个 C 程序时，我们习惯于把 main() 当成起点。严格地说，它只是你的代码的起点。在它之前，操作系统和 C 运行库已经做了大量准备：创建进程、建立虚拟地址空间、装入可执行文件、放好用户栈、准备命令行参数和环境变量，最后才由运行库调用 main()。
+CPU / 固件 ↓ 操作系统加载器：创建进程、页表、用户栈、权限边界 ↓ C 运行库启动代码（crt） ↓ 你写的 main() 因此，普通程序一开始就能调用函数、使用局部变量，并不是 C 语言天然保证了这些事，而是环境已经替它满足了前提：sp 有可用的栈、内存可以访问、异常可以由内核接管。
+裸机（bare metal）程序没有这层现成服务。所谓“裸机”并不是没有机器，而是程序直接面对硬件或模拟硬件；引导加载器、单片机固件、操作系统刚启动的一小段代码都属于这个场景。它必须自己回答：
+第一条机器指令存放在哪里？ CPU 从哪个地址开始取指？ 哪块内存可以作为栈？ 此时能访问哪些控制寄存器和设备？ 多个硬件线程同时启动时，谁先初始化共享资源？ xv6 是教学操作系统。它在你的电脑上看似由一个 QEMU 进程运行，但对 QEMU 模拟出的 RISC-V 机器 来说，xv6 正是要接管机器的内核：
+你的电脑硬件 └─ 宿主操作系统（Windows / Linux / macOS） └─ QEMU 进程 └─ 一台被模拟的 RISC-V 机器 └─ xv6 内核 └─ xv6 用户进程 不要跳过这张层次图。这里的“内核启动”讨论的是倒数第二层，并不是 xv6 作为一个宿主机普通进程的启动过程。
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/assembly/05-%E5%86%85%E6%A0%B8%E5%90%AF%E5%8A%A8%E5%89%8D%E7%9A%84%E7%8E%AF%E5%A2%83qemu%E9%93%BE%E6%8E%A5%E8%84%9A%E6%9C%AC%E7%89%B9%E6%9D%83%E7%BA%A7%E4%B8%8E-csr/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/assembly/05-%E5%86%85%E6%A0%B8%E5%90%AF%E5%8A%A8%E5%89%8D%E7%9A%84%E7%8E%AF%E5%A2%83qemu%E9%93%BE%E6%8E%A5%E8%84%9A%E6%9C%AC%E7%89%B9%E6%9D%83%E7%BA%A7%E4%B8%8E-csr/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="内核启动前的环境：QEMU、链接脚本、特权级与 CSR">
+  <meta property="og:description" content="普通应用程序从操作系统获得一个已经准备好的世界：内存映射存在、栈已经分配、CPU 已处于合适的权限级别。内核启动恰好相反。它必须先回答“代码被放在哪里、CPU 从哪里取第一条指令、当前有什么权限、怎样进入日常内核模式”，然后才谈得上执行 main()。
+xv6 的 entry.S 只解决最小的一步——建立早期栈并调用 start()。理解其中的 0x80000000、_entry、mhartid、Machine 模式与 mret，需要先建立这一章的启动环境地图。
+〇、先把舞台看清：普通程序、裸机与启动链 你平时写的 main() 并不是程序真正的第一行 在桌面操作系统上写一个 C 程序时，我们习惯于把 main() 当成起点。严格地说，它只是你的代码的起点。在它之前，操作系统和 C 运行库已经做了大量准备：创建进程、建立虚拟地址空间、装入可执行文件、放好用户栈、准备命令行参数和环境变量，最后才由运行库调用 main()。
+CPU / 固件 ↓ 操作系统加载器：创建进程、页表、用户栈、权限边界 ↓ C 运行库启动代码（crt） ↓ 你写的 main() 因此，普通程序一开始就能调用函数、使用局部变量，并不是 C 语言天然保证了这些事，而是环境已经替它满足了前提：sp 有可用的栈、内存可以访问、异常可以由内核接管。
+裸机（bare metal）程序没有这层现成服务。所谓“裸机”并不是没有机器，而是程序直接面对硬件或模拟硬件；引导加载器、单片机固件、操作系统刚启动的一小段代码都属于这个场景。它必须自己回答：
+第一条机器指令存放在哪里？ CPU 从哪个地址开始取指？ 哪块内存可以作为栈？ 此时能访问哪些控制寄存器和设备？ 多个硬件线程同时启动时，谁先初始化共享资源？ xv6 是教学操作系统。它在你的电脑上看似由一个 QEMU 进程运行，但对 QEMU 模拟出的 RISC-V 机器 来说，xv6 正是要接管机器的内核：
+你的电脑硬件 └─ 宿主操作系统（Windows / Linux / macOS） └─ QEMU 进程 └─ 一台被模拟的 RISC-V 机器 └─ xv6 内核 └─ xv6 用户进程 不要跳过这张层次图。这里的“内核启动”讨论的是倒数第二层，并不是 xv6 作为一个宿主机普通进程的启动过程。">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="assembly">
+    <meta property="article:published_time" content="2026-09-08T18:44:00+08:00">
+    <meta property="article:modified_time" content="2026-09-08T18:44:00+08:00">
+
+  
+  <meta itemprop="name" content="内核启动前的环境：QEMU、链接脚本、特权级与 CSR">
+  <meta itemprop="description" content="普通应用程序从操作系统获得一个已经准备好的世界：内存映射存在、栈已经分配、CPU 已处于合适的权限级别。内核启动恰好相反。它必须先回答“代码被放在哪里、CPU 从哪里取第一条指令、当前有什么权限、怎样进入日常内核模式”，然后才谈得上执行 main()。
+xv6 的 entry.S 只解决最小的一步——建立早期栈并调用 start()。理解其中的 0x80000000、_entry、mhartid、Machine 模式与 mret，需要先建立这一章的启动环境地图。
+〇、先把舞台看清：普通程序、裸机与启动链 你平时写的 main() 并不是程序真正的第一行 在桌面操作系统上写一个 C 程序时，我们习惯于把 main() 当成起点。严格地说，它只是你的代码的起点。在它之前，操作系统和 C 运行库已经做了大量准备：创建进程、建立虚拟地址空间、装入可执行文件、放好用户栈、准备命令行参数和环境变量，最后才由运行库调用 main()。
+CPU / 固件 ↓ 操作系统加载器：创建进程、页表、用户栈、权限边界 ↓ C 运行库启动代码（crt） ↓ 你写的 main() 因此，普通程序一开始就能调用函数、使用局部变量，并不是 C 语言天然保证了这些事，而是环境已经替它满足了前提：sp 有可用的栈、内存可以访问、异常可以由内核接管。
+裸机（bare metal）程序没有这层现成服务。所谓“裸机”并不是没有机器，而是程序直接面对硬件或模拟硬件；引导加载器、单片机固件、操作系统刚启动的一小段代码都属于这个场景。它必须自己回答：
+第一条机器指令存放在哪里？ CPU 从哪个地址开始取指？ 哪块内存可以作为栈？ 此时能访问哪些控制寄存器和设备？ 多个硬件线程同时启动时，谁先初始化共享资源？ xv6 是教学操作系统。它在你的电脑上看似由一个 QEMU 进程运行，但对 QEMU 模拟出的 RISC-V 机器 来说，xv6 正是要接管机器的内核：
+你的电脑硬件 └─ 宿主操作系统（Windows / Linux / macOS） └─ QEMU 进程 └─ 一台被模拟的 RISC-V 机器 └─ xv6 内核 └─ xv6 用户进程 不要跳过这张层次图。这里的“内核启动”讨论的是倒数第二层，并不是 xv6 作为一个宿主机普通进程的启动过程。">
+  <meta itemprop="datePublished" content="2026-09-08T18:44:00+08:00">
+  <meta itemprop="dateModified" content="2026-09-08T18:44:00+08:00">
+  <meta itemprop="wordCount" content="1208">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="内核启动前的环境：QEMU、链接脚本、特权级与 CSR">
+  <meta name="twitter:description" content="普通应用程序从操作系统获得一个已经准备好的世界：内存映射存在、栈已经分配、CPU 已处于合适的权限级别。内核启动恰好相反。它必须先回答“代码被放在哪里、CPU 从哪里取第一条指令、当前有什么权限、怎样进入日常内核模式”，然后才谈得上执行 main()。
+xv6 的 entry.S 只解决最小的一步——建立早期栈并调用 start()。理解其中的 0x80000000、_entry、mhartid、Machine 模式与 mret，需要先建立这一章的启动环境地图。
+〇、先把舞台看清：普通程序、裸机与启动链 你平时写的 main() 并不是程序真正的第一行 在桌面操作系统上写一个 C 程序时，我们习惯于把 main() 当成起点。严格地说，它只是你的代码的起点。在它之前，操作系统和 C 运行库已经做了大量准备：创建进程、建立虚拟地址空间、装入可执行文件、放好用户栈、准备命令行参数和环境变量，最后才由运行库调用 main()。
+CPU / 固件 ↓ 操作系统加载器：创建进程、页表、用户栈、权限边界 ↓ C 运行库启动代码（crt） ↓ 你写的 main() 因此，普通程序一开始就能调用函数、使用局部变量，并不是 C 语言天然保证了这些事，而是环境已经替它满足了前提：sp 有可用的栈、内存可以访问、异常可以由内核接管。
+裸机（bare metal）程序没有这层现成服务。所谓“裸机”并不是没有机器，而是程序直接面对硬件或模拟硬件；引导加载器、单片机固件、操作系统刚启动的一小段代码都属于这个场景。它必须自己回答：
+第一条机器指令存放在哪里？ CPU 从哪个地址开始取指？ 哪块内存可以作为栈？ 此时能访问哪些控制寄存器和设备？ 多个硬件线程同时启动时，谁先初始化共享资源？ xv6 是教学操作系统。它在你的电脑上看似由一个 QEMU 进程运行，但对 QEMU 模拟出的 RISC-V 机器 来说，xv6 正是要接管机器的内核：
+你的电脑硬件 └─ 宿主操作系统（Windows / Linux / macOS） └─ QEMU 进程 └─ 一台被模拟的 RISC-V 机器 └─ xv6 内核 └─ xv6 用户进程 不要跳过这张层次图。这里的“内核启动”讨论的是倒数第二层，并不是 xv6 作为一个宿主机普通进程的启动过程。">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">内核启动前的环境：QEMU、链接脚本、特权级与 CSR</h1>
+
+    
+      <div class="post-date">September 8, 2026</div>
+    
+
+    <div class="post-content">
+      <p>普通应用程序从操作系统获得一个已经准备好的世界：内存映射存在、栈已经分配、CPU 已处于合适的权限级别。内核启动恰好相反。它必须先回答“代码被放在哪里、CPU 从哪里取第一条指令、当前有什么权限、怎样进入日常内核模式”，然后才谈得上执行 <code>main()</code>。</p>
+<p>xv6 的 <code>entry.S</code> 只解决最小的一步——建立早期栈并调用 <code>start()</code>。理解其中的 <code>0x80000000</code>、<code>_entry</code>、<code>mhartid</code>、Machine 模式与 <code>mret</code>，需要先建立这一章的启动环境地图。</p>
+<h2 id="先把舞台看清普通程序裸机与启动链">〇、先把舞台看清：普通程序、裸机与启动链</h2>
+<h3 id="你平时写的-main-并不是程序真正的第一行">你平时写的 <code>main()</code> 并不是程序真正的第一行</h3>
+<p>在桌面操作系统上写一个 C 程序时，我们习惯于把 <code>main()</code> 当成起点。严格地说，它只是<strong>你的代码</strong>的起点。在它之前，操作系统和 C 运行库已经做了大量准备：创建进程、建立虚拟地址空间、装入可执行文件、放好用户栈、准备命令行参数和环境变量，最后才由运行库调用 <code>main()</code>。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">CPU / 固件
+</span></span><span class="line"><span class="cl">    ↓
+</span></span><span class="line"><span class="cl">操作系统加载器：创建进程、页表、用户栈、权限边界
+</span></span><span class="line"><span class="cl">    ↓
+</span></span><span class="line"><span class="cl">C 运行库启动代码（crt）
+</span></span><span class="line"><span class="cl">    ↓
+</span></span><span class="line"><span class="cl">你写的 main()
+</span></span></code></pre></div><p>因此，普通程序一开始就能调用函数、使用局部变量，并不是 C 语言天然保证了这些事，而是环境已经替它满足了前提：<code>sp</code> 有可用的栈、内存可以访问、异常可以由内核接管。</p>
+<p>裸机（bare metal）程序没有这层现成服务。所谓“裸机”并不是没有机器，而是程序直接面对硬件或模拟硬件；引导加载器、单片机固件、操作系统刚启动的一小段代码都属于这个场景。它必须自己回答：</p>
+<ul>
+<li>第一条机器指令存放在哪里？</li>
+<li>CPU 从哪个地址开始取指？</li>
+<li>哪块内存可以作为栈？</li>
+<li>此时能访问哪些控制寄存器和设备？</li>
+<li>多个硬件线程同时启动时，谁先初始化共享资源？</li>
+</ul>
+<p>xv6 是教学操作系统。它在你的电脑上看似由一个 QEMU 进程运行，但对 <strong>QEMU 模拟出的 RISC-V 机器</strong> 来说，xv6 正是要接管机器的内核：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">你的电脑硬件
+</span></span><span class="line"><span class="cl">  └─ 宿主操作系统（Windows / Linux / macOS）
+</span></span><span class="line"><span class="cl">      └─ QEMU 进程
+</span></span><span class="line"><span class="cl">          └─ 一台被模拟的 RISC-V 机器
+</span></span><span class="line"><span class="cl">              └─ xv6 内核
+</span></span><span class="line"><span class="cl">                  └─ xv6 用户进程
+</span></span></code></pre></div><p>不要跳过这张层次图。这里的“内核启动”讨论的是倒数第二层，并不是 xv6 作为一个宿主机普通进程的启动过程。</p>
+<h3 id="从-qemu-到-main-的总路线">从 QEMU 到 <code>main()</code> 的总路线</h3>
+<p>下面是本章所有名词所在的位置。先理解流程，再去理解每一个缩写；反过来背缩写通常只会得到一团不太体面的记忆碎片。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">执行 qemu-system-riscv64
+</span></span><span class="line"><span class="cl">      │
+</span></span><span class="line"><span class="cl">      ├─ 创建虚拟 CPU、RAM、串口、磁盘、定时器等设备
+</span></span><span class="line"><span class="cl">      ├─ 装载 kernel/kernel（一个 ELF 内核映像）到虚拟机 RAM
+</span></span><span class="line"><span class="cl">      ▼
+</span></span><span class="line"><span class="cl">把每个 hart 的 PC 放到内核的启动位置（xv6 教学配置中约为 0x80000000）
+</span></span><span class="line"><span class="cl">      ▼
+</span></span><span class="line"><span class="cl">CPU 从 PC 指向的内存取出第一条机器码
+</span></span><span class="line"><span class="cl">      ▼
+</span></span><span class="line"><span class="cl">_entry（entry.S）：为当前 hart 设置私有早期栈
+</span></span><span class="line"><span class="cl">      ▼
+</span></span><span class="line"><span class="cl">start()：仍在 M 模式，配置少量机器态状态
+</span></span><span class="line"><span class="cl">      ▼
+</span></span><span class="line"><span class="cl">mret：按 CSR 中准备好的状态切换控制流和权限
+</span></span><span class="line"><span class="cl">      ▼
+</span></span><span class="line"><span class="cl">main()：开始日常 S 模式内核初始化
+</span></span></code></pre></div><p>这条链里，CPU 真正执行的只有内存中的机器码；<code>_entry</code>、<code>start</code>、<code>.text</code> 这些人类可读的名字，是编译、链接和调试阶段帮助我们定位字节的工具。</p>
+<h2 id="一qemu一台可重复启动的虚拟-risc-v-机器">一、QEMU：一台可重复启动的虚拟 RISC-V 机器</h2>
+<p>QEMU 是模拟器。它可模拟 RISC-V CPU、内存、串口、磁盘、定时器等设备，让 xv6 像运行在一台确定的虚拟开发板上。教学时它尤其方便：机器布局稳定，可暂停、可重启，也可连接 GDB 单步查看寄存器。</p>
+<p>类似启动命令：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">qemu-system-riscv64 -machine virt -bios none -kernel kernel/kernel
+</span></span></code></pre></div><table>
+  <thead>
+      <tr>
+          <th>选项</th>
+          <th>含义</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>qemu-system-riscv64</code></td>
+          <td>模拟 64 位 RISC-V 系统</td>
+      </tr>
+      <tr>
+          <td><code>-machine virt</code></td>
+          <td>选择 QEMU 的通用虚拟机器布局</td>
+      </tr>
+      <tr>
+          <td><code>-bios none</code></td>
+          <td>不额外运行 BIOS/固件，由内核直接接管</td>
+      </tr>
+      <tr>
+          <td><code>-kernel kernel/kernel</code></td>
+          <td>装载 xv6 内核映像</td>
+      </tr>
+  </tbody>
+</table>
+<p>如果命令还带有如下选项，也应知道它们改变的是什么：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">qemu-system-riscv64 -machine virt -bios none -kernel kernel/kernel -m 128M -smp <span class="m">3</span>
+</span></span></code></pre></div><table>
+  <thead>
+      <tr>
+          <th>选项</th>
+          <th>直白解释</th>
+          <th>与本章的联系</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>-machine virt</code></td>
+          <td>选择 QEMU 定义好的通用 RISC-V 虚拟开发板</td>
+          <td>它规定 RAM、串口和中断控制器等设备的大致布局</td>
+      </tr>
+      <tr>
+          <td><code>-m 128M</code></td>
+          <td>给虚拟机提供 128 MiB RAM</td>
+          <td>决定内存容量，不是把入口地址改成 128 MiB</td>
+      </tr>
+      <tr>
+          <td><code>-smp 3</code></td>
+          <td>创建 3 个可独立执行指令流的 hart</td>
+          <td>三个 hart 都会进入 <code>_entry</code>，因此需要三份栈</td>
+      </tr>
+      <tr>
+          <td><code>-S</code></td>
+          <td>CPU 启动后先暂停</td>
+          <td>常与 GDB 一起使用，便于观察第一条指令</td>
+      </tr>
+      <tr>
+          <td><code>-gdb tcp::1234</code></td>
+          <td>开一个远程调试端口</td>
+          <td>GDB 可连接进来读 PC、<code>sp</code> 和反汇编</td>
+      </tr>
+  </tbody>
+</table>
+<p><code>-bios none</code> 是一个很重要的教学简化，不是 RISC-V 机器的普遍真相。真实硬件通常会先执行芯片中的 ROM，再执行固件；RISC-V 平台上常见的 OpenSBI 固件会完成部分机器态工作，然后将控制权交给操作系统。xv6 的这条 QEMU 启动路径刻意少放一层，以便你能直接追踪到内核入口。它省略的是环境层次，不是硬件规律。</p>
+<p>还要避免一个常见想象：QEMU 并不是把 <code>entry.S</code> 的文本逐行“解释执行”。<code>kernel/kernel</code> 是 ELF 格式的二进制映像。QEMU 将应该装入内存的字节放到虚拟 RAM；之后 CPU 模型仅仅执行这些字节解码出的机器指令。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">entry.S、start.c（文本）
+</span></span><span class="line"><span class="cl">      │ 编译 / 汇编
+</span></span><span class="line"><span class="cl">      ▼
+</span></span><span class="line"><span class="cl">entry.o、start.o（机器码片段 + 符号 + 待修补的引用）
+</span></span><span class="line"><span class="cl">      │ 链接
+</span></span><span class="line"><span class="cl">      ▼
+</span></span><span class="line"><span class="cl">kernel/kernel（ELF：最终布局的内核映像）
+</span></span><span class="line"><span class="cl">      │ QEMU 装载
+</span></span><span class="line"><span class="cl">      ▼
+</span></span><span class="line"><span class="cl">虚拟机 RAM 中的字节
+</span></span><span class="line"><span class="cl">      │ PC 取指、译码、执行
+</span></span><span class="line"><span class="cl">      ▼
+</span></span><span class="line"><span class="cl">硬件实际执行的指令
+</span></span></code></pre></div><h3 id="用-qemu-和-gdb-看见第一条指令">用 QEMU 和 GDB 看见“第一条指令”</h3>
+<p>不要只相信示意图。可让 QEMU 在启动后暂停，再由 GDB 连接：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">qemu-system-riscv64 -machine virt -bios none -kernel kernel/kernel -S -gdb tcp::1234
+</span></span></code></pre></div><p>在另一个终端中（工具链名称以项目实际配置为准）：</p>
+<pre tabindex="0"><code class="language-gdb" data-lang="gdb">(gdb) file kernel/kernel
+(gdb) target remote :1234
+(gdb) info registers pc sp ra
+(gdb) x/8i $pc
+(gdb) si
+</code></pre><p><code>-S</code> 的意思是 <em>暂停（stop）</em>，并不是 Supervisor 模式；这两个字母相同只是无聊的巧合。<code>x/8i $pc</code> 会把 PC 指向的内存按八条指令反汇编，<code>si</code> 单步执行一条。若初始 PC 没有停在预期位置，首先核对 QEMU 是否真的带了 <code>-S</code>、是否使用了预期的 <code>-bios none</code> 启动路径，以及 GDB 加载的是否为当前构建出的 <code>kernel/kernel</code>。</p>
+<p>在 xv6 的该启动约定中，QEMU 将内核放在物理地址 <code>0x80000000</code>，并让 hart 从这里开始执行。将它翻译成 CPU 语言就是：初始 PC 指向 <code>0x80000000</code>，CPU 从该地址取第一条机器指令。</p>
+<h2 id="二链接脚本谁决定-_entry-的地址">二、链接脚本：谁决定 <code>_entry</code> 的地址</h2>
+<p>编译器和汇编器生成多个 <code>.o</code> 文件，但它们尚未决定整个内核第一条指令的最终地址。链接脚本是这份布局说明书，概念形状如下：</p>
+<pre tabindex="0"><code class="language-ld" data-lang="ld">OUTPUT_ARCH(&#34;riscv&#34;)
+ENTRY(_entry)
+
+SECTIONS {
+  . = 0x80000000;
+  .text   : { *(.text .text.*) }
+  .rodata : { *(.rodata .rodata.*) }
+  .data   : { *(.data .data.*) }
+  .bss    : { *(.bss .bss.*) }
+}
+</code></pre><h3 id="为什么还需要链接器o-文件并不知道对方在哪里">为什么还需要链接器：<code>.o</code> 文件并不知道对方在哪里</h3>
+<p>编译器与汇编器分别把 <code>start.c</code>、<code>entry.S</code> 变成目标文件，例如 <code>start.o</code>、<code>entry.o</code>。目标文件中已经有机器码，但其中很多地址还不能立刻写死。譬如 <code>entry.S</code> 的 <code>call start</code> 知道有一个外部符号叫 <code>start</code>，却不一定知道 <code>start.c</code> 的代码最终会被排在什么地址。</p>
+<p>链接器把许多目标文件组合起来，按链接脚本摆放每个节，并修补这些跨文件引用。这个过程叫<strong>重定位</strong>。因此，源文件的目录顺序、函数在文件中出现的先后，都不能可靠地推导最终地址；真正决定布局的是链接脚本、链接命令和输入节的大小。</p>
+<p>理解 ELF 时，至少分清以下四个术语：</p>
+<table>
+  <thead>
+      <tr>
+          <th>名称</th>
+          <th>作用</th>
+          <th>不该把它误认为</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>ELF header（文件头）</td>
+          <td>记录架构、文件类型、入口地址等总体元数据</td>
+          <td>一段可直接执行的代码</td>
+      </tr>
+      <tr>
+          <td>section（节）</td>
+          <td>链接、调试阶段的组织单位，如 <code>.text</code>、<code>.data</code></td>
+          <td>CPU 的某个特权级</td>
+      </tr>
+      <tr>
+          <td>segment（程序段）</td>
+          <td>装载阶段的组织单位，描述文件字节要放进内存的范围和权限</td>
+          <td>section 的同义词</td>
+      </tr>
+      <tr>
+          <td>symbol（符号）</td>
+          <td>给地址、函数或对象命名，如 <code>_entry</code>、<code>stack0</code></td>
+          <td>CPU 在运行时主动查询的变量名</td>
+      </tr>
+  </tbody>
+</table>
+<p>通常 <code>.text</code> 放机器指令，<code>.rodata</code> 放只读常量，<code>.data</code> 放有初值的全局/静态数据，<code>.bss</code> 表示需要在内存中初始为零的一大片空间。<code>.bss</code> 不必在文件里存放同样多的零字节；装载时只需为它保留并清零相应内存。<code>stack0</code> 的具体节归属取决于其定义和编译结果，不能只凭变量名字判断。</p>
+<p>脚本中的每一句也有不同身份：</p>
+<ol>
+<li><code>ENTRY(_entry)</code> 将 ELF 的入口字段设为符号 <code>_entry</code> 的最终地址；它本身不会让 CPU 执行跳转。</li>
+<li><code>. = 0x80000000</code> 修改的是链接器的“当前位置”计数器，表示之后安排的输出节从这个地址开始。</li>
+<li><code>.text : { *(.text .text.*) }</code> 不是一条 CPU 指令，而是说“把每个输入目标文件中的代码节收集为一个输出 <code>.text</code> 节”。</li>
+<li><code>entry.S</code> 里的 <code>.global _entry</code> 使这个符号对链接器和其他目标文件可见；标签 <code>_entry:</code> 把名字绑定到当前位置。</li>
+</ol>
+<p>所以 CPU 不认识 <code>_entry</code> 这个拼写；它只认识 PC 中的数值。<code>_entry</code> 的价值在于：链接器能以这个名字算出地址、ELF 能记录入口、调试器能显示标签，人类终于不必靠记住一串地址工作。</p>
+<p>关键关系只有四个：</p>
+<ol>
+<li><code>ENTRY(_entry)</code> 选定 ELF 入口符号；</li>
+<li><code>. = 0x80000000</code> 让后续段从这个地址开始布局；</li>
+<li><code>.text</code> 收集各个目标文件中的机器指令；</li>
+<li>符号地址随段布局确定，链接器再修补跨文件引用。</li>
+</ol>
+<p>因此：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">QEMU 初始 PC：0x80000000
+</span></span><span class="line"><span class="cl">        ↓
+</span></span><span class="line"><span class="cl">链接脚本将 .text 放到 0x80000000
+</span></span><span class="line"><span class="cl">        ↓
+</span></span><span class="line"><span class="cl">entry.S 将全局标签 _entry 放进 .text
+</span></span><span class="line"><span class="cl">        ↓
+</span></span><span class="line"><span class="cl">CPU 开始执行 _entry 的第一条机器指令
+</span></span></code></pre></div><p>CPU 不知道 <code>_entry</code> 这个名字；名称只在编译、汇编和链接阶段存在。CPU 只知道 PC 中的数值地址。</p>
+<h3 id="把入口变成可观察的事实">把“入口”变成可观察的事实</h3>
+<p>在项目根目录执行下列命令。工具链前缀在不同环境中可能不同，请以 Makefile 中实际的 <code>TOOLPREFIX</code> 为准：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="c1"># ELF 文件头：确认记录的入口地址</span>
+</span></span><span class="line"><span class="cl">riscv64-unknown-elf-readelf -h kernel/kernel
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 节、程序段与符号：分别从链接、装载、命名三个视角检查</span>
+</span></span><span class="line"><span class="cl">riscv64-unknown-elf-readelf -SW kernel/kernel
+</span></span><span class="line"><span class="cl">riscv64-unknown-elf-readelf -lW kernel/kernel
+</span></span><span class="line"><span class="cl">riscv64-unknown-elf-nm -n kernel/kernel <span class="p">|</span> grep -E <span class="s1">&#39;(_entry|stack0|start|main)$&#39;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 机器最终看到的反汇编</span>
+</span></span><span class="line"><span class="cl">riscv64-unknown-elf-objdump -d --no-show-raw-insn kernel/kernel
+</span></span></code></pre></div><p>典型输出会有类似关系（中间地址会随版本变化）：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Entry point address:               0x0000000080000000
+</span></span><span class="line"><span class="cl">0000000080000000 T _entry
+</span></span><span class="line"><span class="cl">00000000800000xx T start
+</span></span><span class="line"><span class="cl">0000000080000yyy T main
+</span></span><span class="line"><span class="cl">000000008000zzzz B stack0
+</span></span></code></pre></div><p><code>T</code> 常表示代码区域中的符号，<code>B</code> 常表示 bss 区域中的符号。重点不是记住示意中的 <code>xx</code>，而是检查 <code>_entry</code> 是否与入口对应、<code>start</code> 是否在代码中、<code>stack0</code> 是否有静态存储空间。反汇编中若没有原样出现 <code>la</code> 或 <code>call</code>，也不代表源代码消失了：它们常被汇编器展开为 <code>auipc</code>、<code>addi</code>、<code>jal</code> 或 <code>jalr</code> 等基础指令，再由链接器修补立即数。</p>
+<h2 id="三物理地址pc-和虚拟地址不是同一概念">三、物理地址、PC 和虚拟地址不是同一概念</h2>
+<p>启动处的 <code>0x80000000</code> 是物理内存布局中的地址。至少应分开三种提问：</p>
+<table>
+  <thead>
+      <tr>
+          <th>说法</th>
+          <th>关注点</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>“链接到 0x80000000”</td>
+          <td>链接器为段和符号分配的地址</td>
+      </tr>
+      <tr>
+          <td>“PC 是 0x80000000”</td>
+          <td>CPU 此刻从哪里取指</td>
+      </tr>
+      <tr>
+          <td>“虚拟地址映射到物理页”</td>
+          <td>启用页表后地址如何翻译</td>
+      </tr>
+  </tbody>
+</table>
+<p>可以把它们放到三张不同的“地图”上理解：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">物理地址：虚拟机 RAM / 设备的硬件编号
+</span></span><span class="line"><span class="cl">      例：RAM 中某一字节的实际位置
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">PC：CPU 内部保存的“下一条取指地址”
+</span></span><span class="line"><span class="cl">      例：PC = 0x80000000，CPU 下一步从那里读取指令编码
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">虚拟地址：软件使用、且可能需由页表翻译的地址
+</span></span><span class="line"><span class="cl">      例：同一个 0x400000 可在两个进程中映射到不同物理页
+</span></span></code></pre></div><p>PC 不是一种特殊的“内核地址”，而是一个寄存器。顺序执行时它前进；<code>j</code>、<code>call</code>、异常返回或 <code>mret</code> 都会修改它。CPU 取指时，地址转换若尚未开启，取指地址直接按物理内存布局使用；若已开启，则先经页表翻译并检查执行权限。</p>
+<p>RISC-V 中与 S 模式地址翻译相关的关键 CSR 是 <code>satp</code>。它携带页表根位置和翻译模式等信息。启用页表后会出现两个很重要的现象：不同进程可以都使用看似相同的虚拟地址，却落到不同物理页；同一物理页也可能同时拥有不同的虚拟映射。早期启动阶段地址安排较直接，后续内核配置完整页表后则必须明确说清“此处是物理地址还是虚拟地址”。</p>
+<p>一个有限但有用的类比是：物理地址像城市里建筑的真实坐标，虚拟地址像不同地图中的页码，页表像把页码查为真实坐标的索引；PC 则是导航仪当前准备前往的下一地点。别把类比用过头：真实 CPU 有 TLB、权限位和页表遍历，不是在翻纸。</p>
+<p>在早期启动阶段，xv6 尚未建立后续内核使用的完整页表环境，地址安排比较直接。之后内核会配置地址转换；相同物理页可能由虚拟地址访问。早期某些数值碰巧相同，不代表这些概念永远可互换。</p>
+<h2 id="四risc-v-特权级msu">四、RISC-V 特权级：M、S、U</h2>
+<p>RISC-V 常见三层特权模式：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">M（Machine）模式：最高权限，平台级控制
+</span></span><span class="line"><span class="cl">S（Supervisor）模式：操作系统内核的日常运行环境
+</span></span><span class="line"><span class="cl">U（User）模式：普通应用程序
+</span></span></code></pre></div><p>权限级不是性能档位，而是隔离边界。用户程序不能任意改写异常入口、关闭系统中断或配置机器级状态；否则每个程序都能接管整台计算机，操作系统这一层也就没有存在的理由了。</p>
+<p>这三层不是“不同难度的指令集”，而是同一颗 CPU 对不同代码施加的访问权限。普通用户程序通常运行在 U 模式，日常操作系统内核运行在 S 模式，M 模式更接近平台级控制。真实平台中，M 模式常主要由固件使用；xv6 为了教学，会在自己的 <code>start()</code> 中直接完成一部分 M 模式工作，再降到 S 模式。不要把“xv6 的做法”误记成每个 RISC-V 操作系统唯一的启动形态。</p>
+<h3 id="trapcpu-如何有规则地中断当前控制流">trap：CPU 如何有规则地中断当前控制流</h3>
+<p>trap 是“受架构约束的控制流转移”的总称。它可以由当前指令引起的异常（如非法指令、访问不允许的地址）、外部事件引起的中断（如时钟或串口），也可以由用户程序主动发起的系统调用触发。trap 不等于程序崩溃：定时器中断和系统调用都是操作系统正常工作的基础。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">正常执行的 U / S 模式指令
+</span></span><span class="line"><span class="cl">          │
+</span></span><span class="line"><span class="cl">          ├─ 异常、外部中断或系统调用
+</span></span><span class="line"><span class="cl">          ▼
+</span></span><span class="line"><span class="cl">硬件保存必要的返回状态，并转到该特权级规定的 trap 入口
+</span></span><span class="line"><span class="cl">          ▼
+</span></span><span class="line"><span class="cl">处理程序检查原因、处理事件
+</span></span><span class="line"><span class="cl">          ▼
+</span></span><span class="line"><span class="cl">专用返回指令恢复被打断的控制流
+</span></span></code></pre></div><p>这也解释了为什么特权级和 CSR 不只是“高级概念”：异常入口若可由任何用户程序随便改写，系统调用和中断就无法安全地回到内核。M 模式的 trap 入口由 <code>mtvec</code> 一类 CSR 关联；S 模式也有对应的监管者态控制寄存器。现在只需把 trap 理解为一条受控的岔路，不必立刻背每一个位域。</p>
+<p>xv6 最早期入口处于 M 模式，因为它需要设置一部分机器态控制状态。<code>start()</code> 完成必要准备后，通常通过 <code>mret</code> 将控制流转到 S 模式中的后续内核入口。</p>
+<h2 id="五csrcpu-的控制状态寄存器">五、CSR：CPU 的控制状态寄存器</h2>
+<p>通用寄存器存放普通数值和地址；CSR（Control and Status Register）保存处理器控制/状态。启动相关的几个名字如下：</p>
+<table>
+  <thead>
+      <tr>
+          <th>CSR</th>
+          <th>大意</th>
+          <th>在启动中的作用</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>mhartid</code></td>
+          <td>当前 hart ID</td>
+          <td>为不同 hart 选择不同早期栈</td>
+      </tr>
+      <tr>
+          <td><code>mstatus</code></td>
+          <td>Machine 模式状态</td>
+          <td>控制 <code>mret</code> 后的部分状态与目标权限</td>
+      </tr>
+      <tr>
+          <td><code>mepc</code></td>
+          <td>Machine exception program counter</td>
+          <td><code>mret</code> 将跳转到这里给出的地址</td>
+      </tr>
+      <tr>
+          <td><code>mtvec</code></td>
+          <td>Machine trap vector</td>
+          <td>M 模式异常/中断入口相关设置</td>
+      </tr>
+      <tr>
+          <td><code>satp</code></td>
+          <td>地址转换和保护状态</td>
+          <td>后续页表设置会涉及</td>
+      </tr>
+  </tbody>
+</table>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-asm" data-lang="asm"><span class="line"><span class="cl"><span class="nf">csrr</span>    <span class="no">a1</span><span class="p">,</span> <span class="no">mhartid</span>
+</span></span></code></pre></div><p>不是读取普通内存，而是从 CPU 的控制状态中读取当前硬件线程编号：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">a1 = CSR[mhartid]
+</span></span></code></pre></div><p>CSR 的可访问性受特权级限制，所以它们是内核和启动代码的重要概念，而不是普通用户程序可以随意读写的变量。</p>
+<p>把 CSR 想成 CPU 的控制面板比想成“全局变量”更准确。通用寄存器 <code>a0</code>、<code>sp</code>、<code>ra</code> 用来放普通计算结果、参数和地址；CSR 则描述 CPU 正在如何工作。它们通常要用 <code>csrr</code>、<code>csrw</code>、<code>csrrw</code> 一类专门指令读写，并且硬件会按当前特权级检查访问是否允许。</p>
+<p>下面几个名字最容易在启动代码里相遇：</p>
+<table>
+  <thead>
+      <tr>
+          <th>CSR</th>
+          <th>零基础直觉</th>
+          <th>启动阶段为何出现</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>mhartid</code></td>
+          <td>“我是第几个硬件线程”</td>
+          <td>同一入口代码为不同 hart 计算不同早期栈</td>
+      </tr>
+      <tr>
+          <td><code>mstatus</code></td>
+          <td>M 模式的一组状态与控制位</td>
+          <td>影响 <code>mret</code> 返回/移交后的权限和部分中断状态</td>
+      </tr>
+      <tr>
+          <td><code>mepc</code></td>
+          <td>M 模式专用的返回目标 PC</td>
+          <td><code>mret</code> 执行时会从这里取得跳转目标</td>
+      </tr>
+      <tr>
+          <td><code>mtvec</code></td>
+          <td>M 模式 trap 的处理入口</td>
+          <td>机器态异常/中断不能掉进未知内存</td>
+      </tr>
+      <tr>
+          <td><code>satp</code></td>
+          <td>S 模式地址翻译与页表的关键配置</td>
+          <td>后续启用虚拟内存时需要它</td>
+      </tr>
+      <tr>
+          <td><code>mie</code> / <code>mip</code></td>
+          <td>M 模式中断的使能和待处理状态</td>
+          <td>定时器等机器态初始化可能会接触</td>
+      </tr>
+  </tbody>
+</table>
+<p>表格只在建立职责感，不应被误读为“每一版 xv6 必须以相同顺序写完全部 CSR”。真正的写入位置、掩码和值以当前 <code>start.c</code> 为证据。</p>
+<h2 id="六mret从机器态交给后续入口">六、<code>mret</code>：从机器态交给后续入口</h2>
+<p><code>start()</code> 配置好必要状态后执行 <code>mret</code>（machine return）。概念上它会：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">1. 按 mstatus 的相关字段恢复目标特权状态；
+</span></span><span class="line"><span class="cl">2. 将 PC 设置为 mepc；
+</span></span><span class="line"><span class="cl">3. 继续执行目标地址处的代码。
+</span></span></code></pre></div><p>更具体地说，xv6 的启动代码会先把 <code>mepc</code> 设置为一个后续入口（通常是 <code>main</code>），再在 <code>mstatus</code> 中配置 <code>mret</code> 之后应处的特权级，最后执行 <code>mret</code>。可以将其记为以下<strong>概念伪代码</strong>，它不是可直接编译的 C：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">mepc</span> <span class="o">=</span> <span class="err">地址</span><span class="p">(</span><span class="n">main</span><span class="p">);</span>          <span class="c1">// 下一阶段从哪里继续
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">mstatus</span><span class="p">.</span><span class="n">MPP</span> <span class="o">=</span> <span class="n">S模式</span><span class="p">;</span>         <span class="c1">// mret 后应处的特权级
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="err">配置必要的中断、定时器等状态</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="n">mret</span><span class="p">;</span>                        <span class="c1">// PC ← mepc，并依据 mstatus 完成移交
+</span></span></span></code></pre></div><p>因此必须把两种“返回”严格分开：</p>
+<table>
+  <thead>
+      <tr>
+          <th>指令</th>
+          <th>依据什么决定下一条 PC</th>
+          <th>用在什么场景</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>ret</code></td>
+          <td>通用寄存器 <code>ra</code></td>
+          <td>普通函数按 ABI 返回调用点</td>
+      </tr>
+      <tr>
+          <td><code>mret</code></td>
+          <td><code>mepc</code> 与 <code>mstatus</code> 等机器态状态</td>
+          <td>M 模式 trap 返回，或像 xv6 启动这样完成受控移交</td>
+      </tr>
+  </tbody>
+</table>
+<p><code>mret</code> 不是“高级版的 C <code>return</code>”。它不会看 <code>ra</code>，也不会自然回到 <code>call start</code> 的下一条。把这一区分清楚，<code>spin</code> 标签的意义才会显得合理：若 <code>start()</code> 意外以普通函数路径返回，入口代码让 CPU 在确定的死循环里停下，而不是掉进后续未知字节。</p>
+<p>典型路径更接近：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">entry.S → start()（M 模式）→ mret → main()（S 模式）
+</span></span></code></pre></div><p>而不是普通的 <code>start() → ret → entry.S</code>。这也解释入口代码中为何有 <code>spin: j spin</code>：如果 <code>start()</code> 异常地按普通函数返回，控制流会停在可预测的循环里，而不是继续将未知字节当指令执行。</p>
+<h2 id="七多个-hart同一段代码如何获得不同栈">七、多个 hart：同一段代码如何获得不同栈</h2>
+<p>多个 hart 可从同一个 <code>_entry</code> 地址开始执行，但它们读取的 <code>mhartid</code> 不同：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">hart 0：mhartid = 0 → stack0 的第 0 份
+</span></span><span class="line"><span class="cl">hart 1：mhartid = 1 → stack0 的第 1 份
+</span></span><span class="line"><span class="cl">hart 2：mhartid = 2 → stack0 的第 2 份
+</span></span></code></pre></div><p>同一份程序文本因此计算出不同的 <code>sp</code>。每 hart 独立栈只解决调用帧互不覆盖；共享内存、设备和全局初始化仍需要锁、原子操作与内存顺序等并发规则，不能由 <code>mhartid</code> 自动解决。</p>
+<h3 id="栈分开了之后为什么还要等">“栈分开了”之后，为什么还要等</h3>
+<p>私有栈只是把每个 hart 的局部变量、保存的返回地址和函数调用帧隔离开。它并不把全局变量、内存分配器、设备寄存器或页表自动复制成多份。假设 hart 0 负责初始化一个共享设备表，hart 1 却在表写到一半时读取它，结果仍然是错误的。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">hart 0：写共享初始化数据 ─── 完成 ─── 发布 ready 标志
+</span></span><span class="line"><span class="cl">hart 1：                    等待 ─── 观察到 ready 后才读取数据
+</span></span></code></pre></div><p>这里的“发布 ready 标志之前不能使用、之后才能使用”的分界，就是<strong>启动同步边界</strong>。多核下还要考虑编译器优化和 CPU 的内存重排：一个随手写的普通全局变量，并不必然表达“此前全部初始化写入都已经对其他 hart 可见”。实际内核会用锁、原子操作或内存屏障来建立这个保证。</p>
+<p>教学内核常采用如下角色分工：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">全部 hart：进入 _entry → 各自设置早期栈 → 进入 C 启动代码
+</span></span><span class="line"><span class="cl">                         │
+</span></span><span class="line"><span class="cl">                         ├─ hart 0：完成一次性的全局初始化
+</span></span><span class="line"><span class="cl">                         └─ 其他 hart：等待全局状态就绪，再做各自的初始化
+</span></span></code></pre></div><p>具体哪项工作只应由 hart 0 完成，不能凭印象判断，必须读当前 xv6 版本的条件判断和同步代码。此处要形成的习惯是：<code>mhartid</code> 告诉程序“我是谁”，却没有自动给出“共享状态何时可用”。</p>
+<h2 id="八如何验证而不只相信源码">八、如何验证而不只相信源码</h2>
+<p>可以用工具检查这条启动链：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">riscv64-unknown-elf-readelf -h kernel/kernel
+</span></span><span class="line"><span class="cl">riscv64-unknown-elf-nm -n kernel/kernel <span class="p">|</span> grep -E <span class="s1">&#39;(_entry|stack0|start)&#39;</span>
+</span></span><span class="line"><span class="cl">riscv64-unknown-elf-objdump -d -M no-aliases kernel/kernel
+</span></span></code></pre></div><ul>
+<li><code>readelf -h</code> 查看 ELF 入口地址；</li>
+<li><code>nm -n</code> 查看 <code>_entry</code>、<code>stack0</code>、<code>start</code> 的最终符号地址；</li>
+<li><code>objdump</code> 查看伪指令在链接后展开的真实基础指令。</li>
+</ul>
+<p>这三者分别验证“入口是谁”“符号在哪里”“CPU 最终会看到哪些编码”。不要只根据源文件顺序猜地址，最后说了算的是链接结果。</p>
+<h2 id="九几种特别常见的误解">九、几种特别常见的误解</h2>
+<h3 id="误解-10x80000000-永远等于内核虚拟地址">误解 1：<code>0x80000000</code> 永远等于“内核虚拟地址”</h3>
+<p>不对。本章首先把它作为 xv6/QEMU 启动约定下的物理装载地址和早期取指地址理解。页表启用前后、不同内核布局下，虚拟地址可以不同。遇到地址先问：此时地址翻译是否开启？这句话讨论的是物理地址、虚拟地址，还是 PC 的当前值？</p>
+<h3 id="误解-2entry_entry-会让-cpu-自己找到标签">误解 2：<code>ENTRY(_entry)</code> 会让 CPU 自己找到标签</h3>
+<p>不对。<code>ENTRY</code> 影响 ELF 的入口元数据，标签帮助链接器和调试器定位；CPU 不会在运行时搜索符号表。真正让 CPU 从某地址开始执行的是启动链中的 QEMU、固件或 bootloader 对 PC 的设置。</p>
+<h3 id="误解-3-bios-none-说明所有-risc-v-系统没有-bios">误解 3：<code>-bios none</code> 说明所有 RISC-V 系统没有 BIOS</h3>
+<p>不对。它仅说明这个 QEMU 实验刻意不额外运行固件。现实机器常有 ROM 与固件；不同平台把内核交到 M 模式还是 S 模式，也可能不同。</p>
+<h3 id="误解-4hart-就是一个物理核心">误解 4：hart 就是“一个物理核心”</h3>
+<p>不严格。hart 是硬件线程，表示可独立执行一条指令流的上下文。一个核心可以实现多个 hart。对本章的 QEMU 入门实验，将它近似当作独立 CPU 执行流足够，但不要把近似当作定义。</p>
+<h3 id="误解-5每个-hart-有自己的-sp多核启动就安全了">误解 5：每个 hart 有自己的 <code>sp</code>，多核启动就安全了</h3>
+<p>不对。它只保证各自的栈帧不重叠；共享内存初始化的先后、可见性和设备访问仍需同步。</p>
+<h3 id="误解-6mret-与普通-ret-的区别只是名字多了一个-m">误解 6：<code>mret</code> 与普通 <code>ret</code> 的区别只是名字多了一个 <code>m</code></h3>
+<p>不对。<code>ret</code> 使用 <code>ra</code> 遵守函数调用约定；<code>mret</code> 使用 <code>mepc/mstatus</code> 所代表的特权状态来完成机器态返回或移交。这是 ABI 与特权架构两套不同规则。</p>
+<h2 id="十练习用因果关系检查自己是否真的理解">十、练习：用因果关系检查自己是否真的理解</h2>
+<h3 id="练习-1补全启动链">练习 1：补全启动链</h3>
+<p>将 <code>链接脚本</code>、<code>QEMU 装载</code>、<code>初始 PC</code>、<code>_entry</code>、<code>start()</code>、<code>mret</code>、<code>main()</code> 按合理顺序连成图，并为每个箭头写一句原因。</p>
+<p><strong>参考要点：</strong> 链接脚本先把 <code>_entry</code> 所在的代码安排到地址并写入入口元数据；QEMU 按启动约定装载映像、设置初始 PC；CPU 从 <code>_entry</code> 取指，入口建立栈后调用 <code>start()</code>；<code>start()</code> 准备 <code>mepc/mstatus</code> 等，<code>mret</code> 才将控制流和权限移交到 <code>main()</code>。</p>
+<h3 id="练习-2判断并解释">练习 2：判断并解释</h3>
+<ol>
+<li>“CPU 执行时会查询 ELF 符号表来找到 <code>_entry</code>。”</li>
+<li>“只要将 <code>mepc</code> 写成 <code>main</code>，执行普通 <code>ret</code> 就会进入 <code>main</code>。”</li>
+<li>“两个 hart 的 <code>sp</code> 不同，所以它们对全局变量的访问天然隔离。”</li>
+</ol>
+<p><strong>答案：</strong> 三句都错误。第一句混淆构建期符号与运行期取指；第二句混淆 <code>ret</code> 与 <code>mret</code>；第三句混淆私有栈和共享内存同步。</p>
+<h3 id="练习-3解释一个调试现象">练习 3：解释一个调试现象</h3>
+<p>若 <code>readelf -h</code> 显示入口是 <code>0x80000000</code>，但 GDB 连上后 PC 并未停在这个地址，写出至少两种可能原因。</p>
+<p><strong>参考要点：</strong> QEMU 可能没有使用 <code>-S</code>，所以 CPU 已跑过入口；启动命令可能运行了固件而不是 <code>-bios none</code> 的直接内核路径；GDB 加载的符号文件可能与正在运行的映像不匹配；也可能当前项目的链接脚本和示例使用了不同地址。应先核对构建产物、启动命令和链接脚本，别急着把 <code>0x80000000</code> 改成另一个“看起来合理”的数。</p>
+<h2 id="小结">小结</h2>
+<ul>
+<li>QEMU 按启动约定装载内核并设置初始 PC；CPU 从该地址开始取指。</li>
+<li>链接脚本以 <code>ENTRY(_entry)</code>、段布局和起始地址，把汇编中的入口符号连接到启动地址。</li>
+<li>物理地址、PC 当前地址与页表启用后的虚拟地址要分别理解。</li>
+<li>M、S、U 是权限层级；xv6 先在 M 模式完成机器态准备，再转交 S 模式内核。</li>
+<li>CSR 保存 CPU 控制状态，<code>mhartid</code> 用于区分硬件线程，<code>mepc</code>/<code>mstatus</code> 与 <code>mret</code> 服务于后续移交。</li>
+<li>现在再读 <code>entry.S</code>，它不再孤立，而是启动链中“建立第一个可调用 C 环境”的一环。</li>
+</ul>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

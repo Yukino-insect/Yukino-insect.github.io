@@ -1,0 +1,1137 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MySQL 专题索引 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="这个目录用于整理 MySQL 和关系型数据库开发中最常遇到的问题。阅读时可以按下面的顺序走：先补基础 SQL 和索引，再看事务、锁、复制，最后看工程实践。
+一、基础和查询 数据库 ：关系型数据库、SQL 基础、存储引擎和索引入门。 SQL 的执行顺序 ：SELECT 的逻辑执行顺序，以及 MySQL 服务层、存储引擎层的执行链路。 SQL JOIN 与 ON、WHERE 的区别 ：内连接、左连接，以及 ON 和 WHERE 在外连接中的语义差异。 MySQL 中 IN 条件的查询机制 ：常量 IN、子查询 IN、IN 与 OR 的执行差异。 sql 递归 ：用 WITH RECURSIVE 查询树形结构。 二、索引和性能 索引 ：索引类型、B&#43; 树、聚簇索引、唯一性校验、索引失效和深分页。 MySQL 排序 ：ORDER BY 的索引排序、filesort、临时表和优化方式。 自增主键的使用 ：自增主键的优缺点、回滚不回退、分布式 ID 和逻辑删除下的主键设计。 三、事务、锁和一致性 MySQL 事务 ：ACID、隔离级别、MVCC、锁类型和事务控制。 FOR UPDATE ：什么时候需要当前读和行锁，什么时候只靠唯一索引或普通查询即可。 数据库事务的边界 ：数据库连接、schema、多数据源和 Spring @Transactional 的边界。 多数据源 ：多数据源的使用场景、事务风险和工程落地建议。 四、架构和对象 MySQL 主从复制 ：复制链路、binlog、延迟、故障切换和读写分离。 mysql 视图 ：视图的本质、适用场景、可更新限制和性能边界。 Schema 模式 ：PostgreSQL schema 和 MySQL database 命名空间的差异。 数据库操作系列二三事 ：主键、类型映射、逻辑删除、动态条件和迁移变更的实践清单。 ">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/mysql/readme/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/mysql/readme/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="MySQL 专题索引">
+  <meta property="og:description" content="这个目录用于整理 MySQL 和关系型数据库开发中最常遇到的问题。阅读时可以按下面的顺序走：先补基础 SQL 和索引，再看事务、锁、复制，最后看工程实践。
+一、基础和查询 数据库 ：关系型数据库、SQL 基础、存储引擎和索引入门。 SQL 的执行顺序 ：SELECT 的逻辑执行顺序，以及 MySQL 服务层、存储引擎层的执行链路。 SQL JOIN 与 ON、WHERE 的区别 ：内连接、左连接，以及 ON 和 WHERE 在外连接中的语义差异。 MySQL 中 IN 条件的查询机制 ：常量 IN、子查询 IN、IN 与 OR 的执行差异。 sql 递归 ：用 WITH RECURSIVE 查询树形结构。 二、索引和性能 索引 ：索引类型、B&#43; 树、聚簇索引、唯一性校验、索引失效和深分页。 MySQL 排序 ：ORDER BY 的索引排序、filesort、临时表和优化方式。 自增主键的使用 ：自增主键的优缺点、回滚不回退、分布式 ID 和逻辑删除下的主键设计。 三、事务、锁和一致性 MySQL 事务 ：ACID、隔离级别、MVCC、锁类型和事务控制。 FOR UPDATE ：什么时候需要当前读和行锁，什么时候只靠唯一索引或普通查询即可。 数据库事务的边界 ：数据库连接、schema、多数据源和 Spring @Transactional 的边界。 多数据源 ：多数据源的使用场景、事务风险和工程落地建议。 四、架构和对象 MySQL 主从复制 ：复制链路、binlog、延迟、故障切换和读写分离。 mysql 视图 ：视图的本质、适用场景、可更新限制和性能边界。 Schema 模式 ：PostgreSQL schema 和 MySQL database 命名空间的差异。 数据库操作系列二三事 ：主键、类型映射、逻辑删除、动态条件和迁移变更的实践清单。">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="mysql">
+    <meta property="article:published_time" content="2026-08-21T00:00:00+08:00">
+    <meta property="article:modified_time" content="2026-08-21T00:00:00+08:00">
+
+  
+  <meta itemprop="name" content="MySQL 专题索引">
+  <meta itemprop="description" content="这个目录用于整理 MySQL 和关系型数据库开发中最常遇到的问题。阅读时可以按下面的顺序走：先补基础 SQL 和索引，再看事务、锁、复制，最后看工程实践。
+一、基础和查询 数据库 ：关系型数据库、SQL 基础、存储引擎和索引入门。 SQL 的执行顺序 ：SELECT 的逻辑执行顺序，以及 MySQL 服务层、存储引擎层的执行链路。 SQL JOIN 与 ON、WHERE 的区别 ：内连接、左连接，以及 ON 和 WHERE 在外连接中的语义差异。 MySQL 中 IN 条件的查询机制 ：常量 IN、子查询 IN、IN 与 OR 的执行差异。 sql 递归 ：用 WITH RECURSIVE 查询树形结构。 二、索引和性能 索引 ：索引类型、B&#43; 树、聚簇索引、唯一性校验、索引失效和深分页。 MySQL 排序 ：ORDER BY 的索引排序、filesort、临时表和优化方式。 自增主键的使用 ：自增主键的优缺点、回滚不回退、分布式 ID 和逻辑删除下的主键设计。 三、事务、锁和一致性 MySQL 事务 ：ACID、隔离级别、MVCC、锁类型和事务控制。 FOR UPDATE ：什么时候需要当前读和行锁，什么时候只靠唯一索引或普通查询即可。 数据库事务的边界 ：数据库连接、schema、多数据源和 Spring @Transactional 的边界。 多数据源 ：多数据源的使用场景、事务风险和工程落地建议。 四、架构和对象 MySQL 主从复制 ：复制链路、binlog、延迟、故障切换和读写分离。 mysql 视图 ：视图的本质、适用场景、可更新限制和性能边界。 Schema 模式 ：PostgreSQL schema 和 MySQL database 命名空间的差异。 数据库操作系列二三事 ：主键、类型映射、逻辑删除、动态条件和迁移变更的实践清单。">
+  <meta itemprop="datePublished" content="2026-08-21T00:00:00+08:00">
+  <meta itemprop="dateModified" content="2026-08-21T00:00:00+08:00">
+  <meta itemprop="wordCount" content="85">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="MySQL 专题索引">
+  <meta name="twitter:description" content="这个目录用于整理 MySQL 和关系型数据库开发中最常遇到的问题。阅读时可以按下面的顺序走：先补基础 SQL 和索引，再看事务、锁、复制，最后看工程实践。
+一、基础和查询 数据库 ：关系型数据库、SQL 基础、存储引擎和索引入门。 SQL 的执行顺序 ：SELECT 的逻辑执行顺序，以及 MySQL 服务层、存储引擎层的执行链路。 SQL JOIN 与 ON、WHERE 的区别 ：内连接、左连接，以及 ON 和 WHERE 在外连接中的语义差异。 MySQL 中 IN 条件的查询机制 ：常量 IN、子查询 IN、IN 与 OR 的执行差异。 sql 递归 ：用 WITH RECURSIVE 查询树形结构。 二、索引和性能 索引 ：索引类型、B&#43; 树、聚簇索引、唯一性校验、索引失效和深分页。 MySQL 排序 ：ORDER BY 的索引排序、filesort、临时表和优化方式。 自增主键的使用 ：自增主键的优缺点、回滚不回退、分布式 ID 和逻辑删除下的主键设计。 三、事务、锁和一致性 MySQL 事务 ：ACID、隔离级别、MVCC、锁类型和事务控制。 FOR UPDATE ：什么时候需要当前读和行锁，什么时候只靠唯一索引或普通查询即可。 数据库事务的边界 ：数据库连接、schema、多数据源和 Spring @Transactional 的边界。 多数据源 ：多数据源的使用场景、事务风险和工程落地建议。 四、架构和对象 MySQL 主从复制 ：复制链路、binlog、延迟、故障切换和读写分离。 mysql 视图 ：视图的本质、适用场景、可更新限制和性能边界。 Schema 模式 ：PostgreSQL schema 和 MySQL database 命名空间的差异。 数据库操作系列二三事 ：主键、类型映射、逻辑删除、动态条件和迁移变更的实践清单。">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">MySQL 专题索引</h1>
+
+    
+      <div class="post-date">August 21, 2026</div>
+    
+
+    <div class="post-content">
+      <p>这个目录用于整理 MySQL 和关系型数据库开发中最常遇到的问题。阅读时可以按下面的顺序走：先补基础 SQL 和索引，再看事务、锁、复制，最后看工程实践。</p>
+<h2 id="一基础和查询">一、基础和查询</h2>
+<ol>
+<li><a href="/mysql/mysql/">数据库</a>
+：关系型数据库、SQL 基础、存储引擎和索引入门。</li>
+<li><a href="/mysql/sql-%E7%9A%84%E6%89%A7%E8%A1%8C%E9%A1%BA%E5%BA%8F/">SQL 的执行顺序</a>
+：<code>SELECT</code> 的逻辑执行顺序，以及 MySQL 服务层、存储引擎层的执行链路。</li>
+<li><a href="/mysql/sql-join-%E4%B8%8E-onwhere-%E7%9A%84%E5%8C%BA%E5%88%AB/">SQL JOIN 与 ON、WHERE 的区别</a>
+：内连接、左连接，以及 <code>ON</code> 和 <code>WHERE</code> 在外连接中的语义差异。</li>
+<li><a href="/mysql/mysql-%E4%B8%AD-in-%E6%9D%A1%E4%BB%B6%E7%9A%84%E6%9F%A5%E8%AF%A2%E6%9C%BA%E5%88%B6/">MySQL 中 IN 条件的查询机制</a>
+：常量 <code>IN</code>、子查询 <code>IN</code>、<code>IN</code> 与 <code>OR</code> 的执行差异。</li>
+<li><a href="/mysql/sql-%E9%80%92%E5%BD%92/">sql 递归</a>
+：用 <code>WITH RECURSIVE</code> 查询树形结构。</li>
+</ol>
+<h2 id="二索引和性能">二、索引和性能</h2>
+<ol>
+<li><a href="/mysql/%E7%B4%A2%E5%BC%95/">索引</a>
+：索引类型、B+ 树、聚簇索引、唯一性校验、索引失效和深分页。</li>
+<li><a href="/mysql/mysql-%E6%8E%92%E5%BA%8F/">MySQL 排序</a>
+：<code>ORDER BY</code> 的索引排序、<code>filesort</code>、临时表和优化方式。</li>
+<li><a href="/mysql/%E8%87%AA%E5%A2%9E%E4%B8%BB%E9%94%AE%E7%9A%84%E4%BD%BF%E7%94%A8/">自增主键的使用</a>
+：自增主键的优缺点、回滚不回退、分布式 ID 和逻辑删除下的主键设计。</li>
+</ol>
+<h2 id="三事务锁和一致性">三、事务、锁和一致性</h2>
+<ol>
+<li><a href="/mysql/mysql-%E4%BA%8B%E5%8A%A1/">MySQL 事务</a>
+：ACID、隔离级别、MVCC、锁类型和事务控制。</li>
+<li><a href="/mysql/for-update/">FOR UPDATE</a>
+：什么时候需要当前读和行锁，什么时候只靠唯一索引或普通查询即可。</li>
+<li><a href="/mysql/%E6%95%B0%E6%8D%AE%E5%BA%93%E4%BA%8B%E5%8A%A1%E7%9A%84%E8%BE%B9%E7%95%8C/">数据库事务的边界</a>
+：数据库连接、schema、多数据源和 Spring <code>@Transactional</code> 的边界。</li>
+<li><a href="/mysql/%E5%A4%9A%E6%95%B0%E6%8D%AE%E6%BA%90/">多数据源</a>
+：多数据源的使用场景、事务风险和工程落地建议。</li>
+</ol>
+<h2 id="四架构和对象">四、架构和对象</h2>
+<ol>
+<li><a href="/mysql/mysql-%E4%B8%BB%E4%BB%8E%E5%A4%8D%E5%88%B6/">MySQL 主从复制</a>
+：复制链路、binlog、延迟、故障切换和读写分离。</li>
+<li><a href="/mysql/mysql-%E8%A7%86%E5%9B%BE/">mysql 视图</a>
+：视图的本质、适用场景、可更新限制和性能边界。</li>
+<li><a href="/mysql/schema-%E6%A8%A1%E5%BC%8F/">Schema 模式</a>
+：PostgreSQL schema 和 MySQL database 命名空间的差异。</li>
+<li><a href="/mysql/%E6%95%B0%E6%8D%AE%E5%BA%93%E6%93%8D%E4%BD%9C%E7%B3%BB%E5%88%97%E4%BA%8C%E4%B8%89%E4%BA%8B/">数据库操作系列二三事</a>
+：主键、类型映射、逻辑删除、动态条件和迁移变更的实践清单。</li>
+</ol>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

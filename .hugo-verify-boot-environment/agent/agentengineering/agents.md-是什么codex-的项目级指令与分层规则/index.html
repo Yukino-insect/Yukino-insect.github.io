@@ -1,0 +1,1207 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AGENTS.md 是什么：Codex 的项目级指令与分层规则 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="AGENTS.md 是提供给 Codex 的持久化项目指令文件。它把“如何在这个项目里工作”的共同约定放进仓库：构建命令、测试要求、目录边界、代码规范、评审关注点和需要确认的高风险动作，都可以写在这里。
+它解决的不是某一次对话的目标，而是每次进入项目时都应成立的前提。官方文档明确说明，Codex 会在开始工作前读取 AGENTS.md，并将全局规则与项目内不同目录的规则组成一条指令链。完整规则见 Custom instructions with AGENTS.md 。
+一、它的核心作用 没有 AGENTS.md 时，团队成员需要在每次任务里重复说明“用什么包管理器”“测试怎么跑”“哪些目录不要碰”。有了它，这些规则可以随仓库提交、评审和演进。
+适合写入：
+项目启动、构建、测试、格式化和静态检查命令； 代码组织、命名、依赖与文档更新约定； 不可修改的目录、接口或安全规则； 对提交、部署、密钥、数据库迁移等动作的确认要求； 代码审查中必须检查的领域规则。 不适合写入：一次性任务的背景、会频繁变化的大段文档、只属于一项专项工作的完整流程，以及秘密信息。前两者应该放到 Prompt、文档或配置文件，专项流程应考虑 Skill；密钥则不该出现在版本库的 Markdown 中，事情不必弄得那么惊险。
+二、Codex 怎样发现并合并指令 Codex 会按作用域读取指令：先是用户级全局文件，再从项目根目录一路走到当前工作目录。越靠近当前目录的指令越晚拼接，因此可以覆盖更上层的通用规则。
+~/.codex/AGENTS.md ↓ repository/AGENTS.md ↓ repository/services/payments/AGENTS.override.md ↓ 当前目录中的最终约束 每一级目录中，AGENTS.override.md 的优先级高于 AGENTS.md；Codex 在同一目录只使用其中一个非空文件。官方默认还限制合并后的项目指令大小为 32 KiB，因此不应把它写成百科全书。大而杂的说明不会变得更权威，只会更难被遵守。
+三、一个务实的仓库根目录示例 # AGENTS.md ## 项目约定 - 使用 `pnpm` 管理前端依赖，不要同时生成其他锁文件。 - 修改 TypeScript 后运行 `pnpm lint` 和相关测试。 - 公共接口行为变化时，同步更新 `docs/`。 ## 安全与发布 - 不要提交密钥、令牌或真实生产数据。 - 不执行部署、数据库迁移、提交或推送，除非用户明确要求。 - 新增生产依赖前，说明理由并等待确认。 这里的每一项都应该是稳定、可操作、团队认可的约定。避免“保持代码优雅”这种无法检验的要求；如果没有可观察的行为或例外条件，Codex 和人一样，都只能猜。
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/agent/agentengineering/agents.md-%E6%98%AF%E4%BB%80%E4%B9%88codex-%E7%9A%84%E9%A1%B9%E7%9B%AE%E7%BA%A7%E6%8C%87%E4%BB%A4%E4%B8%8E%E5%88%86%E5%B1%82%E8%A7%84%E5%88%99/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/agent/agentengineering/agents.md-%E6%98%AF%E4%BB%80%E4%B9%88codex-%E7%9A%84%E9%A1%B9%E7%9B%AE%E7%BA%A7%E6%8C%87%E4%BB%A4%E4%B8%8E%E5%88%86%E5%B1%82%E8%A7%84%E5%88%99/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="AGENTS.md 是什么：Codex 的项目级指令与分层规则">
+  <meta property="og:description" content="AGENTS.md 是提供给 Codex 的持久化项目指令文件。它把“如何在这个项目里工作”的共同约定放进仓库：构建命令、测试要求、目录边界、代码规范、评审关注点和需要确认的高风险动作，都可以写在这里。
+它解决的不是某一次对话的目标，而是每次进入项目时都应成立的前提。官方文档明确说明，Codex 会在开始工作前读取 AGENTS.md，并将全局规则与项目内不同目录的规则组成一条指令链。完整规则见 Custom instructions with AGENTS.md 。
+一、它的核心作用 没有 AGENTS.md 时，团队成员需要在每次任务里重复说明“用什么包管理器”“测试怎么跑”“哪些目录不要碰”。有了它，这些规则可以随仓库提交、评审和演进。
+适合写入：
+项目启动、构建、测试、格式化和静态检查命令； 代码组织、命名、依赖与文档更新约定； 不可修改的目录、接口或安全规则； 对提交、部署、密钥、数据库迁移等动作的确认要求； 代码审查中必须检查的领域规则。 不适合写入：一次性任务的背景、会频繁变化的大段文档、只属于一项专项工作的完整流程，以及秘密信息。前两者应该放到 Prompt、文档或配置文件，专项流程应考虑 Skill；密钥则不该出现在版本库的 Markdown 中，事情不必弄得那么惊险。
+二、Codex 怎样发现并合并指令 Codex 会按作用域读取指令：先是用户级全局文件，再从项目根目录一路走到当前工作目录。越靠近当前目录的指令越晚拼接，因此可以覆盖更上层的通用规则。
+~/.codex/AGENTS.md ↓ repository/AGENTS.md ↓ repository/services/payments/AGENTS.override.md ↓ 当前目录中的最终约束 每一级目录中，AGENTS.override.md 的优先级高于 AGENTS.md；Codex 在同一目录只使用其中一个非空文件。官方默认还限制合并后的项目指令大小为 32 KiB，因此不应把它写成百科全书。大而杂的说明不会变得更权威，只会更难被遵守。
+三、一个务实的仓库根目录示例 # AGENTS.md ## 项目约定 - 使用 `pnpm` 管理前端依赖，不要同时生成其他锁文件。 - 修改 TypeScript 后运行 `pnpm lint` 和相关测试。 - 公共接口行为变化时，同步更新 `docs/`。 ## 安全与发布 - 不要提交密钥、令牌或真实生产数据。 - 不执行部署、数据库迁移、提交或推送，除非用户明确要求。 - 新增生产依赖前，说明理由并等待确认。 这里的每一项都应该是稳定、可操作、团队认可的约定。避免“保持代码优雅”这种无法检验的要求；如果没有可观察的行为或例外条件，Codex 和人一样，都只能猜。">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="agent">
+    <meta property="article:published_time" content="2026-08-28T17:35:00+08:00">
+    <meta property="article:modified_time" content="2026-08-28T17:35:00+08:00">
+
+  
+  <meta itemprop="name" content="AGENTS.md 是什么：Codex 的项目级指令与分层规则">
+  <meta itemprop="description" content="AGENTS.md 是提供给 Codex 的持久化项目指令文件。它把“如何在这个项目里工作”的共同约定放进仓库：构建命令、测试要求、目录边界、代码规范、评审关注点和需要确认的高风险动作，都可以写在这里。
+它解决的不是某一次对话的目标，而是每次进入项目时都应成立的前提。官方文档明确说明，Codex 会在开始工作前读取 AGENTS.md，并将全局规则与项目内不同目录的规则组成一条指令链。完整规则见 Custom instructions with AGENTS.md 。
+一、它的核心作用 没有 AGENTS.md 时，团队成员需要在每次任务里重复说明“用什么包管理器”“测试怎么跑”“哪些目录不要碰”。有了它，这些规则可以随仓库提交、评审和演进。
+适合写入：
+项目启动、构建、测试、格式化和静态检查命令； 代码组织、命名、依赖与文档更新约定； 不可修改的目录、接口或安全规则； 对提交、部署、密钥、数据库迁移等动作的确认要求； 代码审查中必须检查的领域规则。 不适合写入：一次性任务的背景、会频繁变化的大段文档、只属于一项专项工作的完整流程，以及秘密信息。前两者应该放到 Prompt、文档或配置文件，专项流程应考虑 Skill；密钥则不该出现在版本库的 Markdown 中，事情不必弄得那么惊险。
+二、Codex 怎样发现并合并指令 Codex 会按作用域读取指令：先是用户级全局文件，再从项目根目录一路走到当前工作目录。越靠近当前目录的指令越晚拼接，因此可以覆盖更上层的通用规则。
+~/.codex/AGENTS.md ↓ repository/AGENTS.md ↓ repository/services/payments/AGENTS.override.md ↓ 当前目录中的最终约束 每一级目录中，AGENTS.override.md 的优先级高于 AGENTS.md；Codex 在同一目录只使用其中一个非空文件。官方默认还限制合并后的项目指令大小为 32 KiB，因此不应把它写成百科全书。大而杂的说明不会变得更权威，只会更难被遵守。
+三、一个务实的仓库根目录示例 # AGENTS.md ## 项目约定 - 使用 `pnpm` 管理前端依赖，不要同时生成其他锁文件。 - 修改 TypeScript 后运行 `pnpm lint` 和相关测试。 - 公共接口行为变化时，同步更新 `docs/`。 ## 安全与发布 - 不要提交密钥、令牌或真实生产数据。 - 不执行部署、数据库迁移、提交或推送，除非用户明确要求。 - 新增生产依赖前，说明理由并等待确认。 这里的每一项都应该是稳定、可操作、团队认可的约定。避免“保持代码优雅”这种无法检验的要求；如果没有可观察的行为或例外条件，Codex 和人一样，都只能猜。">
+  <meta itemprop="datePublished" content="2026-08-28T17:35:00+08:00">
+  <meta itemprop="dateModified" content="2026-08-28T17:35:00+08:00">
+  <meta itemprop="wordCount" content="124">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="AGENTS.md 是什么：Codex 的项目级指令与分层规则">
+  <meta name="twitter:description" content="AGENTS.md 是提供给 Codex 的持久化项目指令文件。它把“如何在这个项目里工作”的共同约定放进仓库：构建命令、测试要求、目录边界、代码规范、评审关注点和需要确认的高风险动作，都可以写在这里。
+它解决的不是某一次对话的目标，而是每次进入项目时都应成立的前提。官方文档明确说明，Codex 会在开始工作前读取 AGENTS.md，并将全局规则与项目内不同目录的规则组成一条指令链。完整规则见 Custom instructions with AGENTS.md 。
+一、它的核心作用 没有 AGENTS.md 时，团队成员需要在每次任务里重复说明“用什么包管理器”“测试怎么跑”“哪些目录不要碰”。有了它，这些规则可以随仓库提交、评审和演进。
+适合写入：
+项目启动、构建、测试、格式化和静态检查命令； 代码组织、命名、依赖与文档更新约定； 不可修改的目录、接口或安全规则； 对提交、部署、密钥、数据库迁移等动作的确认要求； 代码审查中必须检查的领域规则。 不适合写入：一次性任务的背景、会频繁变化的大段文档、只属于一项专项工作的完整流程，以及秘密信息。前两者应该放到 Prompt、文档或配置文件，专项流程应考虑 Skill；密钥则不该出现在版本库的 Markdown 中，事情不必弄得那么惊险。
+二、Codex 怎样发现并合并指令 Codex 会按作用域读取指令：先是用户级全局文件，再从项目根目录一路走到当前工作目录。越靠近当前目录的指令越晚拼接，因此可以覆盖更上层的通用规则。
+~/.codex/AGENTS.md ↓ repository/AGENTS.md ↓ repository/services/payments/AGENTS.override.md ↓ 当前目录中的最终约束 每一级目录中，AGENTS.override.md 的优先级高于 AGENTS.md；Codex 在同一目录只使用其中一个非空文件。官方默认还限制合并后的项目指令大小为 32 KiB，因此不应把它写成百科全书。大而杂的说明不会变得更权威，只会更难被遵守。
+三、一个务实的仓库根目录示例 # AGENTS.md ## 项目约定 - 使用 `pnpm` 管理前端依赖，不要同时生成其他锁文件。 - 修改 TypeScript 后运行 `pnpm lint` 和相关测试。 - 公共接口行为变化时，同步更新 `docs/`。 ## 安全与发布 - 不要提交密钥、令牌或真实生产数据。 - 不执行部署、数据库迁移、提交或推送，除非用户明确要求。 - 新增生产依赖前，说明理由并等待确认。 这里的每一项都应该是稳定、可操作、团队认可的约定。避免“保持代码优雅”这种无法检验的要求；如果没有可观察的行为或例外条件，Codex 和人一样，都只能猜。">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">AGENTS.md 是什么：Codex 的项目级指令与分层规则</h1>
+
+    
+      <div class="post-date">August 28, 2026</div>
+    
+
+    <div class="post-content">
+      <p><code>AGENTS.md</code> 是提供给 Codex 的持久化项目指令文件。它把“如何在这个项目里工作”的共同约定放进仓库：构建命令、测试要求、目录边界、代码规范、评审关注点和需要确认的高风险动作，都可以写在这里。</p>
+<p>它解决的不是某一次对话的目标，而是每次进入项目时都应成立的前提。官方文档明确说明，Codex 会在开始工作前读取 <code>AGENTS.md</code>，并将全局规则与项目内不同目录的规则组成一条指令链。完整规则见 <a href="https://learn.chatgpt.com/docs/agent-configuration/agents-md">Custom instructions with AGENTS.md</a>
+。</p>
+<h2 id="一它的核心作用">一、它的核心作用</h2>
+<p>没有 <code>AGENTS.md</code> 时，团队成员需要在每次任务里重复说明“用什么包管理器”“测试怎么跑”“哪些目录不要碰”。有了它，这些规则可以随仓库提交、评审和演进。</p>
+<p>适合写入：</p>
+<ul>
+<li>项目启动、构建、测试、格式化和静态检查命令；</li>
+<li>代码组织、命名、依赖与文档更新约定；</li>
+<li>不可修改的目录、接口或安全规则；</li>
+<li>对提交、部署、密钥、数据库迁移等动作的确认要求；</li>
+<li>代码审查中必须检查的领域规则。</li>
+</ul>
+<p>不适合写入：一次性任务的背景、会频繁变化的大段文档、只属于一项专项工作的完整流程，以及秘密信息。前两者应该放到 Prompt、文档或配置文件，专项流程应考虑 Skill；密钥则不该出现在版本库的 Markdown 中，事情不必弄得那么惊险。</p>
+<h2 id="二codex-怎样发现并合并指令">二、Codex 怎样发现并合并指令</h2>
+<p>Codex 会按作用域读取指令：先是用户级全局文件，再从项目根目录一路走到当前工作目录。越靠近当前目录的指令越晚拼接，因此可以覆盖更上层的通用规则。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">~/.codex/AGENTS.md
+</span></span><span class="line"><span class="cl">        ↓
+</span></span><span class="line"><span class="cl">repository/AGENTS.md
+</span></span><span class="line"><span class="cl">        ↓
+</span></span><span class="line"><span class="cl">repository/services/payments/AGENTS.override.md
+</span></span><span class="line"><span class="cl">        ↓
+</span></span><span class="line"><span class="cl">当前目录中的最终约束
+</span></span></code></pre></div><p>每一级目录中，<code>AGENTS.override.md</code> 的优先级高于 <code>AGENTS.md</code>；Codex 在同一目录只使用其中一个非空文件。官方默认还限制合并后的项目指令大小为 32 KiB，因此不应把它写成百科全书。大而杂的说明不会变得更权威，只会更难被遵守。</p>
+<h2 id="三一个务实的仓库根目录示例">三、一个务实的仓库根目录示例</h2>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-markdown" data-lang="markdown"><span class="line"><span class="cl"><span class="gh"># AGENTS.md
+</span></span></span><span class="line"><span class="cl"><span class="gh"></span>
+</span></span><span class="line"><span class="cl"><span class="gu">## 项目约定
+</span></span></span><span class="line"><span class="cl"><span class="gu"></span>
+</span></span><span class="line"><span class="cl"><span class="k">-</span> 使用 <span class="sb">`pnpm`</span> 管理前端依赖，不要同时生成其他锁文件。
+</span></span><span class="line"><span class="cl"><span class="k">-</span> 修改 TypeScript 后运行 <span class="sb">`pnpm lint`</span> 和相关测试。
+</span></span><span class="line"><span class="cl"><span class="k">-</span> 公共接口行为变化时，同步更新 <span class="sb">`docs/`</span>。
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="gu">## 安全与发布
+</span></span></span><span class="line"><span class="cl"><span class="gu"></span>
+</span></span><span class="line"><span class="cl"><span class="k">-</span> 不要提交密钥、令牌或真实生产数据。
+</span></span><span class="line"><span class="cl"><span class="k">-</span> 不执行部署、数据库迁移、提交或推送，除非用户明确要求。
+</span></span><span class="line"><span class="cl"><span class="k">-</span> 新增生产依赖前，说明理由并等待确认。
+</span></span></code></pre></div><p>这里的每一项都应该是稳定、可操作、团队认可的约定。避免“保持代码优雅”这种无法检验的要求；如果没有可观察的行为或例外条件，Codex 和人一样，都只能猜。</p>
+<h2 id="四何时添加嵌套规则">四、何时添加嵌套规则</h2>
+<p>单仓库中不同服务往往使用不同的测试入口或安全要求。这时应在专属子目录放置更具体的指令，而不是让根目录的文件膨胀。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">repository/
+</span></span><span class="line"><span class="cl">├── AGENTS.md
+</span></span><span class="line"><span class="cl">├── web/
+</span></span><span class="line"><span class="cl">│   └── AGENTS.md
+</span></span><span class="line"><span class="cl">└── services/
+</span></span><span class="line"><span class="cl">    └── payments/
+</span></span><span class="line"><span class="cl">        └── AGENTS.override.md
+</span></span></code></pre></div><p>根目录写公共规则；<code>web/</code> 写前端工具链约定；<code>payments/</code> 写支付域的特殊测试和密钥限制。只有确实需要覆盖本目录默认规则时才使用 <code>AGENTS.override.md</code>，并在文件中说明覆盖原因，免得后来的人把“覆盖”误当成“补充”。</p>
+<h2 id="五与其他概念的边界">五、与其他概念的边界</h2>
+<table>
+  <thead>
+      <tr>
+          <th>概念</th>
+          <th>主要回答的问题</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Prompt</td>
+          <td>这次任务要完成什么？</td>
+      </tr>
+      <tr>
+          <td><code>AGENTS.md</code></td>
+          <td>在这个项目或目录中，始终应如何工作？</td>
+      </tr>
+      <tr>
+          <td>Skill</td>
+          <td>某项可复用的专项任务应按什么流程完成？</td>
+      </tr>
+      <tr>
+          <td>MCP</td>
+          <td>能连接和调用哪些外部工具、数据或服务？</td>
+      </tr>
+      <tr>
+          <td>Plugin</td>
+          <td>如何把 Skills、MCP 连接和相关资源打包分发？</td>
+      </tr>
+  </tbody>
+</table>
+<p><code>AGENTS.md</code> 是基础规则层，不应抢走 Skill 的专项流程职责，也不能替代工具权限。它能告知 Codex“不要部署”，但实际能否部署仍由环境权限、审批配置和工具本身决定。</p>
+<h2 id="六维护建议">六、维护建议</h2>
+<ul>
+<li>保持短小、命令化、可验证；将长背景文档链接出去。</li>
+<li>把规则放在最接近其适用代码的位置，避免无关模块被误约束。</li>
+<li>把安全边界和测试命令写清楚，别假定“大家都知道”。</li>
+<li>修改规则后，使用一个小任务确认 Codex 实际加载了哪些指令来源。</li>
+<li>将它与代码一起评审：规则本身也是工程行为的一部分。</li>
+</ul>
+<p>一个好的 <code>AGENTS.md</code> 不会替团队做决定，但会把本不该每次重新讨论的事情提前说清。项目越复杂，这种克制的共同语言越重要。</p>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

@@ -1,0 +1,2221 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>如何写好 Prompt：以 Open Deep Research 为例 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="当前日期：2026-08-17
+这份教程面向已经会一点 Python、正在学习 LangGraph / Agent 工程的人。它会先解释 src/open_deep_research/prompts.py 中每个 prompt 的作用，再抽象出一套可复用的 prompt 写法。
+先把结论放在前面：好 prompt 不是“把话说得很华丽”，而是把模型在当前节点中必须遵守的契约写清楚。它要告诉模型：
+你是谁。 你现在处在哪个流程阶段。 你要完成什么任务。 你能使用什么输入和工具。 你必须遵守哪些硬性约束。 你的输出格式是什么。 什么情况下应该停止、追问、继续或交给下一个节点。 如果这些都没有说清楚，却指望模型稳定地产出工程级结果，那就有些过于相信奇迹了。奇迹偶尔会发生，但生产系统最好不要靠它维持体面。
+目录 当前项目的 Prompt 总览 Deep Research 的工作流 clarify_with_user_instructions：判断是否需要澄清 transform_messages_into_research_topic_prompt：把对话改写成研究简报 lead_researcher_prompt：监督者如何拆分和调度研究 research_system_prompt：单个研究者如何搜索和反思 compress_research_system_prompt：压缩研究发现但不丢信息 compress_research_simple_human_message：切换到清理模式 final_report_generation_prompt：生成最终深度报告 summarize_webpage_prompt：网页内容摘要 这些 Prompt 的共同设计模式 写好 Prompt 的工程方法 常用 Prompt 模板 Prompt 的坏味道 Agent Prompt 的专项建议 测试和迭代 Prompt 检查清单 1. 当前项目的 Prompt 总览 src/open_deep_research/prompts.py 是 Deep Research Agent 的提示词集中定义文件。它不是普通的“聊天指令集合”，而是 LangGraph 工作流中多个节点的行为说明。
+Prompt 名称 所属阶段 主要作用 典型输出 clarify_with_user_instructions 入口澄清 判断用户需求是否足够明确 JSON / ClarifyWithUser transform_messages_into_research_topic_prompt 研究简报生成 把多轮对话转成具体研究问题 ResearchQuestion.research_brief lead_researcher_prompt 监督者规划 让监督者拆分任务并调用子研究员 tool calls research_system_prompt 子研究员执行 指导研究员搜索、反思、停止 tool calls / 研究消息 compress_research_system_prompt 研究压缩 清理搜索发现，保留所有相关信息和引用 压缩后的研究报告 compress_research_simple_human_message 压缩触发 明确告诉模型进入“清理发现”任务 人类消息 final_report_generation_prompt 最终报告 根据研究简报和发现生成完整报告 Markdown 报告 summarize_webpage_prompt 网页摘要 把网页原文压缩成结构化摘要 JSON / Summary 这些 prompt 分工很明确。它们对应的不是“一个大模型做所有事”，而是一个研究系统中不同角色的职责边界：
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/agent/prompt_writing_tutorial/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/agent/prompt_writing_tutorial/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="如何写好 Prompt：以 Open Deep Research 为例">
+  <meta property="og:description" content="当前日期：2026-08-17
+这份教程面向已经会一点 Python、正在学习 LangGraph / Agent 工程的人。它会先解释 src/open_deep_research/prompts.py 中每个 prompt 的作用，再抽象出一套可复用的 prompt 写法。
+先把结论放在前面：好 prompt 不是“把话说得很华丽”，而是把模型在当前节点中必须遵守的契约写清楚。它要告诉模型：
+你是谁。 你现在处在哪个流程阶段。 你要完成什么任务。 你能使用什么输入和工具。 你必须遵守哪些硬性约束。 你的输出格式是什么。 什么情况下应该停止、追问、继续或交给下一个节点。 如果这些都没有说清楚，却指望模型稳定地产出工程级结果，那就有些过于相信奇迹了。奇迹偶尔会发生，但生产系统最好不要靠它维持体面。
+目录 当前项目的 Prompt 总览 Deep Research 的工作流 clarify_with_user_instructions：判断是否需要澄清 transform_messages_into_research_topic_prompt：把对话改写成研究简报 lead_researcher_prompt：监督者如何拆分和调度研究 research_system_prompt：单个研究者如何搜索和反思 compress_research_system_prompt：压缩研究发现但不丢信息 compress_research_simple_human_message：切换到清理模式 final_report_generation_prompt：生成最终深度报告 summarize_webpage_prompt：网页内容摘要 这些 Prompt 的共同设计模式 写好 Prompt 的工程方法 常用 Prompt 模板 Prompt 的坏味道 Agent Prompt 的专项建议 测试和迭代 Prompt 检查清单 1. 当前项目的 Prompt 总览 src/open_deep_research/prompts.py 是 Deep Research Agent 的提示词集中定义文件。它不是普通的“聊天指令集合”，而是 LangGraph 工作流中多个节点的行为说明。
+Prompt 名称 所属阶段 主要作用 典型输出 clarify_with_user_instructions 入口澄清 判断用户需求是否足够明确 JSON / ClarifyWithUser transform_messages_into_research_topic_prompt 研究简报生成 把多轮对话转成具体研究问题 ResearchQuestion.research_brief lead_researcher_prompt 监督者规划 让监督者拆分任务并调用子研究员 tool calls research_system_prompt 子研究员执行 指导研究员搜索、反思、停止 tool calls / 研究消息 compress_research_system_prompt 研究压缩 清理搜索发现，保留所有相关信息和引用 压缩后的研究报告 compress_research_simple_human_message 压缩触发 明确告诉模型进入“清理发现”任务 人类消息 final_report_generation_prompt 最终报告 根据研究简报和发现生成完整报告 Markdown 报告 summarize_webpage_prompt 网页摘要 把网页原文压缩成结构化摘要 JSON / Summary 这些 prompt 分工很明确。它们对应的不是“一个大模型做所有事”，而是一个研究系统中不同角色的职责边界：">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="agent">
+    <meta property="article:published_time" content="2026-08-17T17:33:36+08:00">
+    <meta property="article:modified_time" content="2026-08-17T17:33:36+08:00">
+
+  
+  <meta itemprop="name" content="如何写好 Prompt：以 Open Deep Research 为例">
+  <meta itemprop="description" content="当前日期：2026-08-17
+这份教程面向已经会一点 Python、正在学习 LangGraph / Agent 工程的人。它会先解释 src/open_deep_research/prompts.py 中每个 prompt 的作用，再抽象出一套可复用的 prompt 写法。
+先把结论放在前面：好 prompt 不是“把话说得很华丽”，而是把模型在当前节点中必须遵守的契约写清楚。它要告诉模型：
+你是谁。 你现在处在哪个流程阶段。 你要完成什么任务。 你能使用什么输入和工具。 你必须遵守哪些硬性约束。 你的输出格式是什么。 什么情况下应该停止、追问、继续或交给下一个节点。 如果这些都没有说清楚，却指望模型稳定地产出工程级结果，那就有些过于相信奇迹了。奇迹偶尔会发生，但生产系统最好不要靠它维持体面。
+目录 当前项目的 Prompt 总览 Deep Research 的工作流 clarify_with_user_instructions：判断是否需要澄清 transform_messages_into_research_topic_prompt：把对话改写成研究简报 lead_researcher_prompt：监督者如何拆分和调度研究 research_system_prompt：单个研究者如何搜索和反思 compress_research_system_prompt：压缩研究发现但不丢信息 compress_research_simple_human_message：切换到清理模式 final_report_generation_prompt：生成最终深度报告 summarize_webpage_prompt：网页内容摘要 这些 Prompt 的共同设计模式 写好 Prompt 的工程方法 常用 Prompt 模板 Prompt 的坏味道 Agent Prompt 的专项建议 测试和迭代 Prompt 检查清单 1. 当前项目的 Prompt 总览 src/open_deep_research/prompts.py 是 Deep Research Agent 的提示词集中定义文件。它不是普通的“聊天指令集合”，而是 LangGraph 工作流中多个节点的行为说明。
+Prompt 名称 所属阶段 主要作用 典型输出 clarify_with_user_instructions 入口澄清 判断用户需求是否足够明确 JSON / ClarifyWithUser transform_messages_into_research_topic_prompt 研究简报生成 把多轮对话转成具体研究问题 ResearchQuestion.research_brief lead_researcher_prompt 监督者规划 让监督者拆分任务并调用子研究员 tool calls research_system_prompt 子研究员执行 指导研究员搜索、反思、停止 tool calls / 研究消息 compress_research_system_prompt 研究压缩 清理搜索发现，保留所有相关信息和引用 压缩后的研究报告 compress_research_simple_human_message 压缩触发 明确告诉模型进入“清理发现”任务 人类消息 final_report_generation_prompt 最终报告 根据研究简报和发现生成完整报告 Markdown 报告 summarize_webpage_prompt 网页摘要 把网页原文压缩成结构化摘要 JSON / Summary 这些 prompt 分工很明确。它们对应的不是“一个大模型做所有事”，而是一个研究系统中不同角色的职责边界：">
+  <meta itemprop="datePublished" content="2026-08-17T17:33:36+08:00">
+  <meta itemprop="dateModified" content="2026-08-17T17:33:36+08:00">
+  <meta itemprop="wordCount" content="2030">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="如何写好 Prompt：以 Open Deep Research 为例">
+  <meta name="twitter:description" content="当前日期：2026-08-17
+这份教程面向已经会一点 Python、正在学习 LangGraph / Agent 工程的人。它会先解释 src/open_deep_research/prompts.py 中每个 prompt 的作用，再抽象出一套可复用的 prompt 写法。
+先把结论放在前面：好 prompt 不是“把话说得很华丽”，而是把模型在当前节点中必须遵守的契约写清楚。它要告诉模型：
+你是谁。 你现在处在哪个流程阶段。 你要完成什么任务。 你能使用什么输入和工具。 你必须遵守哪些硬性约束。 你的输出格式是什么。 什么情况下应该停止、追问、继续或交给下一个节点。 如果这些都没有说清楚，却指望模型稳定地产出工程级结果，那就有些过于相信奇迹了。奇迹偶尔会发生，但生产系统最好不要靠它维持体面。
+目录 当前项目的 Prompt 总览 Deep Research 的工作流 clarify_with_user_instructions：判断是否需要澄清 transform_messages_into_research_topic_prompt：把对话改写成研究简报 lead_researcher_prompt：监督者如何拆分和调度研究 research_system_prompt：单个研究者如何搜索和反思 compress_research_system_prompt：压缩研究发现但不丢信息 compress_research_simple_human_message：切换到清理模式 final_report_generation_prompt：生成最终深度报告 summarize_webpage_prompt：网页内容摘要 这些 Prompt 的共同设计模式 写好 Prompt 的工程方法 常用 Prompt 模板 Prompt 的坏味道 Agent Prompt 的专项建议 测试和迭代 Prompt 检查清单 1. 当前项目的 Prompt 总览 src/open_deep_research/prompts.py 是 Deep Research Agent 的提示词集中定义文件。它不是普通的“聊天指令集合”，而是 LangGraph 工作流中多个节点的行为说明。
+Prompt 名称 所属阶段 主要作用 典型输出 clarify_with_user_instructions 入口澄清 判断用户需求是否足够明确 JSON / ClarifyWithUser transform_messages_into_research_topic_prompt 研究简报生成 把多轮对话转成具体研究问题 ResearchQuestion.research_brief lead_researcher_prompt 监督者规划 让监督者拆分任务并调用子研究员 tool calls research_system_prompt 子研究员执行 指导研究员搜索、反思、停止 tool calls / 研究消息 compress_research_system_prompt 研究压缩 清理搜索发现，保留所有相关信息和引用 压缩后的研究报告 compress_research_simple_human_message 压缩触发 明确告诉模型进入“清理发现”任务 人类消息 final_report_generation_prompt 最终报告 根据研究简报和发现生成完整报告 Markdown 报告 summarize_webpage_prompt 网页摘要 把网页原文压缩成结构化摘要 JSON / Summary 这些 prompt 分工很明确。它们对应的不是“一个大模型做所有事”，而是一个研究系统中不同角色的职责边界：">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">如何写好 Prompt：以 Open Deep Research 为例</h1>
+
+    
+      <div class="post-date">August 17, 2026</div>
+    
+
+    <div class="post-content">
+      <p>当前日期：2026-08-17</p>
+<p>这份教程面向已经会一点 Python、正在学习 LangGraph / Agent 工程的人。它会先解释 <code>src/open_deep_research/prompts.py</code> 中每个 prompt 的作用，再抽象出一套可复用的 prompt 写法。</p>
+<p>先把结论放在前面：好 prompt 不是“把话说得很华丽”，而是把模型在当前节点中必须遵守的契约写清楚。它要告诉模型：</p>
+<ul>
+<li>你是谁。</li>
+<li>你现在处在哪个流程阶段。</li>
+<li>你要完成什么任务。</li>
+<li>你能使用什么输入和工具。</li>
+<li>你必须遵守哪些硬性约束。</li>
+<li>你的输出格式是什么。</li>
+<li>什么情况下应该停止、追问、继续或交给下一个节点。</li>
+</ul>
+<p>如果这些都没有说清楚，却指望模型稳定地产出工程级结果，那就有些过于相信奇迹了。奇迹偶尔会发生，但生产系统最好不要靠它维持体面。</p>
+<h2 id="目录">目录</h2>
+<ol>
+<li>当前项目的 Prompt 总览</li>
+<li>Deep Research 的工作流</li>
+<li><code>clarify_with_user_instructions</code>：判断是否需要澄清</li>
+<li><code>transform_messages_into_research_topic_prompt</code>：把对话改写成研究简报</li>
+<li><code>lead_researcher_prompt</code>：监督者如何拆分和调度研究</li>
+<li><code>research_system_prompt</code>：单个研究者如何搜索和反思</li>
+<li><code>compress_research_system_prompt</code>：压缩研究发现但不丢信息</li>
+<li><code>compress_research_simple_human_message</code>：切换到清理模式</li>
+<li><code>final_report_generation_prompt</code>：生成最终深度报告</li>
+<li><code>summarize_webpage_prompt</code>：网页内容摘要</li>
+<li>这些 Prompt 的共同设计模式</li>
+<li>写好 Prompt 的工程方法</li>
+<li>常用 Prompt 模板</li>
+<li>Prompt 的坏味道</li>
+<li>Agent Prompt 的专项建议</li>
+<li>测试和迭代 Prompt</li>
+<li>检查清单</li>
+</ol>
+<h2 id="1-当前项目的-prompt-总览">1. 当前项目的 Prompt 总览</h2>
+<p><code>src/open_deep_research/prompts.py</code> 是 Deep Research Agent 的提示词集中定义文件。它不是普通的“聊天指令集合”，而是 LangGraph 工作流中多个节点的行为说明。</p>
+<table>
+  <thead>
+      <tr>
+          <th>Prompt 名称</th>
+          <th>所属阶段</th>
+          <th>主要作用</th>
+          <th>典型输出</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>clarify_with_user_instructions</code></td>
+          <td>入口澄清</td>
+          <td>判断用户需求是否足够明确</td>
+          <td>JSON / <code>ClarifyWithUser</code></td>
+      </tr>
+      <tr>
+          <td><code>transform_messages_into_research_topic_prompt</code></td>
+          <td>研究简报生成</td>
+          <td>把多轮对话转成具体研究问题</td>
+          <td><code>ResearchQuestion.research_brief</code></td>
+      </tr>
+      <tr>
+          <td><code>lead_researcher_prompt</code></td>
+          <td>监督者规划</td>
+          <td>让监督者拆分任务并调用子研究员</td>
+          <td>tool calls</td>
+      </tr>
+      <tr>
+          <td><code>research_system_prompt</code></td>
+          <td>子研究员执行</td>
+          <td>指导研究员搜索、反思、停止</td>
+          <td>tool calls / 研究消息</td>
+      </tr>
+      <tr>
+          <td><code>compress_research_system_prompt</code></td>
+          <td>研究压缩</td>
+          <td>清理搜索发现，保留所有相关信息和引用</td>
+          <td>压缩后的研究报告</td>
+      </tr>
+      <tr>
+          <td><code>compress_research_simple_human_message</code></td>
+          <td>压缩触发</td>
+          <td>明确告诉模型进入“清理发现”任务</td>
+          <td>人类消息</td>
+      </tr>
+      <tr>
+          <td><code>final_report_generation_prompt</code></td>
+          <td>最终报告</td>
+          <td>根据研究简报和发现生成完整报告</td>
+          <td>Markdown 报告</td>
+      </tr>
+      <tr>
+          <td><code>summarize_webpage_prompt</code></td>
+          <td>网页摘要</td>
+          <td>把网页原文压缩成结构化摘要</td>
+          <td>JSON / <code>Summary</code></td>
+      </tr>
+  </tbody>
+</table>
+<p>这些 prompt 分工很明确。它们对应的不是“一个大模型做所有事”，而是一个研究系统中不同角色的职责边界：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">用户消息
+</span></span><span class="line"><span class="cl">-&gt; 是否需要澄清
+</span></span><span class="line"><span class="cl">-&gt; 生成研究简报
+</span></span><span class="line"><span class="cl">-&gt; 监督者规划和委派
+</span></span><span class="line"><span class="cl">-&gt; 子研究员搜索和反思
+</span></span><span class="line"><span class="cl">-&gt; 清理压缩研究发现
+</span></span><span class="line"><span class="cl">-&gt; 生成最终报告
+</span></span></code></pre></div><h2 id="2-deep-research-的工作流">2. Deep Research 的工作流</h2>
+<p>理解 prompt 前，先看它们在 <code>deep_researcher.py</code> 中的调用位置。</p>
+<h3 id="主图">主图</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">START
+</span></span><span class="line"><span class="cl">-&gt; clarify_with_user
+</span></span><span class="line"><span class="cl">-&gt; write_research_brief
+</span></span><span class="line"><span class="cl">-&gt; research_supervisor
+</span></span><span class="line"><span class="cl">-&gt; final_report_generation
+</span></span><span class="line"><span class="cl">-&gt; END
+</span></span></code></pre></div><h3 id="监督者子图">监督者子图</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">supervisor
+</span></span><span class="line"><span class="cl">-&gt; supervisor_tools
+</span></span><span class="line"><span class="cl">-&gt; supervisor
+</span></span></code></pre></div><p>监督者循环负责三件事：</p>
+<ul>
+<li>用 <code>think_tool</code> 规划和复盘。</li>
+<li>用 <code>ConductResearch</code> 创建子研究任务。</li>
+<li>用 <code>ResearchComplete</code> 表示研究已完成。</li>
+</ul>
+<h3 id="研究者子图">研究者子图</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">researcher
+</span></span><span class="line"><span class="cl">-&gt; researcher_tools
+</span></span><span class="line"><span class="cl">-&gt; researcher
+</span></span><span class="line"><span class="cl">-&gt; compress_research
+</span></span><span class="line"><span class="cl">-&gt; END
+</span></span></code></pre></div><p>单个研究者负责搜索、调用 MCP 工具、反思搜索结果，并在完成后把原始研究发现压缩成可交给监督者的报告。</p>
+<p>这里要注意一个工程事实：prompt 并不是只给模型看的“说明书”，它还必须和代码中的状态、工具、结构化输出 schema 对齐。否则 prompt 写得再认真，代码不承认，也只是礼貌地自言自语。</p>
+<h2 id="3-clarify_with_user_instructions判断是否需要澄清">3. <code>clarify_with_user_instructions</code>：判断是否需要澄清</h2>
+<h3 id="位置">位置</h3>
+<p>文件：<code>src/open_deep_research/prompts.py</code></p>
+<p>调用节点：<code>clarify_with_user</code></p>
+<p>结构化输出模型：<code>ClarifyWithUser</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">ClarifyWithUser</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">    <span class="n">need_clarification</span><span class="p">:</span> <span class="nb">bool</span>
+</span></span><span class="line"><span class="cl">    <span class="n">question</span><span class="p">:</span> <span class="nb">str</span>
+</span></span><span class="line"><span class="cl">    <span class="n">verification</span><span class="p">:</span> <span class="nb">str</span>
+</span></span></code></pre></div><h3 id="它解决的问题">它解决的问题</h3>
+<p>用户可能会说：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">帮我研究一下新能源汽车。
+</span></span></code></pre></div><p>这个请求太宽了。要研究什么？</p>
+<ul>
+<li>市场规模？</li>
+<li>技术路线？</li>
+<li>中国市场？</li>
+<li>全球市场？</li>
+<li>竞争格局？</li>
+<li>政策？</li>
+<li>投资？</li>
+<li>论文？</li>
+<li>某个时间范围？</li>
+</ul>
+<p>如果不澄清，后续搜索会变得发散，最终报告也容易泛泛而谈。所以第一个 prompt 的任务是：判断是否需要追问用户。</p>
+<h3 id="核心输入">核心输入</h3>
+<p>它把历史消息包在标签里：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">&lt;Messages&gt;
+</span></span><span class="line"><span class="cl">{messages}
+</span></span><span class="line"><span class="cl">&lt;/Messages&gt;
+</span></span></code></pre></div><p>并注入当前日期：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Today&#39;s date is {date}.
+</span></span></code></pre></div><p>日期对研究任务很重要，因为“最新”“今年”“最近”这类相对时间必须有参考点。</p>
+<h3 id="核心指令">核心指令</h3>
+<p>这个 prompt 的关键约束包括：</p>
+<ul>
+<li>判断是否需要澄清。</li>
+<li>如果历史里已经问过澄清问题，通常不要再问一次。</li>
+<li>遇到缩写、简称、不明术语，要让用户澄清。</li>
+<li>问题要简洁，但收集必要信息。</li>
+<li>不要重复询问用户已经提供的信息。</li>
+<li>输出必须是合法 JSON，且只包含指定键。</li>
+</ul>
+<h3 id="输出契约">输出契约</h3>
+<p>它要求模型返回：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;need_clarification&#34;</span><span class="p">:</span> <span class="kc">true</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;question&#34;</span><span class="p">:</span> <span class="s2">&#34;你的澄清问题&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;verification&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>或：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;need_clarification&#34;</span><span class="p">:</span> <span class="kc">false</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;question&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;verification&#34;</span><span class="p">:</span> <span class="s2">&#34;确认将开始研究的简短说明&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>虽然 prompt 写了 JSON，但代码里又用了 <code>.with_structured_output(ClarifyWithUser)</code>。这是一种“双保险”：</p>
+<ul>
+<li>prompt 从语言层面要求 JSON。</li>
+<li>Pydantic schema 从工程层面要求字段正确。</li>
+<li><code>.with_retry()</code> 在结构化失败时重试。</li>
+</ul>
+<h3 id="设计亮点">设计亮点</h3>
+<p>这个 prompt 写得好的地方有三点：</p>
+<ol>
+<li>它不是一上来就追问，而是先判断是否真的需要追问。</li>
+<li>它限制“连续追问”的倾向，避免用户体验变成审问。</li>
+<li>它把两种情况的输出字段都固定下来，方便后续节点路由。</li>
+</ol>
+<h3 id="可以学到什么">可以学到什么</h3>
+<p>凡是会影响工作流分支的 prompt，都应该有严格输出格式。比如：</p>
+<ul>
+<li>是否需要澄清。</li>
+<li>应该走哪个路由。</li>
+<li>是否调用工具。</li>
+<li>是否完成任务。</li>
+<li>是否需要人工审批。</li>
+</ul>
+<p>这种 prompt 不适合让模型自由发挥。自由发挥可以留给写报告，别留给流程控制。</p>
+<h2 id="4-transform_messages_into_research_topic_prompt把对话改写成研究简报">4. <code>transform_messages_into_research_topic_prompt</code>：把对话改写成研究简报</h2>
+<h3 id="位置-1">位置</h3>
+<p>调用节点：<code>write_research_brief</code></p>
+<p>结构化输出模型：<code>ResearchQuestion</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">ResearchQuestion</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">    <span class="n">research_brief</span><span class="p">:</span> <span class="nb">str</span>
+</span></span></code></pre></div><h3 id="它解决的问题-1">它解决的问题</h3>
+<p>用户消息通常是对话式的，不适合直接交给研究 agent。比如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">我想了解一下这个行业，最好重点看中国市场，别太学术，适合给老板汇报。
+</span></span></code></pre></div><p>这句话对人来说还算明白，但对一个要执行搜索和报告生成的系统来说，需要转成更明确的研究简报：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">我需要一份面向管理层汇报的中国某行业研究报告，重点包括市场规模、增长驱动因素、主要公司、竞争格局、政策影响、风险和未来 3-5 年趋势。语气应商务、清晰，避免过度学术化。用户未指定具体数据来源，研究者应优先使用官方统计、上市公司公告、行业协会和权威媒体。
+</span></span></code></pre></div><p>这个 prompt 的任务就是把上下文转译为“可执行研究问题”。</p>
+<h3 id="核心规则">核心规则</h3>
+<p>它要求模型：</p>
+<ul>
+<li>最大化具体性。</li>
+<li>包含所有用户已知偏好。</li>
+<li>如果必要维度缺失，要明确写成开放条件。</li>
+<li>不要编造用户没有说的限制。</li>
+<li>使用第一人称，从用户角度表达。</li>
+<li>根据领域设置来源优先级。</li>
+</ul>
+<h3 id="来源策略">来源策略</h3>
+<p>这个 prompt 特别有价值的部分是 Sources 指令：</p>
+<ul>
+<li>产品和旅行研究：优先官方站、品牌站、制造商页面、可信电商用户评价。</li>
+<li>学术和科学问题：优先原始论文或官方期刊页面。</li>
+<li>人物研究：优先 LinkedIn 或个人网站。</li>
+<li>如果查询是特定语言，优先该语言来源。</li>
+</ul>
+<p>这不是装饰性的要求。它会直接影响后续搜索质量。</p>
+<h3 id="设计亮点-1">设计亮点</h3>
+<p>它强调“不做无根据假设”。这一点很重要。好的研究 brief 应该区分：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">用户已经指定的约束
+</span></span></code></pre></div><p>和：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">研究时应保持开放的维度
+</span></span></code></pre></div><p>例如用户没说预算，就不要写“预算有限”；用户没说地域，就不要写“只看美国”。听起来很基本，但模型很容易为了让任务显得完整而补过头。过度补全就是一种温柔的错误，温柔归温柔，还是错误。</p>
+<h3 id="可以学到什么-1">可以学到什么</h3>
+<p>中间层 prompt 的价值在于“把模糊输入改造成稳定任务”。它不负责最终回答，而是负责让后续 agent 不迷路。</p>
+<p>适合使用这类 prompt 的场景：</p>
+<ul>
+<li>把聊天记录转成工单。</li>
+<li>把用户需求转成 SQL 查询计划。</li>
+<li>把产品经理描述转成验收标准。</li>
+<li>把研究想法转成调研 brief。</li>
+<li>把自然语言转成 API 参数。</li>
+</ul>
+<h2 id="5-lead_researcher_prompt监督者如何拆分和调度研究">5. <code>lead_researcher_prompt</code>：监督者如何拆分和调度研究</h2>
+<h3 id="位置-2">位置</h3>
+<p>调用节点：<code>supervisor</code></p>
+<p>绑定工具：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">lead_researcher_tools</span> <span class="o">=</span> <span class="p">[</span><span class="n">ConductResearch</span><span class="p">,</span> <span class="n">ResearchComplete</span><span class="p">,</span> <span class="n">think_tool</span><span class="p">]</span>
+</span></span></code></pre></div><h3 id="它解决的问题-2">它解决的问题</h3>
+<p>深度研究任务可能很复杂。一个模型直接搜索，很容易陷入：</p>
+<ul>
+<li>搜索范围过宽。</li>
+<li>重复搜索。</li>
+<li>忘记比较维度。</li>
+<li>没有判断是否已有足够材料。</li>
+<li>对多个子问题无法并行。</li>
+</ul>
+<p>所以项目引入“监督者”角色。监督者不直接做网页搜索，而是：</p>
+<ul>
+<li>阅读研究 brief。</li>
+<li>判断是否需要拆分。</li>
+<li>调用 <code>ConductResearch</code> 委派子任务。</li>
+<li>用 <code>think_tool</code> 做规划和复盘。</li>
+<li>满意后调用 <code>ResearchComplete</code>。</li>
+</ul>
+<h3 id="prompt-中的角色设定">Prompt 中的角色设定</h3>
+<p>开头直接定义：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">You are a research supervisor.
+</span></span></code></pre></div><p>这很关键。监督者不是普通研究员，也不是最终报告作者。它的责任是“管理研究”，不是“写答案”。</p>
+<h3 id="工具说明">工具说明</h3>
+<p>它列出三个工具：</p>
+<ul>
+<li><code>ConductResearch</code>：委派研究任务给专门子 agent。</li>
+<li><code>ResearchComplete</code>：表示研究完成。</li>
+<li><code>think_tool</code>：用于反思和战略规划。</li>
+</ul>
+<p>并加了一个强约束：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Use think_tool before calling ConductResearch, and after each ConductResearch.
+</span></span><span class="line"><span class="cl">Do not call think_tool with any other tools in parallel.
+</span></span></code></pre></div><p>这相当于给 agent 加了一个“先想再行动，行动后复盘”的节奏。它不是为了展示思维过程，而是为了改善工具调用策略。</p>
+<h3 id="预算限制">预算限制</h3>
+<p>这个 prompt 写得非常工程化，因为它明确限制：</p>
+<ul>
+<li>默认偏向单个子 agent。</li>
+<li>除非有明显并行机会，否则不要拆太多。</li>
+<li>能自信回答就停止。</li>
+<li>工具调用达到上限要停。</li>
+<li>每轮最多 <code>{max_concurrent_research_units}</code> 个并行 agent。</li>
+</ul>
+<p>这类限制对 agent 非常重要。没有预算意识的 agent 会不断追求“更全面”，最后花掉更多 token 和时间，却不一定产出更好答案。嗯，很像某些没有截止日期概念的会议。</p>
+<h3 id="拆分规则">拆分规则</h3>
+<p>它给出了非常实用的 scaling rules：</p>
+<ul>
+<li>简单事实查询、列表、排名：单个子 agent。</li>
+<li>用户请求中显式出现的比较对象：每个对象一个子 agent。</li>
+<li>委派任务必须清晰、独立、互不重叠。</li>
+<li>子 agent 看不到其他 agent 的工作，所以任务说明必须自包含。</li>
+<li>不要使用缩写或简称。</li>
+</ul>
+<h3 id="可以学到什么-2">可以学到什么</h3>
+<p>多 agent prompt 必须写清楚：</p>
+<ul>
+<li>当前 agent 的层级角色。</li>
+<li>它是否应该亲自执行任务。</li>
+<li>它能调用哪些工具。</li>
+<li>什么时候拆分。</li>
+<li>拆分的粒度。</li>
+<li>并发上限。</li>
+<li>停止条件。</li>
+<li>子任务说明是否必须自包含。</li>
+</ul>
+<p>如果没有这些边界，多 agent 很容易变成“很多模型各忙各的”，看起来热闹，结果松散。</p>
+<h2 id="6-research_system_prompt单个研究者如何搜索和反思">6. <code>research_system_prompt</code>：单个研究者如何搜索和反思</h2>
+<h3 id="位置-3">位置</h3>
+<p>调用节点：<code>researcher</code></p>
+<p>绑定工具来自：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">tools</span> <span class="o">=</span> <span class="k">await</span> <span class="n">get_all_tools</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+</span></span></code></pre></div><p>工具可能包括：</p>
+<ul>
+<li><code>ResearchComplete</code></li>
+<li><code>think_tool</code></li>
+<li>Tavily 搜索</li>
+<li>OpenAI 原生网页搜索</li>
+<li>Anthropic 原生网页搜索</li>
+<li>MCP 工具</li>
+</ul>
+<h3 id="它解决的问题-3">它解决的问题</h3>
+<p>单个研究者拿到监督者分配的一个具体研究主题后，要负责实际查资料。</p>
+<p>它的基本循环是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">读任务
+</span></span><span class="line"><span class="cl">-&gt; 搜索
+</span></span><span class="line"><span class="cl">-&gt; 反思搜索结果
+</span></span><span class="line"><span class="cl">-&gt; 缩小搜索
+</span></span><span class="line"><span class="cl">-&gt; 判断是否足够
+</span></span><span class="line"><span class="cl">-&gt; 完成
+</span></span></code></pre></div><h3 id="搜索策略">搜索策略</h3>
+<p>Prompt 要求：</p>
+<ul>
+<li>先宽后窄。</li>
+<li>每次搜索后暂停评估。</li>
+<li>缺什么就做更窄的搜索。</li>
+<li>能自信回答就停止。</li>
+<li>不要为了完美无限搜索。</li>
+</ul>
+<p>这其实是人类研究者的正常做法。先建立地图，再查细节；先看全局，再补缺口。</p>
+<h3 id="工具预算">工具预算</h3>
+<p>它限制：</p>
+<ul>
+<li>简单问题最多 2-3 次搜索。</li>
+<li>复杂问题最多 5 次搜索。</li>
+<li>搜不到也最多 5 次。</li>
+</ul>
+<p>还规定遇到以下情况立即停止：</p>
+<ul>
+<li>已经能全面回答。</li>
+<li>已有 3 个以上相关例子或来源。</li>
+<li>最近两次搜索返回相似信息。</li>
+</ul>
+<p>这些停止条件能防止 agent 搜索过度。Prompt 工程里，“什么时候停”常常比“怎么做”更重要。</p>
+<h3 id="mcp-注入点">MCP 注入点</h3>
+<p>这个 prompt 有一个变量：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">{mcp_prompt}
+</span></span></code></pre></div><p>它来自配置：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">researcher_prompt</span> <span class="o">=</span> <span class="n">research_system_prompt</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="n">mcp_prompt</span><span class="o">=</span><span class="n">configurable</span><span class="o">.</span><span class="n">mcp_prompt</span> <span class="ow">or</span> <span class="s2">&#34;&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">date</span><span class="o">=</span><span class="n">get_today_str</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span></code></pre></div><p>这允许用户或平台在运行时追加 MCP 工具使用说明。例如某个 MCP server 提供数据库、文档库、浏览器自动化工具，就可以在这里告诉研究者何时使用。</p>
+<h3 id="可以学到什么-3">可以学到什么</h3>
+<p>工具型 agent prompt 要写清：</p>
+<ul>
+<li>工具列表。</li>
+<li>工具使用顺序。</li>
+<li>每次工具调用后的反思要求。</li>
+<li>搜索从宽到窄的策略。</li>
+<li>最大工具调用次数。</li>
+<li>停止条件。</li>
+<li>外部工具的附加说明注入点。</li>
+</ul>
+<h2 id="7-compress_research_system_prompt压缩研究发现但不丢信息">7. <code>compress_research_system_prompt</code>：压缩研究发现但不丢信息</h2>
+<h3 id="位置-4">位置</h3>
+<p>调用节点：<code>compress_research</code></p>
+<h3 id="它解决的问题-4">它解决的问题</h3>
+<p>子研究者会产生很多消息：</p>
+<ul>
+<li>搜索结果。</li>
+<li>网页摘要。</li>
+<li>工具返回。</li>
+<li>反思。</li>
+<li>可能还有重复信息。</li>
+</ul>
+<p>这些原始消息直接交给监督者，会占用大量上下文，也会混杂无关内容。所以需要压缩。</p>
+<p>但这里的“压缩”不是普通总结。它的关键目标是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">清理格式，去重，保留所有相关信息和来源。
+</span></span></code></pre></div><h3 id="prompt-的关键矛盾">Prompt 的关键矛盾</h3>
+<p>这个 prompt 同时要求：</p>
+<ul>
+<li>去掉明显无关和重复内容。</li>
+<li>所有相关信息都要保留。</li>
+<li>关键内容可以 verbatim 保留。</li>
+<li>输出可以很长。</li>
+<li>必须保留所有来源和引用。</li>
+</ul>
+<p>也就是说，它不是让模型写“简短摘要”，而是让模型写“干净版原始发现”。</p>
+<h3 id="输出格式">输出格式</h3>
+<p>它规定：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">**List of Queries and Tool Calls Made**
+</span></span><span class="line"><span class="cl">**Fully Comprehensive Findings**
+</span></span><span class="line"><span class="cl">**List of All Relevant Sources (with citations in the report)**
+</span></span></code></pre></div><p>并要求最终 Sources 顺序编号、无空号。</p>
+<h3 id="为什么这么设计">为什么这么设计</h3>
+<p>因为后面还有一个最终报告生成模型。压缩阶段如果丢了细节，最终报告就没法恢复。LLM 系统中，早期信息丢失往往是不可逆的。你不能指望最终写作模型凭空找回被压缩掉的证据，除非你真的希望它编。那就不叫研究了，叫即兴表演。</p>
+<h3 id="可以学到什么-4">可以学到什么</h3>
+<p>摘要类 prompt 要明确区分：</p>
+<table>
+  <thead>
+      <tr>
+          <th>类型</th>
+          <th>目标</th>
+          <th>写法</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>普通摘要</td>
+          <td>更短、更易读</td>
+          <td>允许概括</td>
+      </tr>
+      <tr>
+          <td>研究压缩</td>
+          <td>减少噪音但保留证据</td>
+          <td>禁止丢相关细节</td>
+      </tr>
+      <tr>
+          <td>执行摘要</td>
+          <td>给决策者快速看</td>
+          <td>强调结论和建议</td>
+      </tr>
+      <tr>
+          <td>证据清单</td>
+          <td>给下游模型使用</td>
+          <td>强调来源、事实、原文片段</td>
+      </tr>
+  </tbody>
+</table>
+<p>本项目的压缩 prompt 属于“证据清单 + 去重清理”，不是普通摘要。</p>
+<h2 id="8-compress_research_simple_human_message切换到清理模式">8. <code>compress_research_simple_human_message</code>：切换到清理模式</h2>
+<h3 id="位置-5">位置</h3>
+<p>调用节点：<code>compress_research</code></p>
+<p>代码中会把它 append 到研究者消息末尾：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">researcher_messages</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">HumanMessage</span><span class="p">(</span><span class="n">content</span><span class="o">=</span><span class="n">compress_research_simple_human_message</span><span class="p">))</span>
+</span></span></code></pre></div><h3 id="它解决的问题-5">它解决的问题</h3>
+<p>系统提示词已经说明了压缩任务，为什么还要追加一条 human message？</p>
+<p>因为模型在前面的对话中一直处于“研究者模式”：它搜索、调用工具、反思。现在流程要进入“清理发现模式”。追加一条人类消息，相当于在上下文末尾明确告诉模型：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">上面这些都是研究过程。现在请清理这些发现。
+</span></span></code></pre></div><h3 id="文案特点">文案特点</h3>
+<p>它非常短，但很强硬：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">DO NOT summarize the information.
+</span></span><span class="line"><span class="cl">I want the raw information returned, just in a cleaner format.
+</span></span></code></pre></div><p>它的作用是防止模型把压缩误解成“写一个概览”。这很有必要，因为很多模型见到“clean up findings”会自动开始概括。</p>
+<h3 id="可以学到什么-5">可以学到什么</h3>
+<p>当一个节点要在同一段消息历史中切换任务模式时，可以在末尾追加一条短 human message，明确当前操作是什么。尤其适合：</p>
+<ul>
+<li>从工具调用切到结果整理。</li>
+<li>从头脑风暴切到执行计划。</li>
+<li>从草稿切到审校。</li>
+<li>从检索切到报告写作。</li>
+</ul>
+<h2 id="9-final_report_generation_prompt生成最终深度报告">9. <code>final_report_generation_prompt</code>：生成最终深度报告</h2>
+<h3 id="位置-6">位置</h3>
+<p>调用节点：<code>final_report_generation</code></p>
+<h3 id="它解决的问题-6">它解决的问题</h3>
+<p>最终报告模型拿到三个上下文：</p>
+<ul>
+<li><code>research_brief</code>：用户真实需求的研究简报。</li>
+<li><code>messages</code>：用户对话上下文。</li>
+<li><code>findings</code>：监督者和子研究者收集到的研究发现。</li>
+</ul>
+<p>它的任务是写出最终报告。</p>
+<h3 id="语言匹配规则">语言匹配规则</h3>
+<p>这个 prompt 明确要求：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Make sure the answer is written in the same language as the human messages.
+</span></span></code></pre></div><p>并强调：</p>
+<ul>
+<li>用户消息是英文，就用英文。</li>
+<li>用户消息是中文，就整篇中文。</li>
+<li>即使研究 brief 或 findings 是英文，也要翻译成用户语言。</li>
+</ul>
+<p>这是面向真实用户体验的重要规则。如果用户用中文提问，最终给出英文报告，大概率不是专业，而是没听懂人话。礼貌一点说，是产品体验欠妥。</p>
+<h3 id="报告结构规则">报告结构规则</h3>
+<p>它要求：</p>
+<ul>
+<li>使用清晰 Markdown。</li>
+<li>标题层级用 <code>#</code>、<code>##</code>、<code>###</code>。</li>
+<li>包含具体事实和研究洞察。</li>
+<li>用 <code>[Title](URL)</code> 引用相关来源。</li>
+<li>保持全面、平衡、详尽。</li>
+<li>最后必须有 Sources。</li>
+</ul>
+<h3 id="写作行为限制">写作行为限制</h3>
+<p>它明确要求：</p>
+<ul>
+<li>不要自称报告作者。</li>
+<li>不要写“我将要……”这种过程说明。</li>
+<li>直接写报告。</li>
+<li>默认段落形式，适合时用 bullet points。</li>
+</ul>
+<p>这可以避免最终报告像模型自述，而不是专业文档。</p>
+<h3 id="引用规则">引用规则</h3>
+<p>它要求：</p>
+<ul>
+<li>每个唯一 URL 分配一个 citation number。</li>
+<li>Sources 从 1 开始连续编号。</li>
+<li>每个来源单独一行。</li>
+<li>引用非常重要。</li>
+</ul>
+<p>注意这里有一个轻微风格张力：正文前面说“用 <code>[Title](URL)</code> 格式”，后面 Citation Rules 又要求编号 <code>[1] Source Title: URL</code>。这不一定会导致错误，但如果要继续优化 prompt，最好统一引用格式，比如正文全部用 <code>[1]</code>，末尾 Sources 列 URL；或者正文全部用 <code>[Title](URL)</code>，末尾 Sources 汇总链接。现在的写法能用，但不是最干净。</p>
+<h3 id="可以学到什么-6">可以学到什么</h3>
+<p>最终报告 prompt 要控制的是“读者体验”：</p>
+<ul>
+<li>语言。</li>
+<li>结构。</li>
+<li>深度。</li>
+<li>语气。</li>
+<li>引用。</li>
+<li>不要自我旁白。</li>
+<li>不要遗漏相关信息。</li>
+</ul>
+<p>它和前面的工具 prompt 不同：工具 prompt 管行为，报告 prompt 管表达。</p>
+<h2 id="10-summarize_webpage_prompt网页内容摘要">10. <code>summarize_webpage_prompt</code>：网页内容摘要</h2>
+<h3 id="位置-7">位置</h3>
+<p>调用函数：<code>summarize_webpage</code></p>
+<p>结构化输出模型：<code>Summary</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">Summary</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">    <span class="n">summary</span><span class="p">:</span> <span class="nb">str</span>
+</span></span><span class="line"><span class="cl">    <span class="n">key_excerpts</span><span class="p">:</span> <span class="nb">str</span>
+</span></span></code></pre></div><h3 id="它解决的问题-7">它解决的问题</h3>
+<p>Tavily 搜索会返回网页原始内容。网页可能很长，直接塞进研究上下文会浪费 token，也可能引入噪音。所以先做网页摘要。</p>
+<p>这个 prompt 要求模型：</p>
+<ul>
+<li>保留网页主旨。</li>
+<li>保留关键事实、统计和数据。</li>
+<li>保留重要引文。</li>
+<li>对时效内容保留时间顺序。</li>
+<li>保留列表和步骤。</li>
+<li>保留关键日期、人物、地点。</li>
+<li>摘要长度约为原文的 25%-30%。</li>
+</ul>
+<h3 id="分类处理">分类处理</h3>
+<p>它按内容类型给出摘要策略：</p>
+<ul>
+<li>新闻：关注 who / what / when / where / why / how。</li>
+<li>科学内容：保留方法、结果、结论。</li>
+<li>观点文章：保留主要论点和支撑点。</li>
+<li>产品页：保留功能、规格、卖点。</li>
+</ul>
+<p>这类按类型处理的指令很实用，因为不同网页的“重要信息”定义不同。</p>
+<h3 id="输出格式-1">输出格式</h3>
+<p>它要求 JSON：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;summary&#34;</span><span class="p">:</span> <span class="s2">&#34;摘要内容&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;key_excerpts&#34;</span><span class="p">:</span> <span class="s2">&#34;重要摘录&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>代码里同样使用 <code>.with_structured_output(Summary)</code>，所以最终会得到 Pydantic 对象。</p>
+<h3 id="可以学到什么-7">可以学到什么</h3>
+<p>当 prompt 面向“不同输入类型”时，不要只写笼统的“总结重点”。你应该告诉模型每种类型的重点是什么。否则模型会用同一种摘要套路处理新闻、论文、产品页和法律文本，结果当然会参差。</p>
+<h2 id="11-这些-prompt-的共同设计模式">11. 这些 Prompt 的共同设计模式</h2>
+<h3 id="模式一角色明确">模式一：角色明确</h3>
+<p>每个 prompt 都会说明模型是谁：</p>
+<ul>
+<li>research supervisor</li>
+<li>research assistant</li>
+<li>report writer</li>
+<li>webpage summarizer</li>
+</ul>
+<p>角色不是装饰，而是职责边界。监督者不写最终报告，研究者不做总调度，网页摘要器不评价市场趋势。</p>
+<h3 id="模式二上下文用标签包裹">模式二：上下文用标签包裹</h3>
+<p>例如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">&lt;Messages&gt;
+</span></span><span class="line"><span class="cl">{messages}
+</span></span><span class="line"><span class="cl">&lt;/Messages&gt;
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">&lt;Research Brief&gt;
+</span></span><span class="line"><span class="cl">{research_brief}
+</span></span><span class="line"><span class="cl">&lt;/Research Brief&gt;
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">&lt;Findings&gt;
+</span></span><span class="line"><span class="cl">{findings}
+</span></span><span class="line"><span class="cl">&lt;/Findings&gt;
+</span></span></code></pre></div><p>这种写法有三个好处：</p>
+<ul>
+<li>模型更容易区分指令和数据。</li>
+<li>降低用户内容覆盖系统意图的概率。</li>
+<li>模板可读性更好。</li>
+</ul>
+<h3 id="模式三任务规则格式分层">模式三：任务、规则、格式分层</h3>
+<p>这些 prompt 常用类似结构：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">&lt;Task&gt;
+</span></span><span class="line"><span class="cl">...
+</span></span><span class="line"><span class="cl">&lt;/Task&gt;
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">&lt;Instructions&gt;
+</span></span><span class="line"><span class="cl">...
+</span></span><span class="line"><span class="cl">&lt;/Instructions&gt;
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">&lt;Hard Limits&gt;
+</span></span><span class="line"><span class="cl">...
+</span></span><span class="line"><span class="cl">&lt;/Hard Limits&gt;
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">&lt;Output Format&gt;
+</span></span><span class="line"><span class="cl">...
+</span></span><span class="line"><span class="cl">&lt;/Output Format&gt;
+</span></span></code></pre></div><p>这是非常推荐的写法。长 prompt 如果没有结构，很容易变成一锅内容。模型和人一样，读一锅东西也会敷衍，只是它敷衍得比较像真的。</p>
+<h3 id="模式四用硬限制控制成本">模式四：用硬限制控制成本</h3>
+<p>例如：</p>
+<ul>
+<li>最多 5 次搜索。</li>
+<li>简单任务 2-3 次搜索。</li>
+<li>达到并发上限就拒绝多余研究。</li>
+<li>搜索结果重复就停止。</li>
+</ul>
+<p>Agent prompt 必须有资源意识。没有预算限制的 agent 会自然膨胀。</p>
+<h3 id="模式五显式停止条件">模式五：显式停止条件</h3>
+<p>好的 agent prompt 不只说“做什么”，还说“什么时候可以结束”。</p>
+<p>例如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Stop when you can answer confidently.
+</span></span><span class="line"><span class="cl">Stop after 5 search calls.
+</span></span><span class="line"><span class="cl">Stop if the last 2 searches returned similar information.
+</span></span></code></pre></div><p>这比“尽可能全面”更可控。</p>
+<h3 id="模式六结构化输出配合-pydantic">模式六：结构化输出配合 Pydantic</h3>
+<p>项目中用于路由或结构化数据的 prompt 都配合了 Pydantic：</p>
+<ul>
+<li><code>ClarifyWithUser</code></li>
+<li><code>ResearchQuestion</code></li>
+<li><code>Summary</code></li>
+</ul>
+<p>这是一种成熟做法。需要机器读取的结果，不要只靠自然语言格式约定。</p>
+<h3 id="模式七把来源当成一等公民">模式七：把来源当成一等公民</h3>
+<p>这个项目几乎所有研究相关 prompt 都强调来源：</p>
+<ul>
+<li>搜索来源优先级。</li>
+<li>压缩阶段保留所有来源。</li>
+<li>最终报告包含 citations。</li>
+<li>Sources 连续编号。</li>
+</ul>
+<p>深度研究的核心不是“说得像真的”，而是“能追溯”。这一点不复杂，但很容易被忽略。</p>
+<h2 id="12-写好-prompt-的工程方法">12. 写好 Prompt 的工程方法</h2>
+<h3 id="第一步确定这个-prompt-在流程中的位置">第一步：确定这个 Prompt 在流程中的位置</h3>
+<p>先问：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">这个 prompt 是入口判断、信息抽取、工具调用、结果压缩，还是最终写作？
+</span></span></code></pre></div><p>不同位置的写法完全不同。</p>
+<table>
+  <thead>
+      <tr>
+          <th>位置</th>
+          <th>重点</th>
+          <th>输出</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>入口澄清</td>
+          <td>判断是否需要追问</td>
+          <td>JSON / 路由字段</td>
+      </tr>
+      <tr>
+          <td>信息抽取</td>
+          <td>保留用户约束</td>
+          <td>结构化对象</td>
+      </tr>
+      <tr>
+          <td>工具调用</td>
+          <td>何时用工具、怎么停</td>
+          <td>tool calls</td>
+      </tr>
+      <tr>
+          <td>搜索研究</td>
+          <td>搜索策略、来源质量</td>
+          <td>研究笔记</td>
+      </tr>
+      <tr>
+          <td>压缩</td>
+          <td>去重但不丢证据</td>
+          <td>结构化发现</td>
+      </tr>
+      <tr>
+          <td>最终写作</td>
+          <td>读者体验和引用</td>
+          <td>Markdown</td>
+      </tr>
+  </tbody>
+</table>
+<p>不要用一个万能 prompt 包揽所有阶段。所谓万能，通常只是所有地方都不够好听的说法。</p>
+<h3 id="第二步写清任务目标">第二步：写清任务目标</h3>
+<p>差的写法：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">请帮我分析用户需求。
+</span></span></code></pre></div><p>好的写法：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">判断用户是否已经提供足够信息，可以开始研究。如果信息不足，只提出一个最关键的澄清问题；如果信息足够，返回确认消息并简要复述你理解的研究范围。
+</span></span></code></pre></div><p>目标要可执行、可判定。</p>
+<h3 id="第三步写清输入">第三步：写清输入</h3>
+<p>把输入包在标签里：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">&lt;UserMessages&gt;
+</span></span><span class="line"><span class="cl">{messages}
+</span></span><span class="line"><span class="cl">&lt;/UserMessages&gt;
+</span></span></code></pre></div><p>如果有多个输入，分别命名：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">&lt;ResearchBrief&gt;
+</span></span><span class="line"><span class="cl">{research_brief}
+</span></span><span class="line"><span class="cl">&lt;/ResearchBrief&gt;
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">&lt;Findings&gt;
+</span></span><span class="line"><span class="cl">{findings}
+</span></span><span class="line"><span class="cl">&lt;/Findings&gt;
+</span></span></code></pre></div><p>不要把不同来源的数据混在一段自然语言里。</p>
+<h3 id="第四步写清约束">第四步：写清约束</h3>
+<p>约束最好分成几类：</p>
+<ul>
+<li>内容约束：必须包含什么，不能编造什么。</li>
+<li>行为约束：是否可以追问，是否可以调用工具。</li>
+<li>资源约束：最多几次搜索，最多几个子任务。</li>
+<li>风格约束：语言、语气、读者对象。</li>
+<li>格式约束：JSON、Markdown、表格、字段名。</li>
+</ul>
+<h3 id="第五步给输出格式">第五步：给输出格式</h3>
+<p>如果输出会被程序读取，尽量使用结构化输出：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">RouteDecision</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">    <span class="n">route</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&#34;clarify&#34;</span><span class="p">,</span> <span class="s2">&#34;research&#34;</span><span class="p">,</span> <span class="s2">&#34;answer&#34;</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">    <span class="n">reason</span><span class="p">:</span> <span class="nb">str</span>
+</span></span></code></pre></div><p>Prompt 中也同步写清：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Return valid JSON with exactly these keys:
+</span></span><span class="line"><span class="cl">&#34;route&#34;: &#34;clarify&#34; | &#34;research&#34; | &#34;answer&#34;,
+</span></span><span class="line"><span class="cl">&#34;reason&#34;: &#34;&lt;brief reason&gt;&#34;
+</span></span></code></pre></div><h3 id="第六步写停止条件">第六步：写停止条件</h3>
+<p>尤其是 agent prompt，必须写：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Stop when:
+</span></span><span class="line"><span class="cl">- you have enough information to answer;
+</span></span><span class="line"><span class="cl">- you have already called the search tool 5 times;
+</span></span><span class="line"><span class="cl">- the last 2 searches returned similar information.
+</span></span></code></pre></div><p>停止条件越清楚，系统越稳定。</p>
+<h3 id="第七步给示例但不要喧宾夺主">第七步：给示例，但不要喧宾夺主</h3>
+<p>示例适合：</p>
+<ul>
+<li>输出格式复杂。</li>
+<li>用户输入类型多变。</li>
+<li>需要模型模仿某种结构。</li>
+</ul>
+<p>但示例也有风险：模型可能过度模仿示例内容。示例应该展示形式，而不是暗示事实。</p>
+<h3 id="第八步把-prompt-和代码契约对齐">第八步：把 prompt 和代码契约对齐</h3>
+<p>Prompt 中提到的工具，代码必须真的绑定。</p>
+<p>Prompt 中要求的字段，schema 必须真的定义。</p>
+<p>Prompt 中说“最多 5 次”，代码最好也有上限。</p>
+<p>Prompt 中说“输出中文”，最终节点必须拿得到用户消息语言。</p>
+<p>自然语言约束可以提高概率，代码约束才能给系统兜底。两者缺一边，都会让人心情复杂。</p>
+<h2 id="13-常用-prompt-模板">13. 常用 Prompt 模板</h2>
+<h3 id="模板一澄清判断-prompt">模板一：澄清判断 Prompt</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">You are an assistant deciding whether a user request is specific enough to proceed.
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">&lt;Messages&gt;
+</span></span><span class="line"><span class="cl">{messages}
+</span></span><span class="line"><span class="cl">&lt;/Messages&gt;
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">Today&#39;s date is {date}.
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">Task:
+</span></span><span class="line"><span class="cl">Determine whether a clarifying question is required before starting the task.
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">Rules:
+</span></span><span class="line"><span class="cl">- Ask a clarifying question only if the missing information would materially change the result.
+</span></span><span class="line"><span class="cl">- Do not ask for information already provided.
+</span></span><span class="line"><span class="cl">- If acronyms or ambiguous terms appear, ask for clarification.
+</span></span><span class="line"><span class="cl">- Ask at most one concise question.
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">Return valid JSON with exactly these keys:
+</span></span><span class="line"><span class="cl">{
+</span></span><span class="line"><span class="cl">  &#34;need_clarification&#34;: boolean,
+</span></span><span class="line"><span class="cl">  &#34;question&#34;: string,
+</span></span><span class="line"><span class="cl">  &#34;confirmation&#34;: string
+</span></span><span class="line"><span class="cl">}
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">If clarification is needed:
+</span></span><span class="line"><span class="cl">{
+</span></span><span class="line"><span class="cl">  &#34;need_clarification&#34;: true,
+</span></span><span class="line"><span class="cl">  &#34;question&#34;: &#34;...&#34;,
+</span></span><span class="line"><span class="cl">  &#34;confirmation&#34;: &#34;&#34;
+</span></span><span class="line"><span class="cl">}
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">If clarification is not needed:
+</span></span><span class="line"><span class="cl">{
+</span></span><span class="line"><span class="cl">  &#34;need_clarification&#34;: false,
+</span></span><span class="line"><span class="cl">  &#34;question&#34;: &#34;&#34;,
+</span></span><span class="line"><span class="cl">  &#34;confirmation&#34;: &#34;...&#34;
+</span></span><span class="line"><span class="cl">}
+</span></span></code></pre></div><h3 id="模板二需求改写-prompt">模板二：需求改写 Prompt</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">You will convert the conversation into a concrete task brief.
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">&lt;Messages&gt;
+</span></span><span class="line"><span class="cl">{messages}
+</span></span><span class="line"><span class="cl">&lt;/Messages&gt;
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">Today&#39;s date is {date}.
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">Guidelines:
+</span></span><span class="line"><span class="cl">- Preserve every explicit user requirement.
+</span></span><span class="line"><span class="cl">- Do not invent constraints the user did not provide.
+</span></span><span class="line"><span class="cl">- If an important dimension is unspecified, mark it as open-ended.
+</span></span><span class="line"><span class="cl">- Write from the user&#39;s first-person perspective.
+</span></span><span class="line"><span class="cl">- Include source preferences if relevant.
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">Return one detailed task brief.
+</span></span></code></pre></div><h3 id="模板三工具-agent-prompt">模板三：工具 Agent Prompt</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">You are a task-focused agent with access to tools.
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">&lt;Task&gt;
+</span></span><span class="line"><span class="cl">{task}
+</span></span><span class="line"><span class="cl">&lt;/Task&gt;
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">Available tools:
+</span></span><span class="line"><span class="cl">- search_tool: use for web research.
+</span></span><span class="line"><span class="cl">- database_tool: use for internal records.
+</span></span><span class="line"><span class="cl">- think_tool: use after each search to assess progress.
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">Instructions:
+</span></span><span class="line"><span class="cl">1. Read the task carefully.
+</span></span><span class="line"><span class="cl">2. Start with broad search if the topic is unfamiliar.
+</span></span><span class="line"><span class="cl">3. Use narrower searches to fill concrete gaps.
+</span></span><span class="line"><span class="cl">4. After each search, call think_tool to evaluate findings.
+</span></span><span class="line"><span class="cl">5. Stop when you can answer confidently.
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">Hard limits:
+</span></span><span class="line"><span class="cl">- Use at most 5 search calls.
+</span></span><span class="line"><span class="cl">- Stop if the last 2 searches return similar information.
+</span></span><span class="line"><span class="cl">- Do not call tools that are irrelevant to the task.
+</span></span></code></pre></div><h3 id="模板四研究压缩-prompt">模板四：研究压缩 Prompt</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">You are cleaning research findings for a downstream report writer.
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">&lt;Task&gt;
+</span></span><span class="line"><span class="cl">Clean the raw findings while preserving all relevant facts, source details, dates, names, numbers, and citations.
+</span></span><span class="line"><span class="cl">&lt;/Task&gt;
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">Rules:
+</span></span><span class="line"><span class="cl">- Do not write an executive summary.
+</span></span><span class="line"><span class="cl">- Remove only obvious duplication and irrelevant text.
+</span></span><span class="line"><span class="cl">- Preserve all evidence that could help answer the research question.
+</span></span><span class="line"><span class="cl">- Keep source URLs attached to the facts they support.
+</span></span><span class="line"><span class="cl">- If multiple sources support the same fact, mention all of them.
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">Output format:
+</span></span><span class="line"><span class="cl">1. Queries and tools used
+</span></span><span class="line"><span class="cl">2. Comprehensive cleaned findings
+</span></span><span class="line"><span class="cl">3. Sources
+</span></span></code></pre></div><h3 id="模板五最终报告-prompt">模板五：最终报告 Prompt</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Create a comprehensive report answering the research brief.
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">&lt;ResearchBrief&gt;
+</span></span><span class="line"><span class="cl">{research_brief}
+</span></span><span class="line"><span class="cl">&lt;/ResearchBrief&gt;
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">&lt;Findings&gt;
+</span></span><span class="line"><span class="cl">{findings}
+</span></span><span class="line"><span class="cl">&lt;/Findings&gt;
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">Requirements:
+</span></span><span class="line"><span class="cl">- Write in the same language as the user&#39;s messages.
+</span></span><span class="line"><span class="cl">- Use clear Markdown headings.
+</span></span><span class="line"><span class="cl">- Use specific facts from the findings.
+</span></span><span class="line"><span class="cl">- Provide balanced analysis.
+</span></span><span class="line"><span class="cl">- Cite sources consistently.
+</span></span><span class="line"><span class="cl">- Do not refer to yourself.
+</span></span><span class="line"><span class="cl">- Do not describe the writing process.
+</span></span><span class="line"><span class="cl">- End with a Sources section.
+</span></span></code></pre></div><h3 id="模板六网页摘要-prompt">模板六：网页摘要 Prompt</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Summarize the following webpage for a downstream research agent.
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">&lt;WebpageContent&gt;
+</span></span><span class="line"><span class="cl">{webpage_content}
+</span></span><span class="line"><span class="cl">&lt;/WebpageContent&gt;
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">Preserve:
+</span></span><span class="line"><span class="cl">- main topic;
+</span></span><span class="line"><span class="cl">- key facts and statistics;
+</span></span><span class="line"><span class="cl">- dates, names, organizations, locations;
+</span></span><span class="line"><span class="cl">- methodology and conclusions for scientific content;
+</span></span><span class="line"><span class="cl">- feature/specification details for product content;
+</span></span><span class="line"><span class="cl">- important quotes or excerpts.
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">Return JSON:
+</span></span><span class="line"><span class="cl">{
+</span></span><span class="line"><span class="cl">  &#34;summary&#34;: &#34;...&#34;,
+</span></span><span class="line"><span class="cl">  &#34;key_excerpts&#34;: &#34;...&#34;
+</span></span><span class="line"><span class="cl">}
+</span></span></code></pre></div><h2 id="14-prompt-的坏味道">14. Prompt 的坏味道</h2>
+<h3 id="坏味道一目标空泛">坏味道一：目标空泛</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">请尽可能全面地回答。
+</span></span></code></pre></div><p>问题：全面到什么程度？是否需要引用？是否需要比较？是否需要搜索？</p>
+<p>改成：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">请从市场规模、主要玩家、技术路线、监管政策、风险和未来趋势六个维度回答，并引用权威来源。
+</span></span></code></pre></div><h3 id="坏味道二多个任务混在一起">坏味道二：多个任务混在一起</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">请理解需求、搜索资料、生成结论、写成报告、检查引用。
+</span></span></code></pre></div><p>可以拆成：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">需求澄清 -&gt; 研究 brief -&gt; 搜索 -&gt; 压缩 -&gt; 报告
+</span></span></code></pre></div><p>也就是当前项目的做法。</p>
+<h3 id="坏味道三输出格式只用自然语言描述">坏味道三：输出格式只用自然语言描述</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">请返回一个 JSON。
+</span></span></code></pre></div><p>不够。</p>
+<p>改成：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Return valid JSON with exactly these keys:
+</span></span><span class="line"><span class="cl">&#34;need_clarification&#34;: boolean,
+</span></span><span class="line"><span class="cl">&#34;question&#34;: string,
+</span></span><span class="line"><span class="cl">&#34;verification&#34;: string
+</span></span></code></pre></div><p>代码里再配合 Pydantic schema。</p>
+<h3 id="坏味道四没有停止条件">坏味道四：没有停止条件</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">不断搜索直到找到足够信息。
+</span></span></code></pre></div><p>这句话听起来勤奋，实际很危险。</p>
+<p>改成：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Use at most 5 search calls. Stop earlier if you have 3 or more high-quality sources or if the last 2 searches return similar information.
+</span></span></code></pre></div><h3 id="坏味道五让模型猜用户没说的东西">坏味道五：让模型猜用户没说的东西</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">根据常识补全用户需求。
+</span></span></code></pre></div><p>改成：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">If a necessary dimension is not specified, state that it is open-ended instead of inventing a constraint.
+</span></span></code></pre></div><h3 id="坏味道六风格要求压过任务要求">坏味道六：风格要求压过任务要求</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">用非常优美、震撼、有感染力的语言回答。
+</span></span></code></pre></div><p>如果是研究报告，这种要求很容易牺牲准确性。</p>
+<p>更稳的写法：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Use clear, professional language. Prefer precise claims over rhetorical flourish.
+</span></span></code></pre></div><h3 id="坏味道七引用规则不统一">坏味道七：引用规则不统一</h3>
+<p>比如同时要求：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Use [Title](URL)
+</span></span></code></pre></div><p>和：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Use numbered citations [1]
+</span></span></code></pre></div><p>不是不能混用，但最好统一。否则最终报告可能出现两套引用系统。</p>
+<h2 id="15-agent-prompt-的专项建议">15. Agent Prompt 的专项建议</h2>
+<h3 id="1-工具说明要具体">1. 工具说明要具体</h3>
+<p>不要只写：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">You have access to search.
+</span></span></code></pre></div><p>要写：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Use search_tool for current, factual, source-backed information. Start with broad queries, then use narrower queries to fill gaps.
+</span></span></code></pre></div><h3 id="2-工具调用要有节奏">2. 工具调用要有节奏</h3>
+<p>当前项目的 <code>think_tool</code> 设计值得学习：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Search -&gt; Think -&gt; Search -&gt; Think -&gt; Stop
+</span></span></code></pre></div><p>它给 agent 加了一个“评估间隔”，避免连续盲搜。</p>
+<h3 id="3-子任务必须自包含">3. 子任务必须自包含</h3>
+<p>多 agent 委派时，子 agent 通常看不到监督者完整上下文。所以监督者调用 <code>ConductResearch</code> 时，研究主题必须包含完整背景。</p>
+<p>差的子任务：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Research Tesla.
+</span></span></code></pre></div><p>好的子任务：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Research Tesla&#39;s current position in the global electric vehicle market, focusing on 2024-2026 delivery trends, pricing strategy, profitability, autonomous driving claims, major competitors, and regulatory risks. Prioritize Tesla investor relations, official filings, government data, and reputable financial publications.
+</span></span></code></pre></div><h3 id="4-并发不是越多越好">4. 并发不是越多越好</h3>
+<p>并发适合：</p>
+<ul>
+<li>明确比较多个对象。</li>
+<li>多个独立维度。</li>
+<li>不同地区或行业可以分开查。</li>
+</ul>
+<p>不适合：</p>
+<ul>
+<li>简单事实查询。</li>
+<li>强依赖顺序推理的任务。</li>
+<li>用户需求还没澄清的任务。</li>
+</ul>
+<h3 id="5-让-prompt-承认资源有限">5. 让 prompt 承认资源有限</h3>
+<p>像当前项目这样写：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Think like a human researcher with limited time.
+</span></span></code></pre></div><p>这句话很有用。它让模型不要以“无限努力”为默认策略。</p>
+<h3 id="6-用代码约束兜底">6. 用代码约束兜底</h3>
+<p>Prompt 中写了最多搜索 5 次，代码中也应该有：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">exceeded_iterations</span> <span class="o">=</span> <span class="n">state</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&#34;tool_call_iterations&#34;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="n">configurable</span><span class="o">.</span><span class="n">max_react_tool_calls</span>
+</span></span></code></pre></div><p>只写 prompt 不写代码约束，相当于把刹车画在墙上。看着像那么回事，真要停的时候就知道问题了。</p>
+<h2 id="16-测试和迭代-prompt">16. 测试和迭代 Prompt</h2>
+<h3 id="1-给每个-prompt-准备测试样例">1. 给每个 prompt 准备测试样例</h3>
+<p>澄清 prompt 可以测：</p>
+<ul>
+<li>明确请求。</li>
+<li>模糊请求。</li>
+<li>已经追问过的对话。</li>
+<li>包含缩写的请求。</li>
+<li>用户拒绝澄清的请求。</li>
+</ul>
+<p>研究 brief prompt 可以测：</p>
+<ul>
+<li>多轮需求。</li>
+<li>有明确来源偏好的需求。</li>
+<li>缺少时间范围的需求。</li>
+<li>多语言需求。</li>
+</ul>
+<p>最终报告 prompt 可以测：</p>
+<ul>
+<li>中文输入必须中文输出。</li>
+<li>引用是否连续。</li>
+<li>是否遗漏来源。</li>
+<li>是否出现自我旁白。</li>
+</ul>
+<h3 id="2-记录失败模式">2. 记录失败模式</h3>
+<p>每次 prompt 失败，都不要只改一句“请更认真”。先归类：</p>
+<ul>
+<li>是输出格式错？</li>
+<li>是任务理解错？</li>
+<li>是工具调用太多？</li>
+<li>是停止太早？</li>
+<li>是引用丢失？</li>
+<li>是语言不匹配？</li>
+<li>是模型没有拿到必要上下文？</li>
+</ul>
+<p>问题类型不同，修法也不同。</p>
+<h3 id="3-用评测指标约束">3. 用评测指标约束</h3>
+<p>Prompt 的好坏最好不要只靠感觉。可以给每类 prompt 设置指标：</p>
+<table>
+  <thead>
+      <tr>
+          <th>Prompt</th>
+          <th>指标</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>澄清</td>
+          <td>不必要追问率、漏追问率</td>
+      </tr>
+      <tr>
+          <td>研究 brief</td>
+          <td>用户约束保留率、无根据假设数量</td>
+      </tr>
+      <tr>
+          <td>搜索 agent</td>
+          <td>平均搜索次数、来源质量、重复搜索率</td>
+      </tr>
+      <tr>
+          <td>压缩</td>
+          <td>信息保留率、引用保留率、重复率</td>
+      </tr>
+      <tr>
+          <td>最终报告</td>
+          <td>结构完整性、引用正确率、语言匹配率</td>
+      </tr>
+  </tbody>
+</table>
+<h3 id="4-小步修改">4. 小步修改</h3>
+<p>不要一次性重写整个 prompt。每次只改一个问题：</p>
+<ul>
+<li>增加停止条件。</li>
+<li>调整输出格式。</li>
+<li>加来源优先级。</li>
+<li>加一个反例。</li>
+<li>强化语言要求。</li>
+</ul>
+<p>否则效果变了，你也不知道是哪一段起了作用。</p>
+<h2 id="17-检查清单">17. 检查清单</h2>
+<p>写完一个 prompt 后，可以用这份清单检查。</p>
+<h3 id="基础检查">基础检查</h3>
+<ul>
+<li>是否说明了角色？</li>
+<li>是否说明了任务？</li>
+<li>是否提供了必要上下文？</li>
+<li>是否区分了指令和输入数据？</li>
+<li>是否包含当前日期，尤其是涉及“最新”“最近”“今年”时？</li>
+<li>是否避免要求模型编造未提供的信息？</li>
+</ul>
+<h3 id="输出检查">输出检查</h3>
+<ul>
+<li>输出格式是否明确？</li>
+<li>字段名是否固定？</li>
+<li>是否能被程序稳定解析？</li>
+<li>是否需要配合 Pydantic 或 JSON schema？</li>
+<li>是否给了正反两种输出情况？</li>
+</ul>
+<h3 id="agent-检查">Agent 检查</h3>
+<ul>
+<li>工具列表是否和代码绑定的工具一致？</li>
+<li>是否说明每个工具何时使用？</li>
+<li>是否限制最大工具调用次数？</li>
+<li>是否说明停止条件？</li>
+<li>是否说明工具调用后的反思或复盘？</li>
+<li>多 agent 委派任务是否自包含？</li>
+</ul>
+<h3 id="研究检查">研究检查</h3>
+<ul>
+<li>是否指定来源优先级？</li>
+<li>是否要求保留日期、数字、组织、人名？</li>
+<li>是否要求保留 URL 和引用？</li>
+<li>是否区分事实、推断和观点？</li>
+<li>是否有防止过度总结的规则？</li>
+</ul>
+<h3 id="报告检查">报告检查</h3>
+<ul>
+<li>是否指定读者语言？</li>
+<li>是否指定结构？</li>
+<li>是否要求引用？</li>
+<li>是否避免自我旁白？</li>
+<li>是否要求平衡分析？</li>
+<li>是否说明 Sources 格式？</li>
+</ul>
+<h2 id="最后总结">最后总结</h2>
+<p><code>prompts.py</code> 展示的是一套相当典型的 Agent Prompt 工程：每个 prompt 只负责一个阶段，靠结构化输出、工具调用、状态流转和引用规则连接成完整系统。</p>
+<p>真正值得学习的不是某一句措辞，而是它背后的设计原则：</p>
+<ul>
+<li>把复杂任务拆成阶段。</li>
+<li>每个阶段定义清楚角色和职责。</li>
+<li>需要程序读取的结果使用结构化输出。</li>
+<li>工具 agent 要有预算、反思和停止条件。</li>
+<li>研究类任务必须保护来源和证据。</li>
+<li>最终写作要服务读者，而不是展示模型过程。</li>
+</ul>
+<p>Prompt 写得好，不是因为它看起来很聪明，而是因为它让模型在复杂系统里少犯无谓的错。工程里，这已经是很不错的美德了。</p>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

@@ -1,0 +1,1483 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>汇编代码怎么写：标签、伪指令、段与符号 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="第一次读 .S 文件时，最容易产生一种很自然、也很麻烦的误会：屏幕上每一行都长得像“命令”，于是便以为 CPU 会从上到下逐行执行它们。可惜事实没有这么体贴。
+.section .text .global _entry _entry: la sp, stack0 call start 这里只有 la、call 最终会对应 CPU 要执行的机器码；.section 是给汇编器的安排，.global 是给链接器的说明，_entry: 则只是给一个地址取名字。汇编源文件同时面对预处理器、汇编器、链接器和 CPU。如果不先分清谁负责哪一行，往后的“逐条解释”只会变成徒劳的背诵。
+本文使用 GNU 工具链和 RISC-V 汇编（xv6 使用的风格）讲解这条链路。学完后，你应当能回答四个实际问题：一行汇编是什么类别；一个 C 函数为何能被 call；la sp, stack0 在目标文件中到底留下了什么；以及为什么反汇编结果有时和源代码不一样。
+一、先看到全貌：源文件怎样成为 CPU 能执行的内容 CPU 不认识 start、.text 或 # 注释，它只在内存中按 PC（程序计数器）取二进制编码并执行。人写的汇编在抵达 CPU 前，会经历下面这条流水线：
+entry.S ──预处理──&gt; 临时汇编文本 ──汇编器──&gt; entry.o C 源码 ──C 编译器─────────────────────────&gt; start.o entry.o &#43; start.o &#43; kernel.ld ──链接器──&gt; kernel（ELF 内核映像） │ QEMU/启动环境装入内存 │ PC 指向 _entry，CPU 开始取指 每一阶段做的事不同：
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/assembly/03-%E6%B1%87%E7%BC%96%E4%BB%A3%E7%A0%81%E6%80%8E%E4%B9%88%E5%86%99%E6%A0%87%E7%AD%BE%E4%BC%AA%E6%8C%87%E4%BB%A4%E6%AE%B5%E4%B8%8E%E7%AC%A6%E5%8F%B7/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/assembly/03-%E6%B1%87%E7%BC%96%E4%BB%A3%E7%A0%81%E6%80%8E%E4%B9%88%E5%86%99%E6%A0%87%E7%AD%BE%E4%BC%AA%E6%8C%87%E4%BB%A4%E6%AE%B5%E4%B8%8E%E7%AC%A6%E5%8F%B7/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="汇编代码怎么写：标签、伪指令、段与符号">
+  <meta property="og:description" content="第一次读 .S 文件时，最容易产生一种很自然、也很麻烦的误会：屏幕上每一行都长得像“命令”，于是便以为 CPU 会从上到下逐行执行它们。可惜事实没有这么体贴。
+.section .text .global _entry _entry: la sp, stack0 call start 这里只有 la、call 最终会对应 CPU 要执行的机器码；.section 是给汇编器的安排，.global 是给链接器的说明，_entry: 则只是给一个地址取名字。汇编源文件同时面对预处理器、汇编器、链接器和 CPU。如果不先分清谁负责哪一行，往后的“逐条解释”只会变成徒劳的背诵。
+本文使用 GNU 工具链和 RISC-V 汇编（xv6 使用的风格）讲解这条链路。学完后，你应当能回答四个实际问题：一行汇编是什么类别；一个 C 函数为何能被 call；la sp, stack0 在目标文件中到底留下了什么；以及为什么反汇编结果有时和源代码不一样。
+一、先看到全貌：源文件怎样成为 CPU 能执行的内容 CPU 不认识 start、.text 或 # 注释，它只在内存中按 PC（程序计数器）取二进制编码并执行。人写的汇编在抵达 CPU 前，会经历下面这条流水线：
+entry.S ──预处理──&gt; 临时汇编文本 ──汇编器──&gt; entry.o C 源码 ──C 编译器─────────────────────────&gt; start.o entry.o &#43; start.o &#43; kernel.ld ──链接器──&gt; kernel（ELF 内核映像） │ QEMU/启动环境装入内存 │ PC 指向 _entry，CPU 开始取指 每一阶段做的事不同：">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="assembly">
+    <meta property="article:published_time" content="2026-09-08T18:42:00+08:00">
+    <meta property="article:modified_time" content="2026-09-08T18:42:00+08:00">
+
+  
+  <meta itemprop="name" content="汇编代码怎么写：标签、伪指令、段与符号">
+  <meta itemprop="description" content="第一次读 .S 文件时，最容易产生一种很自然、也很麻烦的误会：屏幕上每一行都长得像“命令”，于是便以为 CPU 会从上到下逐行执行它们。可惜事实没有这么体贴。
+.section .text .global _entry _entry: la sp, stack0 call start 这里只有 la、call 最终会对应 CPU 要执行的机器码；.section 是给汇编器的安排，.global 是给链接器的说明，_entry: 则只是给一个地址取名字。汇编源文件同时面对预处理器、汇编器、链接器和 CPU。如果不先分清谁负责哪一行，往后的“逐条解释”只会变成徒劳的背诵。
+本文使用 GNU 工具链和 RISC-V 汇编（xv6 使用的风格）讲解这条链路。学完后，你应当能回答四个实际问题：一行汇编是什么类别；一个 C 函数为何能被 call；la sp, stack0 在目标文件中到底留下了什么；以及为什么反汇编结果有时和源代码不一样。
+一、先看到全貌：源文件怎样成为 CPU 能执行的内容 CPU 不认识 start、.text 或 # 注释，它只在内存中按 PC（程序计数器）取二进制编码并执行。人写的汇编在抵达 CPU 前，会经历下面这条流水线：
+entry.S ──预处理──&gt; 临时汇编文本 ──汇编器──&gt; entry.o C 源码 ──C 编译器─────────────────────────&gt; start.o entry.o &#43; start.o &#43; kernel.ld ──链接器──&gt; kernel（ELF 内核映像） │ QEMU/启动环境装入内存 │ PC 指向 _entry，CPU 开始取指 每一阶段做的事不同：">
+  <meta itemprop="datePublished" content="2026-09-08T18:42:00+08:00">
+  <meta itemprop="dateModified" content="2026-09-08T18:42:00+08:00">
+  <meta itemprop="wordCount" content="1071">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="汇编代码怎么写：标签、伪指令、段与符号">
+  <meta name="twitter:description" content="第一次读 .S 文件时，最容易产生一种很自然、也很麻烦的误会：屏幕上每一行都长得像“命令”，于是便以为 CPU 会从上到下逐行执行它们。可惜事实没有这么体贴。
+.section .text .global _entry _entry: la sp, stack0 call start 这里只有 la、call 最终会对应 CPU 要执行的机器码；.section 是给汇编器的安排，.global 是给链接器的说明，_entry: 则只是给一个地址取名字。汇编源文件同时面对预处理器、汇编器、链接器和 CPU。如果不先分清谁负责哪一行，往后的“逐条解释”只会变成徒劳的背诵。
+本文使用 GNU 工具链和 RISC-V 汇编（xv6 使用的风格）讲解这条链路。学完后，你应当能回答四个实际问题：一行汇编是什么类别；一个 C 函数为何能被 call；la sp, stack0 在目标文件中到底留下了什么；以及为什么反汇编结果有时和源代码不一样。
+一、先看到全貌：源文件怎样成为 CPU 能执行的内容 CPU 不认识 start、.text 或 # 注释，它只在内存中按 PC（程序计数器）取二进制编码并执行。人写的汇编在抵达 CPU 前，会经历下面这条流水线：
+entry.S ──预处理──&gt; 临时汇编文本 ──汇编器──&gt; entry.o C 源码 ──C 编译器─────────────────────────&gt; start.o entry.o &#43; start.o &#43; kernel.ld ──链接器──&gt; kernel（ELF 内核映像） │ QEMU/启动环境装入内存 │ PC 指向 _entry，CPU 开始取指 每一阶段做的事不同：">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">汇编代码怎么写：标签、伪指令、段与符号</h1>
+
+    
+      <div class="post-date">September 8, 2026</div>
+    
+
+    <div class="post-content">
+      <p>第一次读 <code>.S</code> 文件时，最容易产生一种很自然、也很麻烦的误会：屏幕上每一行都长得像“命令”，于是便以为 CPU 会从上到下逐行执行它们。可惜事实没有这么体贴。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-asm" data-lang="asm"><span class="line"><span class="cl"><span class="na">.section</span> <span class="no">.text</span>
+</span></span><span class="line"><span class="cl"><span class="na">.global</span> <span class="no">_entry</span>
+</span></span><span class="line"><span class="cl"><span class="nl">_entry:</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">la</span>      <span class="no">sp</span><span class="p">,</span> <span class="no">stack0</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">call</span>    <span class="no">start</span>
+</span></span></code></pre></div><p>这里只有 <code>la</code>、<code>call</code> 最终会对应 CPU 要执行的机器码；<code>.section</code> 是给汇编器的安排，<code>.global</code> 是给链接器的说明，<code>_entry:</code> 则只是给一个地址取名字。汇编源文件同时面对<strong>预处理器、汇编器、链接器和 CPU</strong>。如果不先分清谁负责哪一行，往后的“逐条解释”只会变成徒劳的背诵。</p>
+<p>本文使用 GNU 工具链和 RISC-V 汇编（xv6 使用的风格）讲解这条链路。学完后，你应当能回答四个实际问题：一行汇编是什么类别；一个 C 函数为何能被 <code>call</code>；<code>la sp, stack0</code> 在目标文件中到底留下了什么；以及为什么反汇编结果有时和源代码不一样。</p>
+<h2 id="一先看到全貌源文件怎样成为-cpu-能执行的内容">一、先看到全貌：源文件怎样成为 CPU 能执行的内容</h2>
+<p>CPU 不认识 <code>start</code>、<code>.text</code> 或 <code># 注释</code>，它只在内存中按 PC（程序计数器）取二进制编码并执行。人写的汇编在抵达 CPU 前，会经历下面这条流水线：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">entry.S ──预处理──&gt; 临时汇编文本 ──汇编器──&gt; entry.o
+</span></span><span class="line"><span class="cl"> C 源码 ──C 编译器─────────────────────────&gt; start.o
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">entry.o + start.o + kernel.ld ──链接器──&gt; kernel（ELF 内核映像）
+</span></span><span class="line"><span class="cl">                                          │
+</span></span><span class="line"><span class="cl">                                  QEMU/启动环境装入内存
+</span></span><span class="line"><span class="cl">                                          │
+</span></span><span class="line"><span class="cl">                                  PC 指向 _entry，CPU 开始取指
+</span></span></code></pre></div><p>每一阶段做的事不同：</p>
+<table>
+  <thead>
+      <tr>
+          <th>阶段</th>
+          <th>输入与产物</th>
+          <th>它解决的问题</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>预处理（仅 <code>.S</code>）</td>
+          <td>宏、<code>#include</code> 展开后的文本</td>
+          <td><code>#define NCPU 8</code> 之类的 C 预处理内容从何而来</td>
+      </tr>
+      <tr>
+          <td>汇编</td>
+          <td><code>entry.S</code> → 可重定位目标文件 <code>entry.o</code></td>
+          <td>把助记符编码成指令；记录段、符号和“此处地址以后再填”的位置</td>
+      </tr>
+      <tr>
+          <td>编译</td>
+          <td><code>start.c</code> → <code>start.o</code></td>
+          <td>把 C 语句变成机器指令与数据，同时导出或引用符号</td>
+      </tr>
+      <tr>
+          <td>链接</td>
+          <td>多个 <code>.o</code> + 链接脚本 → ELF 文件</td>
+          <td>合并段、分配最终地址、解析同名符号、完成重定位</td>
+      </tr>
+      <tr>
+          <td>装载/启动</td>
+          <td>ELF → 内存</td>
+          <td>把相应内容放到规定地址，令 PC 从入口地址开始</td>
+      </tr>
+  </tbody>
+</table>
+<p><code>.s</code> 通常直接送入汇编器，<code>.S</code>（大写）通常先经过 C 预处理器。因此内核中常用 <code>.S</code>：它可以安全地写 <code>#include &quot;param.h&quot;</code> 或使用 <code>#if</code>。但在 RISC-V GNU 汇编中，<code>#</code> 同时也可作为汇编注释起始符；若你把一条 <code>#define</code> 当成会被汇编器理解的语句，当然不会得到想要的结果。它必须先由预处理器处理。</p>
+<h2 id="二汇编文件不是一种句子而是三类内容的混合">二、汇编文件不是一种句子，而是三类内容的混合</h2>
+<p>先用最常见的入口片段分类：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-asm" data-lang="asm"><span class="line"><span class="cl"><span class="na">.section</span> <span class="no">.text</span>             <span class="c1"># 汇编器指令（directive）
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="na">.globl</span> <span class="no">_entry</span>              <span class="c1"># 汇编器指令：符号绑定属性
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="nl">_entry:</span>                    <span class="c1"># 标签：给当前位置命名
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="nf">la</span>      <span class="no">sp</span><span class="p">,</span> <span class="no">stack0</span> <span class="c1"># 伪指令：汇编器替你展开
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="nf">csrr</span>    <span class="no">a1</span><span class="p">,</span> <span class="no">mhartid</span><span class="c1"># CPU 指令
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="nf">call</span>    <span class="no">start</span>      <span class="c1"># 伪指令：一次函数调用
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="nl">spin:</span>                      <span class="c1"># 另一个标签
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="nf">j</span>       <span class="no">spin</span>       <span class="c1"># 伪指令：无条件跳转
+</span></span></span></code></pre></div><table>
+  <thead>
+      <tr>
+          <th>类别</th>
+          <th>典型形式</th>
+          <th>谁主要处理</th>
+          <th>自己会不会占据一条机器指令</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>汇编器指令</td>
+          <td>以 <code>.</code> 开头，如 <code>.section</code>、<code>.align</code></td>
+          <td>汇编器；信息传给链接器</td>
+          <td>通常不会</td>
+      </tr>
+      <tr>
+          <td>标签/符号定义</td>
+          <td><code>名字:</code></td>
+          <td>汇编器记录在符号表中</td>
+          <td>不会</td>
+      </tr>
+      <tr>
+          <td>ISA 基础指令</td>
+          <td><code>add</code>、<code>ld</code>、<code>sd</code>、<code>csrr</code> 等</td>
+          <td>CPU 最终执行</td>
+          <td>会</td>
+      </tr>
+      <tr>
+          <td>伪指令</td>
+          <td><code>li</code>、<code>la</code>、<code>call</code>、<code>ret</code>、<code>j</code></td>
+          <td>汇编器将其改写为一条或多条基础指令</td>
+          <td>会，展开后会</td>
+      </tr>
+  </tbody>
+</table>
+<p>阅读时先问：<strong>此行是在安排文件、命名地址，还是让 CPU 做事？</strong> 这个问题比急于记助记符可靠得多。</p>
+<h2 id="三最小语法注释记号标签与局部标签">三、最小语法：注释、记号、标签与局部标签</h2>
+<h3 id="1-一条指令如何阅读">1. 一条指令如何阅读</h3>
+<p>GNU RISC-V 汇编的基本形式是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-asm" data-lang="asm"><span class="line"><span class="cl"><span class="err">助记符</span>    <span class="err">目标寄存器,</span> <span class="err">源操作数1,</span> <span class="err">源操作数2</span>    <span class="c1"># 注释
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nf">addi</span>      <span class="no">a0</span><span class="p">,</span>       <span class="no">a0</span><span class="p">,</span>       <span class="mi">1</span>               <span class="c1"># a0 = a0 + 1
+</span></span></span></code></pre></div><p>逗号分隔操作数；寄存器名 <code>a0</code>、立即数 <code>1</code>、符号名 <code>start</code> 和内存操作数 <code>0(sp)</code> 都是不同的词法记号。空白和对齐绝大多数时候不影响含义，但约定上标签顶格、指令缩进，能让人类快速看出控制流落点。<code>#</code> 之后到行尾是注释，CPU 永远看不到它。</p>
+<p>RISC-V 的内存访问常写成 <code>偏移(基址寄存器)</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-asm" data-lang="asm"><span class="line"><span class="cl"><span class="nf">ld</span>      <span class="no">t0</span><span class="p">,</span> <span class="mi">16</span><span class="p">(</span><span class="no">sp</span><span class="p">)</span>      <span class="c1"># 从地址 sp + 16 读取 8 字节到 t0（RV64）
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nf">sd</span>      <span class="no">ra</span><span class="p">,</span> <span class="mi">8</span><span class="p">(</span><span class="no">sp</span><span class="p">)</span>       <span class="c1"># 把 ra 的 8 字节写到地址 sp + 8
+</span></span></span></code></pre></div><p>括号不是“先访问 <code>sp</code>”，只是地址计算的汇编写法。实际地址是寄存器值加上有符号立即数。</p>
+<h3 id="2-普通标签给当前位置的地址起一个名字">2. 普通标签：给当前位置的地址起一个名字</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-asm" data-lang="asm"><span class="line"><span class="cl"><span class="nl">loop:</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">addi</span>    <span class="no">a0</span><span class="p">,</span> <span class="no">a0</span><span class="p">,</span> <span class="mi">1</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">j</span>       <span class="no">loop</span>
+</span></span></code></pre></div><p>汇编器把 <code>loop</code> 绑定为“当前位置”。假设链接完成后这里位于 <code>0x80000020</code>，<code>j loop</code> 的含义就是让 PC 跳回这一地址。<code>loop:</code> 本身不产生机器码，也不是一条会被 CPU 执行的“标记”；CPU执行到这个地址时，取到的是 <code>addi</code> 的编码。</p>
+<p>标签能命名代码，也能命名数据：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-asm" data-lang="asm"><span class="line"><span class="cl"><span class="na">.section</span> <span class="no">.rodata</span>
+</span></span><span class="line"><span class="cl"><span class="nl">message:</span>
+</span></span><span class="line"><span class="cl">        <span class="na">.asciz</span> <span class="s">&#34;hello\n&#34;</span>  <span class="c1"># 写入字符与结尾的 \0
+</span></span></span></code></pre></div><h3 id="3-数字局部标签短跳转不必绞尽脑汁起名字">3. 数字局部标签：短跳转不必绞尽脑汁起名字</h3>
+<p>GNU 汇编允许数字标签重复使用，并用 <code>f</code>（forward，向前）和 <code>b</code>（backward，向后）引用最近的同号标签：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-asm" data-lang="asm"><span class="line"><span class="cl">        <span class="nf">li</span>      <span class="no">t0</span><span class="p">,</span> <span class="mi">3</span>
+</span></span><span class="line"><span class="cl"><span class="err">1:</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">addi</span>    <span class="no">t0</span><span class="p">,</span> <span class="no">t0</span><span class="p">,</span> <span class="p">-</span><span class="mi">1</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">bnez</span>    <span class="no">t0</span><span class="p">,</span> <span class="mi">1</span><span class="no">b</span>     <span class="c1"># 跳到最近的、在前面的 1:
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="nf">j</span>       <span class="mi">2</span><span class="no">f</span>         <span class="c1"># 跳到后面将出现的 2:
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="nf">ebreak</span>             <span class="c1"># 此处会被跳过
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="err">2:</span>
+</span></span></code></pre></div><p>它适合几十行以内、只在本地有意义的循环。跨函数、跨文件或会被调试器引用的地址仍应取清楚的名字；<code>1b</code> 写错成 <code>1f</code> 并不会因为“人类显然懂你的意思”而被宽恕。</p>
+<h2 id="四段section先分装内容之后才谈最终地址">四、段（section）：先分装内容，之后才谈最终地址</h2>
+<p><strong>段</strong>是目标文件内部的分类容器。汇编器把不同内容放进不同 section，链接器随后把同类 section 合并、排序和定位。</p>
+<table>
+  <thead>
+      <tr>
+          <th>常用 section</th>
+          <th>内容</th>
+          <th>在最终映像中的一般权限/特点</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>.text</code></td>
+          <td>指令</td>
+          <td>可读、可执行，通常不应可写</td>
+      </tr>
+      <tr>
+          <td><code>.rodata</code></td>
+          <td>字符串、只读表</td>
+          <td>只读，不执行</td>
+      </tr>
+      <tr>
+          <td><code>.data</code></td>
+          <td>已初始化的可写全局数据</td>
+          <td>初始字节实际保存在文件中</td>
+      </tr>
+      <tr>
+          <td><code>.bss</code></td>
+          <td>零初始化/未显式初始化的全局数据</td>
+          <td>文件中通常只记大小；装载时得到零值空间</td>
+      </tr>
+      <tr>
+          <td><code>.init</code> / 自定义段</td>
+          <td>启动代码等特殊用途</td>
+          <td>由项目链接脚本决定如何放置</td>
+      </tr>
+  </tbody>
+</table>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-asm" data-lang="asm"><span class="line"><span class="cl"><span class="na">.section</span> <span class="no">.data</span>
+</span></span><span class="line"><span class="cl"><span class="na">.align</span>  <span class="mi">3</span>                 <span class="c1"># 在 RV64 中常使下一对象按 2^3=8 字节边界对齐
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nl">counter:</span>
+</span></span><span class="line"><span class="cl">        <span class="na">.dword</span>  <span class="mi">0</span>         <span class="c1"># 放入一个 8 字节初始值
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="na">.section</span> <span class="no">.bss</span>
+</span></span><span class="line"><span class="cl"><span class="na">.align</span>  <span class="mi">4</span>
+</span></span><span class="line"><span class="cl"><span class="nl">stack0:</span>
+</span></span><span class="line"><span class="cl">        <span class="na">.skip</span>   <span class="mi">4096</span> <span class="p">*</span> <span class="mi">8</span>  <span class="c1"># 预留空间；不写入具体初始字节
+</span></span></span></code></pre></div><p><code>.dword</code>、<code>.word</code>、<code>.byte</code>、<code>.asciz</code>、<code>.zero</code>、<code>.skip</code> 都是汇编器指令，意思是“向当前 section 写入字节或预留空间”，而不是 CPU 运行时才执行的指令。<code>.align</code> 的精确参数含义受工具链目标影响；对 GNU RISC-V 而言通常表示按 <code>2^n</code> 字节对齐。阅读陌生项目时，以该项目的工具链文档和反汇编验证为准，别把其他架构的习惯硬搬过来。</p>
+<p>一个关键但容易被混淆的区分是：<strong>section 是链接时的组织单位，segment（程序头中的加载段）是装载时的映射单位。</strong> 链接器可能把 <code>.text</code> 和 <code>.rodata</code> 放入同一个可加载区域，也可能分开；操作系统或 QEMU依据 ELF 的 program headers 把可加载部分放到内存。初学阶段先记住“源文件写 section；装载器看 segment”即可。</p>
+<h2 id="五符号与可见性名字怎样跨越文件">五、符号与可见性：名字怎样跨越文件</h2>
+<p>符号表记录“某个名字代表哪个 section 中的哪个偏移（或尚待解析）”，还记录它的绑定属性。最重要的三种情形如下：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-asm" data-lang="asm"><span class="line"><span class="cl"><span class="na">.globl</span> <span class="no">add_two</span>            <span class="c1"># 声明此定义可被其他目标文件使用
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nl">add_two:</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">addi</span> <span class="no">a0</span><span class="p">,</span> <span class="no">a0</span><span class="p">,</span> <span class="mi">2</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">ret</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="na">.local</span> <span class="no">private_loop</span>       <span class="c1"># 明确仅限本目标文件
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nl">private_loop:</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">j</span> <span class="no">private_loop</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="na">.weak</span> <span class="no">optional_hook</span>       <span class="c1"># 弱定义；若另有强定义，强定义优先
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nl">optional_hook:</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">ret</span>
+</span></span></code></pre></div><p><code>.global</code> 和 <code>.globl</code> 是同义拼写。没有导出的普通标签通常是本地绑定，只能在当前目标文件内部可靠引用；<code>.local</code> 是把意图写得更明确。<code>.weak</code> 有特定的覆盖规则，内核和库有时用它做可选钩子，但不要把它误当成“更安全的全局变量”。</p>
+<p>引用一个本文件没有定义、但预计会由别处提供的名字时，常写：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-asm" data-lang="asm"><span class="line"><span class="cl"><span class="na">.extern</span> <span class="no">start</span>              <span class="c1"># 可写，也常可省略：未定义引用已足够表达此事
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="nf">call</span>    <span class="no">start</span>
+</span></span></code></pre></div><p><code>start</code> 在 <code>entry.o</code> 中会是 <strong>未定义全局符号</strong>；链接器必须从 <code>start.o</code> 或某个库中找到一个兼容的全局定义，否则会报告 <code>undefined reference to start</code>。这不是“运行到一半找不到函数”，而是运行前链接已经失败。</p>
+<p>在 C 中，文件作用域的非 <code>static</code> 函数/对象通常会导出可链接的名字：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="c1">// start.c
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kt">char</span> <span class="n">stack0</span><span class="p">[</span><span class="mi">4096</span> <span class="o">*</span> <span class="n">NCPU</span><span class="p">];</span>
+</span></span><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">start</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span> <span class="p">{</span> <span class="cm">/* ... */</span> <span class="p">}</span>
+</span></span></code></pre></div><p>相反，<code>static void start(void)</code> 是 C 的内部链接，其他 <code>.o</code> 不能以 <code>start</code> 解析它。C++ 还会对函数名进行 name mangling（名称改编），所以 C++ 调用汇编或让汇编调用 C++ 时，通常需要在声明处使用 <code>extern &quot;C&quot;</code>，并额外处理 ABI、异常与对象构造问题。xv6 的这段代码是 C，因此不存在这个障碍。</p>
+<h2 id="六从-o-到-elf链接器具体修补了什么">六、从 <code>.o</code> 到 ELF：链接器具体修补了什么</h2>
+<p>假设有两个文件：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-asm" data-lang="asm"><span class="line"><span class="cl"><span class="c1"># entry.S
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="na">.section</span> <span class="no">.text</span>
+</span></span><span class="line"><span class="cl"><span class="na">.globl</span> <span class="no">_entry</span>
+</span></span><span class="line"><span class="cl"><span class="nl">_entry:</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">la</span>      <span class="no">sp</span><span class="p">,</span> <span class="no">stack0</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">call</span>    <span class="no">start</span>
+</span></span><span class="line"><span class="cl"><span class="err">1:</span>      <span class="nf">j</span>       <span class="mi">1</span><span class="no">b</span>
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="c1">// start.c
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kt">char</span> <span class="n">stack0</span><span class="p">[</span><span class="mi">4096</span> <span class="o">*</span> <span class="n">NCPU</span><span class="p">];</span>
+</span></span><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">start</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span> <span class="p">{</span> <span class="k">for</span> <span class="p">(;;)</span> <span class="p">{}</span> <span class="p">}</span>
+</span></span></code></pre></div><p>汇编器独自处理 <code>entry.S</code> 时并不知道 <code>stack0</code>、<code>start</code> 的最终地址。因此 <code>entry.o</code> 不可能已经写死“跳到 0x8000xxxx”。它会产生三样东西：</p>
+<ol>
+<li><code>.text</code> 中 <code>la</code>、<code>call</code> 展开后的机器指令占位编码；</li>
+<li>符号表：<code>_entry</code> 已定义，<code>stack0</code> 与 <code>start</code> 尚未定义；</li>
+<li><strong>重定位记录</strong>：说明 <code>.text</code> 的某个偏移应根据 <code>stack0</code> 或 <code>start</code> 的最终位置被修补。</li>
+</ol>
+<p>链接器读取所有目标文件和 <code>kernel.ld</code>。后者可能含有这样的骨架：</p>
+<pre tabindex="0"><code class="language-ld" data-lang="ld">OUTPUT_ARCH(&#34;riscv&#34;)
+ENTRY(_entry)
+
+SECTIONS {
+  . = 0x80000000;
+  .text : { *(.text .text.*) }
+  .rodata : { *(.rodata .rodata.*) }
+  .data : { *(.data .data.*) }
+  .bss : { *(.bss .bss.*) *(COMMON) }
+}
+</code></pre><p>这不是 C，也不是汇编，而是<strong>链接器脚本</strong>：<code>.</code> 是当前输出地址；<code>*(.text .text.*)</code> 表示收集所有输入文件匹配的 section；<code>ENTRY(_entry)</code> 把 ELF 的入口信息设为该符号。真实 xv6 脚本还会处理页对齐、内核末尾和其他约束，但逻辑相同。</p>
+<p>链接器据此分配地址，例如让 <code>_entry</code> 位于 <code>0x80000000</code>、让 <code>stack0</code> 落在 <code>.bss</code> 的某处，然后按 RISC-V 的地址编码规则补全那几条指令。<code>call start</code> 常需要 PC 相对的 <code>auipc</code> 与 <code>jalr</code> 组合；<code>la sp, stack0</code> 也常是构造 PC 相对地址的多条指令。对应的重定位名可能显示为 <code>R_RISCV_CALL_PLT</code>、<code>R_RISCV_PCREL_HI20</code>、<code>R_RISCV_PCREL_LO12_I</code> 等——名称会随写法、链接阶段和工具链而不同，但中心事实不变：<strong>“符号地址是多少”由链接决定，不应由源代码臆测。</strong></p>
+<h2 id="七伪指令源代码中的一条不保证机器码中的一条">七、伪指令：源代码中的一条，不保证机器码中的一条</h2>
+<p>RISC-V ISA 规定的基础指令集不追求把每个方便写法都编码成独立指令。GNU 汇编器因此提供伪指令：</p>
+<table>
+  <thead>
+      <tr>
+          <th>源码写法</th>
+          <th>表达的意图</th>
+          <th>常见的基础指令形式（概念上）</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>mv rd, rs</code></td>
+          <td>复制寄存器</td>
+          <td><code>addi rd, rs, 0</code></td>
+      </tr>
+      <tr>
+          <td><code>nop</code></td>
+          <td>什么也不做</td>
+          <td><code>addi x0, x0, 0</code></td>
+      </tr>
+      <tr>
+          <td><code>j label</code></td>
+          <td>不保存返回地址地跳转</td>
+          <td><code>jal x0, label</code></td>
+      </tr>
+      <tr>
+          <td><code>ret</code></td>
+          <td>返回调用者</td>
+          <td><code>jalr x0, 0(ra)</code></td>
+      </tr>
+      <tr>
+          <td><code>li rd, imm</code></td>
+          <td>装入常量</td>
+          <td>小常量可一条 <code>addi</code>，大常量可能多条</td>
+      </tr>
+      <tr>
+          <td><code>call symbol</code></td>
+          <td>保存 <code>ra</code> 并调用符号</td>
+          <td>常为 <code>auipc</code> + <code>jalr</code>，并附重定位</td>
+      </tr>
+      <tr>
+          <td><code>la rd, symbol</code></td>
+          <td>取得符号的地址</td>
+          <td>常为多条 PC 相对地址构造指令</td>
+      </tr>
+  </tbody>
+</table>
+<p>“常见”不等于永远如此。地址距离、是否启用压缩指令扩展、位置无关代码和链接器 relaxation（松弛优化）都可能改变最终序列。<code>la sp, stack0</code> 的含义是把 <strong><code>stack0</code> 的地址</strong> 放进 <code>sp</code>，并不读取 <code>stack0</code> 保存的第一个字节；<code>ld sp, stack0</code> 才会是“从该地址读取数据”这一类意思。</p>
+<p>所以应把源代码与反汇编当作两个层次：前者更接近人的意图，后者显示实际编码。二者不同不代表其中一方出错。恰好相反，这是汇编器和链接器正常工作的痕迹。</p>
+<h2 id="八c-与汇编互调名称之外还有-abi-这份合同">八、C 与汇编互调：名称之外还有 ABI 这份合同</h2>
+<p>仅仅“链接器找得到函数名”还不够。调用双方还必须遵守 RISC-V ABI：参数放哪里、返回值放哪里、谁保存寄存器、栈如何对齐。一个最小的例子：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-asm" data-lang="asm"><span class="line"><span class="cl"><span class="c1"># add_two.S
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="na">.section</span> <span class="no">.text</span>
+</span></span><span class="line"><span class="cl"><span class="na">.globl</span> <span class="no">add_two</span>
+</span></span><span class="line"><span class="cl"><span class="na">.type</span>   <span class="no">add_two</span><span class="p">,</span> <span class="na">@function</span>
+</span></span><span class="line"><span class="cl"><span class="nl">add_two:</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">addi</span>    <span class="no">a0</span><span class="p">,</span> <span class="no">a0</span><span class="p">,</span> <span class="mi">2</span>       <span class="c1"># 第一个 long 参数与返回值都使用 a0
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="nf">ret</span>
+</span></span><span class="line"><span class="cl"><span class="na">.size</span>   <span class="no">add_two</span><span class="p">,</span> <span class="no">.-add_two</span>
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="c1">// main.c
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">extern</span> <span class="kt">long</span> <span class="nf">add_two</span><span class="p">(</span><span class="kt">long</span> <span class="n">value</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kt">long</span> <span class="nf">answer</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nf">add_two</span><span class="p">(</span><span class="mi">40</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>调用 <code>add_two(40)</code> 前，C 编译器把 <code>40</code> 放入 <code>a0</code>；汇编将 <code>a0</code> 改成 <code>42</code>；<code>ret</code> 按 <code>ra</code> 返回，调用者从 <code>a0</code> 读回返回值。<code>.type</code> 与 <code>.size</code> 主要完善 ELF 符号的“这是函数、长度是多少”信息，利于调试、反汇编和工具分析；它们不替 CPU 调用函数。</p>
+<p>如果汇编函数还要调用另一个函数，就必须先保护自己的返回地址。例如下面展示典型的 RV64 栈帧骨架：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-asm" data-lang="asm"><span class="line"><span class="cl"><span class="na">.globl</span> <span class="no">wrapper</span>
+</span></span><span class="line"><span class="cl"><span class="na">.type</span> <span class="no">wrapper</span><span class="p">,</span> <span class="na">@function</span>
+</span></span><span class="line"><span class="cl"><span class="nl">wrapper:</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">addi</span>    <span class="no">sp</span><span class="p">,</span> <span class="no">sp</span><span class="p">,</span> <span class="p">-</span><span class="mi">16</span>     <span class="c1"># 分配 16 字节，保持调用边界对齐
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="nf">sd</span>      <span class="no">ra</span><span class="p">,</span> <span class="mi">8</span><span class="p">(</span><span class="no">sp</span><span class="p">)</span>       <span class="c1"># 本函数还要 call，先保存调用者的返回地址
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="nf">call</span>    <span class="no">add_two</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">ld</span>      <span class="no">ra</span><span class="p">,</span> <span class="mi">8</span><span class="p">(</span><span class="no">sp</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">addi</span>    <span class="no">sp</span><span class="p">,</span> <span class="no">sp</span><span class="p">,</span> <span class="mi">16</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">ret</span>
+</span></span><span class="line"><span class="cl"><span class="na">.size</span> <span class="no">wrapper</span><span class="p">,</span> <span class="no">.-wrapper</span>
+</span></span></code></pre></div><p>这正是 xv6 <code>_entry</code> 必须在 <code>call start</code> 前建立 <code>sp</code> 的直接原因：一旦进入 C 世界，编译器生成的函数就可能保存寄存器、创建局部变量或继续调用别的函数，没有有效栈就无处可放。</p>
+<h2 id="九用工具亲眼验证而不是凭印象相信它">九、用工具亲眼验证，而不是凭印象相信它</h2>
+<p>在安装了 RISC-V ELF 工具链的环境中，以下命令很适合配合一个小例子使用。工具名前缀因环境而异；xv6 常见的是 <code>riscv64-unknown-elf-</code>。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="line"><span class="cl">riscv64-unknown-elf-gcc -c -g entry.S -o entry.o
+</span></span><span class="line"><span class="cl">riscv64-unknown-elf-gcc -c -g start.c -o start.o
+</span></span><span class="line"><span class="cl">riscv64-unknown-elf-readelf -S entry.o       <span class="c1"># section 表</span>
+</span></span><span class="line"><span class="cl">riscv64-unknown-elf-readelf -s entry.o       <span class="c1"># 符号表：定义与未定义符号</span>
+</span></span><span class="line"><span class="cl">riscv64-unknown-elf-readelf -r entry.o       <span class="c1"># 重定位：哪些位置等待链接器修补</span>
+</span></span><span class="line"><span class="cl">riscv64-unknown-elf-objdump -dr entry.o      <span class="c1"># 反汇编，并紧邻显示重定位</span>
+</span></span></code></pre></div><p>链接以后再看最终映像：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="line"><span class="cl">riscv64-unknown-elf-readelf -h kernel/kernel <span class="c1"># ELF 头；关注 Entry point address</span>
+</span></span><span class="line"><span class="cl">riscv64-unknown-elf-readelf -l kernel/kernel <span class="c1"># program headers：装载段</span>
+</span></span><span class="line"><span class="cl">riscv64-unknown-elf-nm -n kernel/kernel      <span class="c1"># 按地址排序的符号</span>
+</span></span><span class="line"><span class="cl">riscv64-unknown-elf-objdump -d -M no-aliases kernel/kernel
+</span></span></code></pre></div><p>特别推荐先看 <code>.o</code>，再看最终 <code>kernel</code>：前者通常能看到未解析符号和重定位，后者则应当已拥有最终地址。若只看最后结果，就很容易误以为汇编器一开始便知道所有地址——这种误解和觉得舞台魔术没有幕后一样方便，但毫无帮助。</p>
+<h2 id="十初学者最常踩的坑">十、初学者最常踩的坑</h2>
+<ol>
+<li><strong>把标签当成运行语句。</strong> <code>loop:</code> 不执行，也不自动循环；循环来自后面的分支或跳转。</li>
+<li><strong>把 <code>.global</code> 当成调用。</strong> 它只影响链接可见性。函数真的开始运行，是控制流到达标签、<code>call</code> 或跳转发生之后。</li>
+<li><strong>以为 <code>.bss</code> 中没有内存。</strong> 它只是文件常不保存一堆零字节；链接器仍为它保留地址范围，启动环境必须提供相应的清零/可用存储语义。</li>
+<li><strong>把 <code>la</code> 和 <code>ld</code> 混为一谈。</strong> 前者取得地址，后者从内存取数值。少一个字母，含义却不是少一点点。</li>
+<li><strong>把 <code>call</code> 看成单条固定机器指令。</strong> 在 RISC-V GNU 工具链中它常是伪指令，会展开并依赖重定位。</li>
+<li><strong>汇编函数随意改 <code>s0</code>～<code>s11</code> 后不恢复。</strong> 它们是被调用者保存寄存器；违反 ABI 可能让看似无关的 C 代码随机出错。</li>
+<li><strong>用 C++ 名字直接从汇编调用。</strong> 未处理名称改编时，汇编中的 <code>call function</code> 未必能匹配 C++ 生成的符号。</li>
+<li><strong>只看带别名的反汇编。</strong> 默认 <code>objdump -d</code> 为可读性会显示 <code>ret</code>、<code>j</code> 等别名；需追踪真实基础编码时加 <code>-M no-aliases</code>。</li>
+</ol>
+<h2 id="十一把知识代回-xv6-entrys">十一、把知识代回 xv6 <code>entry.S</code></h2>
+<p>现在再回看入口文件，就可按阶段读，而不必把它当作一种神秘咒语：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-asm" data-lang="asm"><span class="line"><span class="cl"><span class="na">.section</span> <span class="no">.text</span>              <span class="c1"># 把下列代码放入 .text section
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="na">.global</span> <span class="no">_entry</span>              <span class="c1"># 导出入口名字，供 kernel.ld 的 ENTRY(_entry) 引用
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nl">_entry:</span>                     <span class="c1"># 当前代码地址被命名为 _entry
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="nf">la</span>      <span class="no">sp</span><span class="p">,</span> <span class="no">stack0</span>  <span class="c1"># 生成“取得 C 全局对象 stack0 地址”的代码与重定位
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="nf">csrr</span>    <span class="no">a1</span><span class="p">,</span> <span class="no">mhartid</span> <span class="c1"># 一条真正的 CSR 读取指令
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="nf">call</span>    <span class="no">start</span>       <span class="c1"># 生成调用序列；链接后跳入 start.o 定义的 C 函数
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nl">spin:</span>                       <span class="c1"># 一个本地控制流地址
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="nf">j</span>       <span class="no">spin</span>        <span class="c1"># 不返回地址地跳回自己；若 start 意外返回则停在这里
+</span></span></span></code></pre></div><p>在 <code>.o</code> 阶段，<code>stack0</code> 和 <code>start</code> 还是外部引用；在最终内核中，链接脚本决定 <code>_entry</code> 位于哪个入口地址，链接器补全对它们的引用；QEMU 装载内核后，CPU 才会从 <code>_entry</code> 对应的真实机器码开始取指。理解这一层之后，再学习栈、ABI 和特权级，读到的就不再是互不相干的概念。</p>
+<h2 id="十二练习用阶段而不是直觉分析">十二、练习：用“阶段”而不是直觉分析</h2>
+<p>先不要运行，尝试回答；答案写在每题后面，避免读者把猜测误认为理解。</p>
+<h3 id="练习-1给每一行归类">练习 1：给每一行归类</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-asm" data-lang="asm"><span class="line"><span class="cl"><span class="na">.section</span> <span class="no">.rodata</span>
+</span></span><span class="line"><span class="cl"><span class="nl">name:</span>
+</span></span><span class="line"><span class="cl">        <span class="na">.asciz</span> <span class="s">&#34;xv6&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="na">.globl</span> <span class="no">get_name</span>
+</span></span><span class="line"><span class="cl"><span class="nl">get_name:</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">la</span> <span class="no">a0</span><span class="p">,</span> <span class="no">name</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">ret</span>
+</span></span></code></pre></div><p><code>.section</code>、<code>.asciz</code>、<code>.globl</code> 是汇编器指令；<code>name:</code>、<code>get_name:</code> 是标签；<code>la</code>、<code>ret</code> 是伪指令。<code>name</code> 代表数据的地址，<code>get_name</code> 代表函数入口地址。</p>
+<h3 id="练习-2为何能通过链接却运行错误">练习 2：为何能通过链接却运行错误？</h3>
+<p>若 <code>wrapper</code> 调用了别的函数，却没有保存 <code>ra</code>，链接器仍能找到所有符号，最终却可能无法返回调用者。原因是什么？</p>
+<p>因为符号解析只证明地址存在；<code>call</code> 会覆盖 <code>ra</code>，而 ABI 规定嵌套调用前须保护原返回地址。链接器无法从语义上替你补这份调用约定。</p>
+<h3 id="练习-3应看哪一个文件">练习 3：应看哪一个文件？</h3>
+<p>你想知道 <code>call start</code> 是否仍在等待链接器修补，应看 <code>entry.o</code> 的什么信息？若想知道最终入口地址，应看什么？</p>
+<p>前者使用 <code>readelf -r entry.o</code> 和 <code>objdump -dr entry.o</code> 查看重定位；后者使用 <code>readelf -h kernel/kernel</code> 的入口地址，并以 <code>nm -n</code> 或链接 map 文件核对 <code>_entry</code> 的地址。</p>
+<h2 id="小结">小结</h2>
+<ul>
+<li>汇编源文件经过预处理、汇编、链接和装载，CPU只执行最终映像中位于内存的机器码。</li>
+<li>汇编器指令组织 section 和符号，标签命名地址，基础指令才是 ISA 规定的直接操作；伪指令则由汇编器展开。</li>
+<li><code>.o</code> 文件既有指令字节，也有符号表和重定位，正因为这些信息存在，跨文件引用才不需要手写地址。</li>
+<li>链接器脚本合并 section、安排最终地址并设定入口；ELF 的 section 与装载 segment 是相邻但不同的概念。</li>
+<li>C 与汇编互调还受 ABI 约束。名字能解析不代表函数调用一定正确，栈、<code>ra</code> 和保存寄存器同样不可忽略。</li>
+</ul>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

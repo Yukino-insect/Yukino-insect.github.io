@@ -1,0 +1,1525 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Python 中括号 `()` 的作用 | 我永远喜欢雪之下雪乃</title>
+  <meta name="description" content="在 Python 代码里，() 出现得非常频繁。
+初学时很容易把它简单理解成“函数调用”或者“元组”，但这并不准确。Python 里的 () 更像是一种表达式容器：它可以参与函数调用，可以改变运算优先级，可以帮助表达式换行，也可以构造生成器表达式。
+更麻烦一点的是，() 有时甚至什么“值的类型”都不改变，只是为了让代码更好读。
+这倒也很符合 Python 的性格：语法看起来温和，细节却一点也不含糊。
+1. Python 不能像 C&#43;&#43; / Java 那样随意换行 先看一段很常见的链式调用：
+clarification_model = ( configurable_model .with_structured_output(ClarifyWithUser) .with_retry(stop_after_attempt=configurable.max_structured_output_retries) .with_config(model_config) ) 这里外层的 () 不是为了创建元组，而是为了允许右侧表达式跨多行书写。
+在 C&#43;&#43;、Java 这类语言中，语句通常以分号 ; 结束，所以换行大多只是空白字符。比如 Java 中可以这样写：
+var result = object .stepOne() .stepTwo() .stepThree(); 编译器看到最后的分号，才知道语句结束。
+但 Python 不一样。Python 的换行本身有语法意义。通常情况下，一行结束就意味着当前语句结束。
+所以如果你直接写：
+clarification_model = configurable_model .with_structured_output(ClarifyWithUser) .with_retry(stop_after_attempt=configurable.max_structured_output_retries) .with_config(model_config) 这是不合法的。
+因为 Python 会把第一行理解为：
+clarification_model = configurable_model 然后下一行突然出现：
+.with_structured_output(ClarifyWithUser) 一个表达式不能凭空从 . 开始，于是语法就坏了。
+因此，在 Python 中，多行表达式通常需要放在这些成对符号里面：
+">
+  <meta name="generator" content="Hugo 0.150.0">
+  
+  
+  <link rel="canonical" href="https://yukino-insect.github.io/python/python_parentheses/">
+  
+  <meta property="og:url" content="https://yukino-insect.github.io/python/python_parentheses/">
+  <meta property="og:site_name" content="我永远喜欢雪之下雪乃">
+  <meta property="og:title" content="Python 中括号 `()` 的作用">
+  <meta property="og:description" content="在 Python 代码里，() 出现得非常频繁。
+初学时很容易把它简单理解成“函数调用”或者“元组”，但这并不准确。Python 里的 () 更像是一种表达式容器：它可以参与函数调用，可以改变运算优先级，可以帮助表达式换行，也可以构造生成器表达式。
+更麻烦一点的是，() 有时甚至什么“值的类型”都不改变，只是为了让代码更好读。
+这倒也很符合 Python 的性格：语法看起来温和，细节却一点也不含糊。
+1. Python 不能像 C&#43;&#43; / Java 那样随意换行 先看一段很常见的链式调用：
+clarification_model = ( configurable_model .with_structured_output(ClarifyWithUser) .with_retry(stop_after_attempt=configurable.max_structured_output_retries) .with_config(model_config) ) 这里外层的 () 不是为了创建元组，而是为了允许右侧表达式跨多行书写。
+在 C&#43;&#43;、Java 这类语言中，语句通常以分号 ; 结束，所以换行大多只是空白字符。比如 Java 中可以这样写：
+var result = object .stepOne() .stepTwo() .stepThree(); 编译器看到最后的分号，才知道语句结束。
+但 Python 不一样。Python 的换行本身有语法意义。通常情况下，一行结束就意味着当前语句结束。
+所以如果你直接写：
+clarification_model = configurable_model .with_structured_output(ClarifyWithUser) .with_retry(stop_after_attempt=configurable.max_structured_output_retries) .with_config(model_config) 这是不合法的。
+因为 Python 会把第一行理解为：
+clarification_model = configurable_model 然后下一行突然出现：
+.with_structured_output(ClarifyWithUser) 一个表达式不能凭空从 . 开始，于是语法就坏了。
+因此，在 Python 中，多行表达式通常需要放在这些成对符号里面：">
+  <meta property="og:locale" content="zh_cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="python">
+    <meta property="article:published_time" content="2026-08-18T17:40:36+08:00">
+    <meta property="article:modified_time" content="2026-08-18T17:40:36+08:00">
+
+  
+  <meta itemprop="name" content="Python 中括号 `()` 的作用">
+  <meta itemprop="description" content="在 Python 代码里，() 出现得非常频繁。
+初学时很容易把它简单理解成“函数调用”或者“元组”，但这并不准确。Python 里的 () 更像是一种表达式容器：它可以参与函数调用，可以改变运算优先级，可以帮助表达式换行，也可以构造生成器表达式。
+更麻烦一点的是，() 有时甚至什么“值的类型”都不改变，只是为了让代码更好读。
+这倒也很符合 Python 的性格：语法看起来温和，细节却一点也不含糊。
+1. Python 不能像 C&#43;&#43; / Java 那样随意换行 先看一段很常见的链式调用：
+clarification_model = ( configurable_model .with_structured_output(ClarifyWithUser) .with_retry(stop_after_attempt=configurable.max_structured_output_retries) .with_config(model_config) ) 这里外层的 () 不是为了创建元组，而是为了允许右侧表达式跨多行书写。
+在 C&#43;&#43;、Java 这类语言中，语句通常以分号 ; 结束，所以换行大多只是空白字符。比如 Java 中可以这样写：
+var result = object .stepOne() .stepTwo() .stepThree(); 编译器看到最后的分号，才知道语句结束。
+但 Python 不一样。Python 的换行本身有语法意义。通常情况下，一行结束就意味着当前语句结束。
+所以如果你直接写：
+clarification_model = configurable_model .with_structured_output(ClarifyWithUser) .with_retry(stop_after_attempt=configurable.max_structured_output_retries) .with_config(model_config) 这是不合法的。
+因为 Python 会把第一行理解为：
+clarification_model = configurable_model 然后下一行突然出现：
+.with_structured_output(ClarifyWithUser) 一个表达式不能凭空从 . 开始，于是语法就坏了。
+因此，在 Python 中，多行表达式通常需要放在这些成对符号里面：">
+  <meta itemprop="datePublished" content="2026-08-18T17:40:36+08:00">
+  <meta itemprop="dateModified" content="2026-08-18T17:40:36+08:00">
+  <meta itemprop="wordCount" content="801">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Python 中括号 `()` 的作用">
+  <meta name="twitter:description" content="在 Python 代码里，() 出现得非常频繁。
+初学时很容易把它简单理解成“函数调用”或者“元组”，但这并不准确。Python 里的 () 更像是一种表达式容器：它可以参与函数调用，可以改变运算优先级，可以帮助表达式换行，也可以构造生成器表达式。
+更麻烦一点的是，() 有时甚至什么“值的类型”都不改变，只是为了让代码更好读。
+这倒也很符合 Python 的性格：语法看起来温和，细节却一点也不含糊。
+1. Python 不能像 C&#43;&#43; / Java 那样随意换行 先看一段很常见的链式调用：
+clarification_model = ( configurable_model .with_structured_output(ClarifyWithUser) .with_retry(stop_after_attempt=configurable.max_structured_output_retries) .with_config(model_config) ) 这里外层的 () 不是为了创建元组，而是为了允许右侧表达式跨多行书写。
+在 C&#43;&#43;、Java 这类语言中，语句通常以分号 ; 结束，所以换行大多只是空白字符。比如 Java 中可以这样写：
+var result = object .stepOne() .stepTwo() .stepThree(); 编译器看到最后的分号，才知道语句结束。
+但 Python 不一样。Python 的换行本身有语法意义。通常情况下，一行结束就意味着当前语句结束。
+所以如果你直接写：
+clarification_model = configurable_model .with_structured_output(ClarifyWithUser) .with_retry(stop_after_attempt=configurable.max_structured_output_retries) .with_config(model_config) 这是不合法的。
+因为 Python 会把第一行理解为：
+clarification_model = configurable_model 然后下一行突然出现：
+.with_structured_output(ClarifyWithUser) 一个表达式不能凭空从 . 开始，于是语法就坏了。
+因此，在 Python 中，多行表达式通常需要放在这些成对符号里面：">
+
+  
+  
+  
+  <link rel="stylesheet" href="/css/chroma-silent.css">
+<link rel="icon" href="/favicon.ico">
+
+
+  
+</head>
+<body>
+  <main role="main">
+    
+
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+  
+  
+    
+  
+
+
+
+<style>
+header,
+footer,
+.site-header,
+.site-footer,
+.page-header,
+.hero {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: #2a3441;
+  background: #f5f8fb;
+  scrollbar-gutter: stable both-edges;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+main[role="main"] {
+  padding-bottom: 0 !important;
+}
+
+.post-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+}
+
+.post-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(32, 41, 55, 0.34) 0%,
+      rgba(40, 50, 65, 0.44) 72%,
+      rgba(127, 156, 185, 0.24) 91%,
+      rgba(112, 142, 173, 0.42) 100%
+    );
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+body.is-background-preview .post-bg::after {
+  opacity: 0;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(64px, 7vh, 104px) 20px 124px;
+}
+
+.post-card {
+  --post-card-content-width: 860px;
+  --post-card-x-padding: clamp(38px, 6vw, 64px);
+  position: relative;
+  width: 100%;
+  max-width: calc(
+    var(--post-card-content-width) +
+    var(--post-card-x-padding) +
+    var(--post-card-x-padding)
+  );
+  overflow: clip;
+  padding: 56px var(--post-card-x-padding) 62px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(232, 244, 255, 0.18),
+      rgba(232, 244, 255, 0) 30%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.94),
+      rgba(248, 251, 254, 0.91)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(192, 209, 226, 0.34),
+    0 24px 68px rgba(20, 28, 38, 0.1);
+  backdrop-filter: blur(10px) saturate(1.02);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+
+.post-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28),
+      rgba(232, 244, 255, 0) 20%
+    );
+  pointer-events: none;
+}
+
+.post-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(101, 142, 186, 0),
+      rgba(116, 166, 214, 0.28) 18%,
+      rgba(233, 245, 255, 0.56) 52%,
+      rgba(126, 164, 204, 0)
+    );
+  pointer-events: none;
+}
+
+.post-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-card.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.985);
+}
+
+.post-title {
+  margin: 0 0 16px;
+  color: #243247;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.32;
+}
+
+.post-date {
+  margin-bottom: 38px;
+  font-size: 14px;
+  color: #78889a;
+}
+
+.post-content {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.6;
+  color: #2a3441;
+}
+
+.post-content > *:first-child {
+  margin-top: 0;
+}
+
+.post-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content p {
+  margin: 0 0 1em;
+}
+
+.post-content p,
+.post-content ul,
+.post-content ol,
+.post-content blockquote,
+.post-content pre,
+.post-content table,
+.post-content .highlight,
+.post-content hr {
+  margin: 0 0 1em;
+}
+
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  margin: 1.6em 0 0.72em;
+  color: #213048;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.post-content h2 {
+  position: relative;
+  padding-bottom: 0.28em;
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.post-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 3.1em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(74, 126, 181, 0.68),
+      rgba(163, 211, 247, 0.42),
+      rgba(74, 126, 181, 0)
+    );
+}
+
+.post-content h3 {
+  position: relative;
+  padding-bottom: 0.18em;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.post-content h3::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.4em;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(84, 137, 190, 0.5),
+      rgba(176, 219, 250, 0.34),
+      rgba(84, 137, 190, 0)
+    );
+}
+
+.post-content h4 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.post-content h5 {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.post-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  color: #415269;
+}
+
+.post-content a {
+  color: #2f66a3;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.post-content strong {
+  font-weight: 600;
+}
+
+.post-content em {
+  color: #415269;
+}
+
+.post-content ul,
+.post-content ol {
+  padding-left: 1.35em;
+}
+
+.post-content li {
+  margin: 0.28em 0;
+  padding-left: 0.12em;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin-top: 0.28em;
+  margin-bottom: 0;
+}
+
+.post-content :not(pre) > code {
+  display: inline;
+  padding: 0.08em 0.34em 0.1em;
+  border: 1px solid rgba(129, 157, 188, 0.22);
+  border-radius: 6px;
+  background: rgba(240, 245, 250, 0.88);
+  color: #285c92;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.88em;
+  line-height: 1;
+  word-break: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  font-variant-ligatures: none;
+}
+
+.post-content pre {
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content .highlight {
+  position: relative;
+  overflow: hidden;
+  margin: 1.35rem 0 1.55rem;
+  padding: 0.58rem 1rem 0.62rem 1.18rem;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.78),
+      rgba(218, 237, 252, 0.5) 44%,
+      rgba(241, 249, 255, 0.36)
+    );
+  color: #283747;
+  box-shadow:
+    inset 0 1px 0 rgba(205, 232, 255, 0.68),
+    inset 0 0 0 1px rgba(157, 194, 228, 0.24),
+    inset 2px 0 0 rgba(85, 139, 192, 0.32),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+}
+
+.post-content .highlight::before,
+.post-content .highlight::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.post-content .highlight::before {
+  left: 1.18rem;
+  right: 1rem;
+  top: 0;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(112, 151, 191, 0.46),
+      rgba(199, 230, 255, 0.68) 42%,
+      rgba(112, 151, 191, 0)
+    );
+}
+
+.post-content .highlight::after {
+  top: 0.46rem;
+  bottom: 0.46rem;
+  left: 0;
+  width: 1px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(199, 230, 255, 0),
+      rgba(78, 125, 174, 0.42) 32%,
+      rgba(78, 125, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child) {
+  margin: 0.82rem 0 1.18rem;
+  padding: 0.12rem 0 0.16rem 0.72rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.58),
+      rgba(234, 246, 255, 0.32) 58%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow:
+    inset 1px 0 0 rgba(91, 134, 178, 0.26),
+    inset 0 -1px 0 rgba(147, 174, 202, 0.16);
+}
+
+.post-content .highlight:has(.line:only-child)::before {
+  left: 0.72rem;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 5.2rem;
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(82, 127, 174, 0.34),
+      rgba(82, 127, 174, 0)
+    );
+}
+
+.post-content .highlight:has(.line:only-child)::after {
+  content: none;
+}
+
+.post-content .highlight pre {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.22rem;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.post-content .highlight pre::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  color: inherit;
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.post-content .code-copy-host {
+  position: relative;
+}
+
+.post-content .code-copy-host pre {
+  padding-right: 2.9rem;
+}
+
+.post-content .code-copy-plain {
+  margin: 1.35rem 0 1.55rem;
+}
+
+.post-content .code-copy-plain pre {
+  margin: 0;
+}
+
+.post-content .code-copy-button {
+  position: absolute;
+  top: 0.52rem;
+  right: 0.58rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(135, 173, 209, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(233, 244, 254, 0.62)
+    );
+  color: #54799f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(31, 73, 116, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.post-content .code-copy-button::before,
+.post-content .code-copy-button::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 3px;
+}
+
+.post-content .code-copy-button::before {
+  left: 9px;
+  top: 8px;
+  opacity: 0.52;
+}
+
+.post-content .code-copy-button::after {
+  left: 12px;
+  top: 10px;
+  background: rgba(244, 250, 255, 0.58);
+}
+
+.post-content .code-copy-host:hover .code-copy-button,
+.post-content .code-copy-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.post-content .code-copy-button:hover,
+.post-content .code-copy-button:focus-visible {
+  border-color: rgba(90, 137, 184, 0.54);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(223, 240, 254, 0.76)
+    );
+  color: #315f91;
+  outline: none;
+}
+
+.post-content .code-copy-button.is-copied {
+  color: #4f8b72;
+}
+
+.post-content .code-copy-button.is-copied::before {
+  left: 10px;
+  top: 10px;
+  width: 13px;
+  height: 7px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  opacity: 1;
+  transform: rotate(-45deg);
+}
+
+.post-content .code-copy-button.is-copied::after {
+  content: none;
+}
+
+.post-content blockquote {
+  position: relative;
+  overflow: hidden;
+  margin: 1.5rem 0 1.68rem;
+  padding: 12px 22px 13px 24px;
+  border: 0;
+  border-radius: 9px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(236, 247, 255, 0.82),
+      rgba(219, 238, 253, 0.52) 48%,
+      rgba(241, 249, 255, 0.6)
+    );
+  color: #35465a;
+  box-shadow:
+    inset 0 1px 0 rgba(204, 232, 255, 0.64),
+    inset 0 0 0 1px rgba(166, 201, 232, 0.3),
+    0 14px 30px rgba(22, 51, 82, 0.06);
+}
+
+.post-content blockquote::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 1px;
+  z-index: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(76, 123, 170, 0),
+      rgba(91, 134, 177, 0.48) 12%,
+      rgba(199, 230, 255, 0.72) 44%,
+      rgba(91, 134, 177, 0)
+    );
+}
+
+.post-content blockquote::after {
+  content: "“";
+  position: absolute;
+  right: 18px;
+  bottom: -16px;
+  color: rgba(79, 130, 183, 0.13);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 74px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.post-content blockquote > * {
+  position: relative;
+  z-index: 1;
+}
+
+.post-content blockquote .highlight {
+  margin: 0.72rem 0 0.12rem;
+  padding: 0.28rem 0 0.32rem 0.78rem;
+  border-radius: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(218, 237, 252, 0.48),
+      rgba(234, 246, 255, 0.2) 62%,
+      rgba(234, 246, 255, 0)
+    );
+  box-shadow: inset 1px 0 0 rgba(91, 134, 178, 0.2);
+}
+
+.post-content blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.post-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-radius: 10px;
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(212, 220, 229, 0.82);
+}
+
+.post-content table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.post-content thead {
+  background: rgba(222, 231, 240, 0.82);
+}
+
+.post-content th,
+.post-content td {
+  padding: 11px 15px;
+  border: 1px solid rgba(214, 222, 232, 0.82);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.post-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8rem auto;
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(35, 46, 62, 0.1);
+}
+
+.post-content hr {
+  border: 0;
+  border-top: 1px solid rgba(170, 184, 201, 0.5);
+  margin: 2.2rem 0;
+}
+
+.snow {
+  position: fixed;
+  top: -10px;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+}
+
+@keyframes snow-fall {
+  to {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 58px 12px 88px;
+  }
+
+  .post-card {
+    padding: 34px 22px 40px;
+    border-radius: 12px;
+  }
+
+  .post-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .post-date {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0;
+  }
+
+  .post-content h2 {
+    font-size: 1.65em;
+  }
+
+  .post-content h3 {
+    font-size: 1.38em;
+  }
+
+  .post-content h4 {
+    font-size: 1.18em;
+  }
+
+  .post-content h5 {
+    font-size: 1em;
+  }
+
+  .post-content h6 {
+    font-size: 1em;
+  }
+
+  .post-content blockquote {
+    padding: 12px 16px 13px;
+  }
+
+  .post-content th,
+  .post-content td {
+    padding: 10px 12px;
+  }
+}
+</style>
+
+<div class="post-bg" id="postBg"></div>
+
+<section class="page-shell">
+  <article class="post-card" id="postCard">
+    <h1 class="post-title">Python 中括号 `()` 的作用</h1>
+
+    
+      <div class="post-date">August 18, 2026</div>
+    
+
+    <div class="post-content">
+      <p>在 Python 代码里，<code>()</code> 出现得非常频繁。</p>
+<p>初学时很容易把它简单理解成“函数调用”或者“元组”，但这并不准确。Python 里的 <code>()</code> 更像是一种表达式容器：它可以参与函数调用，可以改变运算优先级，可以帮助表达式换行，也可以构造生成器表达式。</p>
+<p>更麻烦一点的是，<code>()</code> 有时甚至什么“值的类型”都不改变，只是为了让代码更好读。</p>
+<p>这倒也很符合 Python 的性格：语法看起来温和，细节却一点也不含糊。</p>
+<hr>
+<h2 id="1-python-不能像-c--java-那样随意换行">1. Python 不能像 C++ / Java 那样随意换行</h2>
+<p>先看一段很常见的链式调用：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">clarification_model</span> <span class="o">=</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="n">configurable_model</span>
+</span></span><span class="line"><span class="cl">    <span class="o">.</span><span class="n">with_structured_output</span><span class="p">(</span><span class="n">ClarifyWithUser</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="o">.</span><span class="n">with_retry</span><span class="p">(</span><span class="n">stop_after_attempt</span><span class="o">=</span><span class="n">configurable</span><span class="o">.</span><span class="n">max_structured_output_retries</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="o">.</span><span class="n">with_config</span><span class="p">(</span><span class="n">model_config</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span></code></pre></div><p>这里外层的 <code>()</code> 不是为了创建元组，而是为了允许右侧表达式跨多行书写。</p>
+<p>在 C++、Java 这类语言中，语句通常以分号 <code>;</code> 结束，所以换行大多只是空白字符。比如 Java 中可以这样写：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="kd">var</span><span class="w"> </span><span class="n">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">object</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">.</span><span class="na">stepOne</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">.</span><span class="na">stepTwo</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">.</span><span class="na">stepThree</span><span class="p">();</span><span class="w">
+</span></span></span></code></pre></div><p>编译器看到最后的分号，才知道语句结束。</p>
+<p>但 Python 不一样。Python 的换行本身有语法意义。通常情况下，一行结束就意味着当前语句结束。</p>
+<p>所以如果你直接写：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">clarification_model</span> <span class="o">=</span> <span class="n">configurable_model</span>
+</span></span><span class="line"><span class="cl">    <span class="o">.</span><span class="n">with_structured_output</span><span class="p">(</span><span class="n">ClarifyWithUser</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="o">.</span><span class="n">with_retry</span><span class="p">(</span><span class="n">stop_after_attempt</span><span class="o">=</span><span class="n">configurable</span><span class="o">.</span><span class="n">max_structured_output_retries</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="o">.</span><span class="n">with_config</span><span class="p">(</span><span class="n">model_config</span><span class="p">)</span>
+</span></span></code></pre></div><p>这是不合法的。</p>
+<p>因为 Python 会把第一行理解为：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">clarification_model</span> <span class="o">=</span> <span class="n">configurable_model</span>
+</span></span></code></pre></div><p>然后下一行突然出现：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="o">.</span><span class="n">with_structured_output</span><span class="p">(</span><span class="n">ClarifyWithUser</span><span class="p">)</span>
+</span></span></code></pre></div><p>一个表达式不能凭空从 <code>.</code> 开始，于是语法就坏了。</p>
+<p>因此，在 Python 中，多行表达式通常需要放在这些成对符号里面：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="p">[]</span>
+</span></span><span class="line"><span class="cl"><span class="p">{}</span>
+</span></span></code></pre></div><p>只要表达式位于括号、方括号或花括号内部，Python 就会启用隐式换行，也就是 implicit line joining。</p>
+<p>例如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">result</span> <span class="o">=</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="n">first_value</span>
+</span></span><span class="line"><span class="cl">    <span class="o">+</span> <span class="n">second_value</span>
+</span></span><span class="line"><span class="cl">    <span class="o">+</span> <span class="n">third_value</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span></code></pre></div><p>这是合法且推荐的。</p>
+<hr>
+<h2 id="2-不使用--时只能用反斜杠-">2. 不使用 <code>()</code> 时，只能用反斜杠 <code>\</code></h2>
+<p>Python 也支持显式换行，也就是用反斜杠 <code>\</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">clarification_model</span> <span class="o">=</span> <span class="n">configurable_model</span> \
+</span></span><span class="line"><span class="cl">    <span class="o">.</span><span class="n">with_structured_output</span><span class="p">(</span><span class="n">ClarifyWithUser</span><span class="p">)</span> \
+</span></span><span class="line"><span class="cl">    <span class="o">.</span><span class="n">with_retry</span><span class="p">(</span><span class="n">stop_after_attempt</span><span class="o">=</span><span class="n">configurable</span><span class="o">.</span><span class="n">max_structured_output_retries</span><span class="p">)</span> \
+</span></span><span class="line"><span class="cl">    <span class="o">.</span><span class="n">with_config</span><span class="p">(</span><span class="n">model_config</span><span class="p">)</span>
+</span></span></code></pre></div><p>这也能运行。</p>
+<p>但在现代 Python 代码里，这种写法通常不如括号写法受欢迎。</p>
+<p>原因有几个：</p>
+<ul>
+<li><code>\</code> 后面不能有多余字符，连一个不小心留下的空格都可能造成问题。</li>
+<li>多行修改时，容易漏写或误删某个 <code>\</code>。</li>
+<li>视觉上比较吵，不如括号自然。</li>
+<li>Black、Ruff 等现代格式化工具也更偏好括号式的隐式换行。</li>
+</ul>
+<p>所以专业 Python 代码里更常见的是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">clarification_model</span> <span class="o">=</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="n">configurable_model</span>
+</span></span><span class="line"><span class="cl">    <span class="o">.</span><span class="n">with_structured_output</span><span class="p">(</span><span class="n">ClarifyWithUser</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="o">.</span><span class="n">with_retry</span><span class="p">(</span><span class="n">stop_after_attempt</span><span class="o">=</span><span class="n">configurable</span><span class="o">.</span><span class="n">max_structured_output_retries</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="o">.</span><span class="n">with_config</span><span class="p">(</span><span class="n">model_config</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span></code></pre></div><p>这段代码的意思可以读成：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">从 configurable_model 开始
+</span></span><span class="line"><span class="cl">调用 with_structured_output
+</span></span><span class="line"><span class="cl">再调用 with_retry
+</span></span><span class="line"><span class="cl">再调用 with_config
+</span></span><span class="line"><span class="cl">最后赋值给 clarification_model
+</span></span></code></pre></div><p>外层 <code>()</code> 的作用是把整个右侧表达式包成一个完整的多行表达式块。</p>
+<hr>
+<h2 id="3--可以用来做普通表达式分组">3. <code>()</code> 可以用来做普通表达式分组</h2>
+<p>最基础的作用当然是控制运算优先级：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">result</span> <span class="o">=</span> <span class="p">(</span><span class="n">a</span> <span class="o">+</span> <span class="n">b</span><span class="p">)</span> <span class="o">*</span> <span class="n">c</span>
+</span></span></code></pre></div><p>这和下面这句不同：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">result</span> <span class="o">=</span> <span class="n">a</span> <span class="o">+</span> <span class="n">b</span> <span class="o">*</span> <span class="n">c</span>
+</span></span></code></pre></div><p>因为乘法优先级高于加法。</p>
+<p>在布尔表达式里也常见：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="k">if</span> <span class="p">(</span><span class="n">is_admin</span> <span class="ow">or</span> <span class="n">is_owner</span><span class="p">)</span> <span class="ow">and</span> <span class="n">is_active</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="o">...</span>
+</span></span></code></pre></div><p>这里括号让阅读者不用去背 <code>and</code> 和 <code>or</code> 的优先级。代码毕竟是写给人维护的，不是写给解释器欣赏的。</p>
+<p>复杂条件也经常写成多行：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="k">if</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="n">user</span><span class="o">.</span><span class="n">is_active</span>
+</span></span><span class="line"><span class="cl">    <span class="ow">and</span> <span class="n">user</span><span class="o">.</span><span class="n">has_permission</span><span class="p">(</span><span class="s2">&#34;read&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="ow">and</span> <span class="ow">not</span> <span class="n">user</span><span class="o">.</span><span class="n">is_suspended</span>
+</span></span><span class="line"><span class="cl"><span class="p">):</span>
+</span></span><span class="line"><span class="cl">    <span class="o">...</span>
+</span></span></code></pre></div><p>如果没有外层 <code>()</code>，这种换行就不能自然成立。</p>
+<hr>
+<h2 id="4--常用于链式调用排版">4. <code>()</code> 常用于链式调用排版</h2>
+<p>链式调用在 Python 项目里很常见，比如 ORM 查询、模型配置、数据处理管道等。</p>
+<p>例如 Django ORM：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">users</span> <span class="o">=</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="n">User</span><span class="o">.</span><span class="n">objects</span>
+</span></span><span class="line"><span class="cl">    <span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">is_active</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="o">.</span><span class="n">exclude</span><span class="p">(</span><span class="n">email</span><span class="o">=</span><span class="s2">&#34;&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="o">.</span><span class="n">order_by</span><span class="p">(</span><span class="s2">&#34;-created_at&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span></code></pre></div><p>或者构造一个模型：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">model</span> <span class="o">=</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="n">base_model</span>
+</span></span><span class="line"><span class="cl">    <span class="o">.</span><span class="n">with_structured_output</span><span class="p">(</span><span class="n">ResultSchema</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="o">.</span><span class="n">with_retry</span><span class="p">(</span><span class="n">stop_after_attempt</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="o">.</span><span class="n">with_config</span><span class="p">(</span><span class="n">model_config</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span></code></pre></div><p>这种风格的优点是：</p>
+<ul>
+<li>每一步调用单独占一行。</li>
+<li>表达式的开始和结束很清楚。</li>
+<li>新增或删除某个步骤时 diff 更干净。</li>
+<li>不需要使用反斜杠 <code>\</code>。</li>
+<li>链式结构像一条垂直的处理流程，比较容易读。</li>
+</ul>
+<p>当然，也不是所有链式调用都必须这样写。短表达式完全可以保持一行：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">name</span> <span class="o">=</span> <span class="n">user</span><span class="o">.</span><span class="n">profile</span><span class="o">.</span><span class="n">get_display_name</span><span class="p">()</span>
+</span></span></code></pre></div><p>只有当表达式变长、参数变多、链条变复杂时，外层 <code>()</code> 才更有价值。</p>
+<hr>
+<h2 id="5--可以让字符串字面量自动拼接">5. <code>()</code> 可以让字符串字面量自动拼接</h2>
+<p>Python 有一个很实用的规则：相邻的字符串字面量会被自动拼接。</p>
+<p>例如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">message</span> <span class="o">=</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="s2">&#34;The structured output could not be parsed. &#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="s2">&#34;Please check whether the response matches the schema.&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span></code></pre></div><p>等价于：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">message</span> <span class="o">=</span> <span class="s2">&#34;The structured output could not be parsed. Please check whether the response matches the schema.&#34;</span>
+</span></span></code></pre></div><p>注意，Python 不会自动帮你加空格。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">text</span> <span class="o">=</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="s2">&#34;hello&#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="s2">&#34;world&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nb">print</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>  <span class="c1"># helloworld</span>
+</span></span></code></pre></div><p>如果需要空格，要自己写：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">text</span> <span class="o">=</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="s2">&#34;hello &#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="s2">&#34;world&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nb">print</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>  <span class="c1"># hello world</span>
+</span></span></code></pre></div><p>如果需要换行，也要自己写 <code>\n</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">text</span> <span class="o">=</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="s2">&#34;line 1</span><span class="se">\n</span><span class="s2">&#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="s2">&#34;line 2&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span></code></pre></div><p>这种写法特别适合长错误消息、长 SQL、长 prompt、长帮助文本等场景：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">prompt</span> <span class="o">=</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="s2">&#34;You are a helpful assistant. &#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="s2">&#34;Answer the user&#39;s question clearly and provide examples when useful.&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span></code></pre></div><p>相比三引号字符串，括号加字符串拼接不会意外引入开头换行、结尾换行和缩进空格。</p>
+<p>例如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">text</span> <span class="o">=</span> <span class="s2">&#34;&#34;&#34;
+</span></span></span><span class="line"><span class="cl"><span class="s2">hello
+</span></span></span><span class="line"><span class="cl"><span class="s2">world
+</span></span></span><span class="line"><span class="cl"><span class="s2">&#34;&#34;&#34;</span>
+</span></span></code></pre></div><p>它的实际内容通常包含开头和结尾的换行：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="s2">&#34;</span><span class="se">\n</span><span class="s2">hello</span><span class="se">\n</span><span class="s2">world</span><span class="se">\n</span><span class="s2">&#34;</span>
+</span></span></code></pre></div><p>而下面这种写法更可控：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">text</span> <span class="o">=</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="s2">&#34;hello</span><span class="se">\n</span><span class="s2">&#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="s2">&#34;world&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span></code></pre></div><p>得到的是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="s2">&#34;hello</span><span class="se">\n</span><span class="s2">world&#34;</span>
+</span></span></code></pre></div><hr>
+<h2 id="6--可以创建生成器表达式">6. <code>()</code> 可以创建生成器表达式</h2>
+<p>下面这种写法不是元组，而是生成器表达式：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">squares</span> <span class="o">=</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="n">value</span> <span class="o">*</span> <span class="n">value</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">values</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span></code></pre></div><p>它创建的是一个 generator。</p>
+<p>生成器表达式和列表推导式很像：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">squares_list</span> <span class="o">=</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">    <span class="n">value</span> <span class="o">*</span> <span class="n">value</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">values</span>
+</span></span><span class="line"><span class="cl"><span class="p">]</span>
+</span></span></code></pre></div><p>区别在于：</p>
+<ul>
+<li>列表推导式会立刻生成完整列表。</li>
+<li>生成器表达式是惰性的，只有被迭代时才逐个计算。</li>
+</ul>
+<p>例如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">squares</span> <span class="o">=</span> <span class="p">(</span><span class="n">value</span> <span class="o">*</span> <span class="n">value</span> <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">5</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">for</span> <span class="n">square</span> <span class="ow">in</span> <span class="n">squares</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="nb">print</span><span class="p">(</span><span class="n">square</span><span class="p">)</span>
+</span></span></code></pre></div><p>输出：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">0
+</span></span><span class="line"><span class="cl">1
+</span></span><span class="line"><span class="cl">4
+</span></span><span class="line"><span class="cl">9
+</span></span><span class="line"><span class="cl">16
+</span></span></code></pre></div><p>生成器表达式常用于 <code>sum</code>、<code>any</code>、<code>all</code>、<code>next</code> 等函数：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">total</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">value</span> <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">values</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">has_empty</span> <span class="o">=</span> <span class="nb">any</span><span class="p">(</span><span class="n">item</span> <span class="o">==</span> <span class="s2">&#34;&#34;</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">items</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">all_active</span> <span class="o">=</span> <span class="nb">all</span><span class="p">(</span><span class="n">user</span><span class="o">.</span><span class="n">is_active</span> <span class="k">for</span> <span class="n">user</span> <span class="ow">in</span> <span class="n">users</span><span class="p">)</span>
+</span></span></code></pre></div><p>这里有一个小规则：如果生成器表达式是函数调用的唯一参数，可以省略生成器自己的那层括号。</p>
+<p>所以通常写：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">total</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">value</span> <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">values</span><span class="p">)</span>
+</span></span></code></pre></div><p>而不是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">total</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">((</span><span class="n">value</span> <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">values</span><span class="p">))</span>
+</span></span></code></pre></div><p>但如果函数还有其他参数，生成器表达式自己的括号就不能省：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">result</span> <span class="o">=</span> <span class="n">some_func</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="p">(</span><span class="n">value</span> <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">values</span><span class="p">),</span>
+</span></span><span class="line"><span class="cl">    <span class="n">default</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span></code></pre></div><hr>
+<h2 id="7--不等于元组逗号才是关键">7. <code>()</code> 不等于元组，逗号才是关键</h2>
+<p>这是非常重要的一点。</p>
+<p>在 Python 中，元组的关键不是括号，而是逗号。</p>
+<p>例如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">a</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nb">print</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">a</span><span class="p">))</span>  <span class="c1"># &lt;class &#39;int&#39;&gt;</span>
+</span></span></code></pre></div><p><code>(1)</code> 只是对整数 <code>1</code> 做了一层表达式分组，它不是元组。</p>
+<p>如果要创建只有一个元素的元组，必须写逗号：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">a</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span><span class="p">,)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nb">print</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">a</span><span class="p">))</span>  <span class="c1"># &lt;class &#39;tuple&#39;&gt;</span>
+</span></span></code></pre></div><p>甚至可以不写括号：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">a</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nb">print</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">a</span><span class="p">))</span>  <span class="c1"># &lt;class &#39;tuple&#39;&gt;</span>
+</span></span></code></pre></div><p>多元素元组也是同样的道理：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">point</span> <span class="o">=</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">)</span>
+</span></span></code></pre></div><p>本质上是逗号创建了元组。下面也成立：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">point</span> <span class="o">=</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">4</span>
+</span></span></code></pre></div><p>不过，为了可读性，实际项目里通常还是会写括号：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">point</span> <span class="o">=</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">)</span>
+</span></span></code></pre></div><p>单元素元组一定要特别小心：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">value</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span><span class="p">)</span>    <span class="c1"># int</span>
+</span></span><span class="line"><span class="cl"><span class="n">value</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span><span class="p">,)</span>   <span class="c1"># tuple</span>
+</span></span></code></pre></div><p>这个差别很小，但调试时足够折磨人。Python 并不会因为你很委屈就改变语法规则。</p>
+<hr>
+<h2 id="8-多行元组和尾随逗号">8. 多行元组和尾随逗号</h2>
+<p>多行元组通常这样写：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">fields</span> <span class="o">=</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="s2">&#34;id&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="s2">&#34;name&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="s2">&#34;email&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span></code></pre></div><p>最后一个元素后面的逗号叫 trailing comma，尾随逗号。</p>
+<p>它的好处是以后新增元素时，版本控制的 diff 更干净：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">fields</span> <span class="o">=</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="s2">&#34;id&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="s2">&#34;name&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="s2">&#34;email&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="s2">&#34;created_at&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span></code></pre></div><p>只新增一行，不需要修改原来的最后一行。</p>
+<p>这种风格也常见于函数参数、列表、字典、集合：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">create_user</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="n">name</span><span class="o">=</span><span class="s2">&#34;Alice&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">email</span><span class="o">=</span><span class="s2">&#34;alice@example.com&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">is_active</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span></code></pre></div><hr>
+<h2 id="9-return--不一定是在返回元组">9. <code>return (...)</code> 不一定是在返回元组</h2>
+<p>看到 <code>return (</code> 时，也不要立刻以为返回的是元组。</p>
+<p>例如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="k">return</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="s2">&#34;Unable to parse the structured output. &#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="s2">&#34;Please check the schema and retry.&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span></code></pre></div><p>这里返回的是字符串。</p>
+<p>再比如：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="k">return</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="n">value</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">values</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span></code></pre></div><p>这里返回的是生成器。</p>
+<p>只有出现逗号时，才是元组：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="k">return</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="n">user</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">user</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">user</span><span class="o">.</span><span class="n">email</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span></code></pre></div><p>所以判断 <code>()</code> 的含义时，不能只看括号本身，要看括号里面的表达式结构。</p>
+<hr>
+<h2 id="10-常见模式总结">10. 常见模式总结</h2>
+<p>函数调用：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">result</span> <span class="o">=</span> <span class="n">func</span><span class="p">(</span><span class="n">arg1</span><span class="p">,</span> <span class="n">arg2</span><span class="p">)</span>
+</span></span></code></pre></div><p>表达式分组：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">result</span> <span class="o">=</span> <span class="p">(</span><span class="n">a</span> <span class="o">+</span> <span class="n">b</span><span class="p">)</span> <span class="o">*</span> <span class="n">c</span>
+</span></span></code></pre></div><p>隐式换行：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">result</span> <span class="o">=</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="n">first_value</span>
+</span></span><span class="line"><span class="cl">    <span class="o">+</span> <span class="n">second_value</span>
+</span></span><span class="line"><span class="cl">    <span class="o">+</span> <span class="n">third_value</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span></code></pre></div><p>链式调用：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">result</span> <span class="o">=</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="n">source</span>
+</span></span><span class="line"><span class="cl">    <span class="o">.</span><span class="n">step_one</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="o">.</span><span class="n">step_two</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="o">.</span><span class="n">step_three</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span></code></pre></div><p>字符串自动拼接：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">message</span> <span class="o">=</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="s2">&#34;hello &#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="s2">&#34;world&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span></code></pre></div><p>生成器表达式：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">items</span> <span class="o">=</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="n">item</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">collection</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="n">item</span><span class="o">.</span><span class="n">enabled</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span></code></pre></div><p>元组：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">pair</span> <span class="o">=</span> <span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="n">single</span> <span class="o">=</span> <span class="p">(</span><span class="n">a</span><span class="p">,)</span>
+</span></span></code></pre></div><p>多行条件：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="k">if</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="n">condition_a</span>
+</span></span><span class="line"><span class="cl">    <span class="ow">and</span> <span class="n">condition_b</span>
+</span></span><span class="line"><span class="cl">    <span class="ow">and</span> <span class="n">condition_c</span>
+</span></span><span class="line"><span class="cl"><span class="p">):</span>
+</span></span><span class="line"><span class="cl">    <span class="o">...</span>
+</span></span></code></pre></div><hr>
+<h2 id="11-实用判断标准">11. 实用判断标准</h2>
+<p>如果表达式太长，使用 <code>()</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">result</span> <span class="o">=</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="n">first_long_expression</span>
+</span></span><span class="line"><span class="cl">    <span class="o">+</span> <span class="n">second_long_expression</span>
+</span></span><span class="line"><span class="cl">    <span class="o">+</span> <span class="n">third_long_expression</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span></code></pre></div><p>如果链式调用超过两三步，使用 <code>()</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">query</span> <span class="o">=</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="n">session</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">User</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">is_active</span><span class="o">.</span><span class="n">is_</span><span class="p">(</span><span class="kc">True</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">    <span class="o">.</span><span class="n">order_by</span><span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">created_at</span><span class="o">.</span><span class="n">desc</span><span class="p">())</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span></code></pre></div><p>如果条件很复杂，使用 <code>()</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="k">if</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="n">request</span><span class="o">.</span><span class="n">user</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+</span></span><span class="line"><span class="cl">    <span class="ow">and</span> <span class="n">request</span><span class="o">.</span><span class="n">user</span><span class="o">.</span><span class="n">is_authenticated</span>
+</span></span><span class="line"><span class="cl">    <span class="ow">and</span> <span class="n">request</span><span class="o">.</span><span class="n">user</span><span class="o">.</span><span class="n">has_permission</span><span class="p">(</span><span class="s2">&#34;admin&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">):</span>
+</span></span><span class="line"><span class="cl">    <span class="o">...</span>
+</span></span></code></pre></div><p>如果写长字符串，可以使用 <code>()</code> 加相邻字符串拼接：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">error_message</span> <span class="o">=</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="s2">&#34;Unable to parse the response as structured output. &#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="s2">&#34;Please verify that the schema matches the model response.&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span></code></pre></div><p>如果只是简单表达式，不必乱加括号：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">x</span> <span class="o">=</span> <span class="mi">1</span>
+</span></span><span class="line"><span class="cl"><span class="n">name</span> <span class="o">=</span> <span class="n">user</span><span class="o">.</span><span class="n">name</span>
+</span></span><span class="line"><span class="cl"><span class="n">total</span> <span class="o">=</span> <span class="n">price</span> <span class="o">*</span> <span class="n">quantity</span>
+</span></span></code></pre></div><p>没有必要写成：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="n">x</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="n">name</span> <span class="o">=</span> <span class="p">(</span><span class="n">user</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="n">total</span> <span class="o">=</span> <span class="p">(</span><span class="n">price</span> <span class="o">*</span> <span class="n">quantity</span><span class="p">)</span>
+</span></span></code></pre></div><p>这种写法不会让代码更专业，只会让读者怀疑作者是不是和括号有私人感情。</p>
+<hr>
+<h2 id="12-结论">12. 结论</h2>
+<p>Python 中的 <code>()</code> 有很多身份：</p>
+<ul>
+<li>函数调用的一部分。</li>
+<li>表达式分组。</li>
+<li>控制运算优先级。</li>
+<li>支持隐式换行。</li>
+<li>辅助链式调用排版。</li>
+<li>辅助字符串字面量拼接。</li>
+<li>创建生成器表达式。</li>
+<li>配合逗号创建元组。</li>
+</ul>
+<p>最值得记住的是两点：</p>
+<p>第一，Python 不能像 C++ / Java 那样随意把链式调用拆成多行。因为 Python 的换行本身参与语法。如果不用 <code>()</code>、<code>[]</code>、<code>{}</code> 包住表达式，就只能用反斜杠 <code>\</code> 做显式换行。</p>
+<p>第二，<code>()</code> 本身不代表元组。<code>(1)</code> 是整数 <code>1</code>，<code>(1,)</code> 才是单元素元组。元组的关键是逗号，不是括号。</p>
+<p>理解了这两点，再去看 Python 项目里的链式调用、长条件、长字符串、生成器表达式和多行返回值，就不会被那些看似随处可见的括号迷惑了。</p>
+
+    </div>
+  </article>
+</section>
+
+<script>
+(function () {
+  const imgs = ["/images/cover/cover1.jpg","/images/cover/cover2.jpg","/images/cover/cover3.jpg","/images/cover/cover4.jpg","/images/cover/cover5.jpg","/images/cover/cover6.jpg","/images/cover/cover7.jpg","/images/cover/cover8.jpg","/images/cover/cover9.jpg","/images/cover/cover10.jpg","/images/cover/cover11.jpg","/images/cover/cover12.jpg","/images/cover/cover13.jpg","/images/cover/cover14.jpg","/images/cover/cover15.jpg","/images/cover/cover16.jpg","/images/cover/cover17.jpg","/images/cover/cover18.jpg","/images/cover/cover19.jpg","/images/cover/cover20.jpg","/images/cover/cover21.jpg"];
+
+  const postBg = document.getElementById("postBg");
+  postBg.style.backgroundImage =
+    `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+for (let i = 0; i < 22; i++) {
+  const snow = document.createElement("div");
+  snow.className = "snow";
+  snow.style.left = Math.random() * 100 + "vw";
+  snow.style.animationDuration = 14 + Math.random() * 12 + "s";
+  snow.style.opacity = 0.4 + Math.random() * 0.5;
+  document.body.appendChild(snow);
+}
+
+(function () {
+  const card = document.getElementById("postCard");
+  if (!card) return;
+
+  document.addEventListener("click", (event) => {
+    if (card.contains(event.target)) return;
+    const shouldHide = !card.classList.contains("is-hidden");
+    card.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("is-background-preview", shouldHide);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      card.classList.remove("is-hidden");
+      document.body.classList.remove("is-background-preview");
+    }
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  function getCodeText(pre) {
+    const clone = pre.cloneNode(true);
+    clone.querySelectorAll(".ln, .lnt").forEach((node) => node.remove());
+    return clone.innerText.replace(/\n$/, "");
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    textarea.style.left = "-999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    return new Promise((resolve, reject) => {
+      try {
+        document.execCommand("copy") ? resolve() : reject();
+      } catch (error) {
+        reject(error);
+      } finally {
+        textarea.remove();
+      }
+    });
+  }
+
+  function createCopyButton(pre) {
+    const button = document.createElement("button");
+    button.className = "code-copy-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "复制代码");
+    button.title = "复制代码";
+
+    button.addEventListener("click", async () => {
+      try {
+        await copyToClipboard(getCodeText(pre));
+        button.classList.add("is-copied");
+        button.setAttribute("aria-label", "已复制");
+        button.title = "已复制";
+        window.setTimeout(() => {
+          button.classList.remove("is-copied");
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      } catch (error) {
+        button.setAttribute("aria-label", "复制失败");
+        button.title = "复制失败";
+        window.setTimeout(() => {
+          button.setAttribute("aria-label", "复制代码");
+          button.title = "复制代码";
+        }, 1400);
+      }
+    });
+
+    return button;
+  }
+
+  content.querySelectorAll(".highlight").forEach((highlight) => {
+    const pre = highlight.querySelector("pre");
+    if (!pre || highlight.querySelector(".code-copy-button")) return;
+
+    highlight.classList.add("code-copy-host");
+    highlight.appendChild(createCopyButton(pre));
+  });
+
+  content.querySelectorAll("pre").forEach((pre) => {
+    if (pre.closest(".highlight") || pre.closest(".code-copy-host")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-copy-host code-copy-plain";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(createCopyButton(pre));
+  });
+})();
+</script>
+
+
+  </main>
+</body>
+</html>

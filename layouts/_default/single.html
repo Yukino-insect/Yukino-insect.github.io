@@ -11,6 +11,14 @@
   {{ $pageBackgroundImages = slice "/images/cover/cover1.jpg" }}
 {{ end }}
 
+{{ $codeWatermarkImages := slice }}
+{{ range .Site.Data.code_watermarks.images }}
+  {{ $codeWatermarkFile := printf "static%s" . }}
+  {{ if and (not (in $codeWatermarkImages .)) (fileExists $codeWatermarkFile) }}
+    {{ $codeWatermarkImages = $codeWatermarkImages | append . }}
+  {{ end }}
+{{ end }}
+
 <style>
 header,
 footer,
@@ -176,6 +184,7 @@ body.is-background-preview .post-bg::after {
 }
 
 .post-content {
+  --code-watermark-image: none;
   font-size: 16px;
   font-weight: 400;
   letter-spacing: 0;
@@ -357,6 +366,16 @@ body.is-background-preview .post-bg::after {
   -ms-overflow-style: none;
 }
 
+.post-content pre:not(.chroma)::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background:
+    var(--code-watermark-image) right -18px top 26% / 250px auto no-repeat;
+  pointer-events: none;
+}
+
 .post-content pre::-webkit-scrollbar {
   display: none;
   width: 0;
@@ -371,6 +390,7 @@ body.is-background-preview .post-bg::after {
   border: 0;
   border-radius: 8px;
   background:
+    var(--code-watermark-image) right -18px top 26% / 250px auto no-repeat,
     linear-gradient(
       135deg,
       rgba(236, 247, 255, 0.78),
@@ -425,6 +445,7 @@ body.is-background-preview .post-bg::after {
   padding: 0.12rem 0 0.16rem 0.72rem;
   border-radius: 0;
   background:
+    var(--code-watermark-image) right 6px top -68px / 250px auto no-repeat,
     linear-gradient(
       90deg,
       rgba(218, 237, 252, 0.58),
@@ -470,6 +491,15 @@ body.is-background-preview .post-bg::after {
   -ms-overflow-style: none;
 }
 
+.post-content pre,
+.post-content pre code {
+  position: relative;
+}
+
+.post-content pre {
+  isolation: isolate;
+}
+
 .post-content .highlight pre::-webkit-scrollbar {
   display: none;
   width: 0;
@@ -478,6 +508,7 @@ body.is-background-preview .post-bg::after {
 
 .post-content pre code {
   display: block;
+  z-index: 1;
   min-width: max-content;
   white-space: pre;
   color: inherit;
@@ -643,16 +674,22 @@ body.is-background-preview .post-bg::after {
 }
 
 .post-content blockquote::after {
-  content: "“";
+  content: "";
   position: absolute;
-  right: 18px;
-  bottom: -16px;
-  color: rgba(79, 130, 183, 0.13);
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 74px;
-  line-height: 1;
+  right: 0;
+  bottom: 0;
+  box-sizing: border-box;
+  width: min(43%, 272px);
+  height: 128px;
+  background:
+    url("/images/decorations/blockquote-yukino-watermark-feathered.webp")
+      right -4px top 26% / 212px auto no-repeat;
   pointer-events: none;
   z-index: 0;
+}
+
+.post-content blockquote.is-compact::after {
+  background-position: right -4px top 20px;
 }
 
 .post-content blockquote > * {
@@ -824,6 +861,63 @@ body.is-background-preview .post-bg::after {
   const postBg = document.getElementById("postBg");
   postBg.style.backgroundImage =
     `url('${imgs[Math.floor(Math.random() * imgs.length)]}')`;
+})();
+
+(function () {
+  const codeWatermarkImages = {{ $codeWatermarkImages | jsonify | safeJS }};
+  if (codeWatermarkImages.length === 0) return;
+
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  for (let index = codeWatermarkImages.length - 1; index > 0; index--) {
+    const randomIndex = Math.floor(Math.random() * (index + 1));
+    [codeWatermarkImages[index], codeWatermarkImages[randomIndex]] = [
+      codeWatermarkImages[randomIndex],
+      codeWatermarkImages[index]
+    ];
+  }
+
+  const codeBlocks = [
+    ...content.querySelectorAll(".highlight"),
+    ...[...content.querySelectorAll("pre")].filter(
+      (pre) => !pre.closest(".highlight")
+    )
+  ];
+
+  codeBlocks.forEach((block, index) => {
+    const image = codeWatermarkImages[index % codeWatermarkImages.length];
+    block.style.setProperty("--code-watermark-image", `url("${image}")`);
+  });
+})();
+
+(function () {
+  const content = document.querySelector(".post-content");
+  if (!content) return;
+
+  let frameId = 0;
+
+  function updateCompactBlockquotes() {
+    content.querySelectorAll("blockquote").forEach((quote) => {
+      const styles = window.getComputedStyle(quote);
+      const fontSize = Number.parseFloat(styles.fontSize) || 16;
+      const lineHeight = Number.parseFloat(styles.lineHeight) || fontSize * 1.6;
+      const padding =
+        (Number.parseFloat(styles.paddingTop) || 0) +
+        (Number.parseFloat(styles.paddingBottom) || 0);
+      const contentHeight = quote.getBoundingClientRect().height - padding;
+
+      quote.classList.toggle("is-compact", contentHeight <= lineHeight * 2.2);
+    });
+  }
+
+  function scheduleCompactBlockquoteUpdate() {
+    window.cancelAnimationFrame(frameId);
+    frameId = window.requestAnimationFrame(updateCompactBlockquotes);
+  }
+
+  scheduleCompactBlockquoteUpdate();
+  window.addEventListener("resize", scheduleCompactBlockquoteUpdate, { passive: true });
 })();
 
 for (let i = 0; i < 22; i++) {

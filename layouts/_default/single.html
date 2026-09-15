@@ -11,11 +11,11 @@
   {{ $pageBackgroundImages = slice "/images/cover/cover1.jpg" }}
 {{ end }}
 
-{{ $codeWatermarkImages := slice }}
-{{ range .Site.Data.code_watermarks.images }}
-  {{ $codeWatermarkFile := printf "static%s" . }}
-  {{ if and (not (in $codeWatermarkImages .)) (fileExists $codeWatermarkFile) }}
-    {{ $codeWatermarkImages = $codeWatermarkImages | append . }}
+{{ $postCardWatermarkImages := slice }}
+{{ range .Site.Data.post_card_watermarks.images }}
+  {{ $postCardWatermarkFile := printf "static%s" . }}
+  {{ if and (not (in $postCardWatermarkImages .)) (fileExists $postCardWatermarkFile) }}
+    {{ $postCardWatermarkImages = $postCardWatermarkImages | append . }}
   {{ end }}
 {{ end }}
 
@@ -91,6 +91,7 @@ body.is-background-preview .post-bg::after {
 .post-card {
   --post-card-content-width: 860px;
   --post-card-x-padding: clamp(38px, 6vw, 64px);
+  --post-card-watermark-image: none;
   position: relative;
   width: 100%;
   max-width: calc(
@@ -99,7 +100,7 @@ body.is-background-preview .post-bg::after {
     var(--post-card-x-padding)
   );
   overflow: clip;
-  padding: 56px var(--post-card-x-padding) 62px;
+  padding: 56px var(--post-card-x-padding) clamp(286px, 28vw, 360px);
   border-radius: 14px;
   background:
     linear-gradient(
@@ -157,7 +158,20 @@ body.is-background-preview .post-bg::after {
   pointer-events: none;
 }
 
-.post-card > * {
+.post-card-watermark {
+  position: absolute;
+  right: -14px;
+  bottom: -8px;
+  z-index: 0;
+  width: clamp(230px, 24vw, 280px);
+  aspect-ratio: 4 / 5;
+  background:
+    var(--post-card-watermark-image) right bottom / 100% 100% no-repeat;
+  opacity: 0.96;
+  pointer-events: none;
+}
+
+.post-card > :not(.post-card-watermark) {
   position: relative;
   z-index: 1;
 }
@@ -184,7 +198,6 @@ body.is-background-preview .post-bg::after {
 }
 
 .post-content {
-  --code-watermark-image: none;
   font-size: 16px;
   font-weight: 400;
   letter-spacing: 0;
@@ -366,16 +379,6 @@ body.is-background-preview .post-bg::after {
   -ms-overflow-style: none;
 }
 
-.post-content pre:not(.chroma)::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  background:
-    var(--code-watermark-image) right -18px top 26% / 250px auto no-repeat;
-  pointer-events: none;
-}
-
 .post-content pre::-webkit-scrollbar {
   display: none;
   width: 0;
@@ -390,7 +393,6 @@ body.is-background-preview .post-bg::after {
   border: 0;
   border-radius: 8px;
   background:
-    var(--code-watermark-image) right -18px top 26% / 250px auto no-repeat,
     linear-gradient(
       135deg,
       rgba(236, 247, 255, 0.78),
@@ -445,7 +447,6 @@ body.is-background-preview .post-bg::after {
   padding: 0.12rem 0 0.16rem 0.72rem;
   border-radius: 0;
   background:
-    var(--code-watermark-image) right 6px top -68px / 250px auto no-repeat,
     linear-gradient(
       90deg,
       rgba(218, 237, 252, 0.58),
@@ -673,25 +674,6 @@ body.is-background-preview .post-bg::after {
     );
 }
 
-.post-content blockquote::after {
-  content: "";
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  box-sizing: border-box;
-  width: min(43%, 272px);
-  height: 128px;
-  background:
-    url("/images/decorations/blockquote-yukino-watermark-feathered.webp")
-      right -4px top 26% / 212px auto no-repeat;
-  pointer-events: none;
-  z-index: 0;
-}
-
-.post-content blockquote.is-compact::after {
-  background-position: right -4px top 20px;
-}
-
 .post-content blockquote > * {
   position: relative;
   z-index: 1;
@@ -787,8 +769,14 @@ body.is-background-preview .post-bg::after {
   }
 
   .post-card {
-    padding: 34px 22px 40px;
+    padding: 34px 22px 270px;
     border-radius: 12px;
+  }
+
+  .post-card-watermark {
+    right: -10px;
+    bottom: -6px;
+    width: 205px;
   }
 
   .post-title {
@@ -842,6 +830,7 @@ body.is-background-preview .post-bg::after {
 
 <section class="page-shell">
   <article class="post-card" id="postCard">
+    <div class="post-card-watermark" aria-hidden="true"></div>
     <h1 class="post-title">{{ partial "page-display-title.html" . }}</h1>
 
     {{ with .Date }}
@@ -864,60 +853,17 @@ body.is-background-preview .post-bg::after {
 })();
 
 (function () {
-  const codeWatermarkImages = {{ $codeWatermarkImages | jsonify | safeJS }};
-  if (codeWatermarkImages.length === 0) return;
+  const postCardWatermarkImages = {{ $postCardWatermarkImages | jsonify | safeJS }};
+  if (postCardWatermarkImages.length === 0) return;
 
-  const content = document.querySelector(".post-content");
-  if (!content) return;
+  const postCard = document.getElementById("postCard");
+  if (!postCard) return;
 
-  for (let index = codeWatermarkImages.length - 1; index > 0; index--) {
-    const randomIndex = Math.floor(Math.random() * (index + 1));
-    [codeWatermarkImages[index], codeWatermarkImages[randomIndex]] = [
-      codeWatermarkImages[randomIndex],
-      codeWatermarkImages[index]
-    ];
-  }
-
-  const codeBlocks = [
-    ...content.querySelectorAll(".highlight"),
-    ...[...content.querySelectorAll("pre")].filter(
-      (pre) => !pre.closest(".highlight")
-    )
-  ];
-
-  codeBlocks.forEach((block, index) => {
-    const image = codeWatermarkImages[index % codeWatermarkImages.length];
-    block.style.setProperty("--code-watermark-image", `url("${image}")`);
-  });
-})();
-
-(function () {
-  const content = document.querySelector(".post-content");
-  if (!content) return;
-
-  let frameId = 0;
-
-  function updateCompactBlockquotes() {
-    content.querySelectorAll("blockquote").forEach((quote) => {
-      const styles = window.getComputedStyle(quote);
-      const fontSize = Number.parseFloat(styles.fontSize) || 16;
-      const lineHeight = Number.parseFloat(styles.lineHeight) || fontSize * 1.6;
-      const padding =
-        (Number.parseFloat(styles.paddingTop) || 0) +
-        (Number.parseFloat(styles.paddingBottom) || 0);
-      const contentHeight = quote.getBoundingClientRect().height - padding;
-
-      quote.classList.toggle("is-compact", contentHeight <= lineHeight * 2.2);
-    });
-  }
-
-  function scheduleCompactBlockquoteUpdate() {
-    window.cancelAnimationFrame(frameId);
-    frameId = window.requestAnimationFrame(updateCompactBlockquotes);
-  }
-
-  scheduleCompactBlockquoteUpdate();
-  window.addEventListener("resize", scheduleCompactBlockquoteUpdate, { passive: true });
+  const index = Math.floor(Math.random() * postCardWatermarkImages.length);
+  postCard.style.setProperty(
+    "--post-card-watermark-image",
+    `url("${postCardWatermarkImages[index]}")`
+  );
 })();
 
 for (let i = 0; i < 22; i++) {

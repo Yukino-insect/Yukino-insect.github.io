@@ -51,6 +51,7 @@ data/category_icons.yaml         首页图标和一级分类页顶部图片配�
 data/module_icons.yaml           二级分类页中三级模块卡片共享图标池
 data/home_backgrounds.yaml       首页首屏背景图配置
 data/page_backgrounds.yaml       分类页、目录页、文章页共享背景图配置
+data/post_card_watermarks.yaml   文章阅读卡右下角潜影图配置
 layouts/index.html               首页模板
 layouts/groups/list.html         泛化分类页与二级分类页模板
 layouts/_default/list.html       原内容目录文章列表页模板

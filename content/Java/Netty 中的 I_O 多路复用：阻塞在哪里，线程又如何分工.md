@@ -51,7 +51,84 @@ title = 'Netty 中的 I/O 多路复用：阻塞在哪里，线程又如何分工
 
 把“事件循环可以阻塞等待事件”误说成“系统退化为一连接一线程”，显然不对；反过来，把“socket 非阻塞”误说成“没有线程会阻塞”，同样不对。术语本身没有问题，含混的表述才有问题。
 
-## 二、多路复用没有消灭哪些成本
+## 二、操作系统究竟替 Netty 做了什么
+
+是的，**操作系统负责维护网络连接及其 I/O 状态；Netty 会通过 Java NIO 的 `Selector`，或通过 Netty 的原生传输实现，把“我关心哪些 socket 的哪些状态变化”登记给操作系统，并等待其返回已经就绪的 socket。**Netty 因而能够知道哪些连接现在值得读、写或接受，但它不是绕过操作系统去侦测网卡，更不会接管 TCP 协议栈。
+
+先把三个容易混淆的对象分开：
+
+| 对象 | 它负责什么 | 例子 |
+| ---- | ---------- | ---- |
+| 内核中的 socket | 保存 TCP 状态、收发缓冲区、错误和关闭状态 | 监听 socket、已建立 TCP 连接的 socket |
+| Java NIO `Channel` / Netty `Channel` | 用户态对 socket 的封装，以及 Netty 的 Pipeline、缓冲区和生命周期 | `ServerSocketChannel`、`SocketChannel`、`NioSocketChannel` |
+| `Selector` / `epoll` 等就绪机制 | 将一批 socket 的状态变化汇总为可等待、可返回的就绪事件 | `OP_ACCEPT`、`OP_READ`、`OP_WRITE` |
+
+以 Netty 的 NIO 传输为例，`NioEventLoop` 会把 `Channel` 注册到一个 JDK `Selector`；Netty 的 API 也明确将它描述为“把 Channel 注册到 Selector 并在事件循环中完成多路复用”的单线程 EventLoop。[Netty NIO 包说明](https://netty.io/4.1/api/io/netty/channel/nio/package-summary.html) 当 EventLoop 调用 `Selector.select()` 时，JDK 会查询底层操作系统关于已注册 Channel 的就绪状态，并把符合关注条件的 `SelectionKey` 放入已选择集合；这正是 `Selector` 的定义行为。[Java `Selector` API](https://docs.oracle.com/en/java/javase/26/docs/api/java.base/java/nio/channels/Selector.html)
+
+在 Linux 上，JDK 的 Selector 实现通常会利用 `epoll` 这类内核接口；而 macOS、BSD、Windows 上的具体后端则由相应 JDK 与平台决定。另一方面，Netty 也提供 Linux `epoll`、BSD/macOS `kqueue` 等原生传输。两条路径的封装层不同，但本质相同：**最后作出“这个内核 socket 现在可读/可写/可接受”判断的仍是操作系统内核。**因此，不能把 `Selector` 和 `epoll` 简单地画成两个必然串联的应用层组件；对于 NIO 传输，前者是 Java API，后者可能是其在 Linux 上使用的底层实现。
+
+### 从建立连接到读事件：内核与 Netty 的接力
+
+以下过程以服务端接收一个 TCP 连接并收到请求数据为例：
+
+```text
+客户端发起 TCP 连接
+        |
+        v
+内核处理 TCP 握手，维护监听 socket 的待接受连接队列
+        |
+        +-- 有连接可 accept：监听 socket 变为“可接受”
+        |
+        v
+boss EventLoop 的 Selector.select() 返回 OP_ACCEPT
+        |
+        +-- Netty 调用 accept，取得一个已建立连接对应的 Channel/socket
+        |
+        v
+Netty 将该 Channel 分配、注册到某个 worker EventLoop 的 Selector，关注 OP_READ
+        |
+        v
+网卡收包；内核完成 TCP 校验、排序和重组，将可交付字节放入该 socket 的接收缓冲区
+        |
+        +-- 接收缓冲区有数据、读端到达 EOF 或出现相应异常：socket 变为“可读”
+        |
+        v
+worker EventLoop 的 Selector.select() 返回 OP_READ
+        |
+        +-- Netty 执行非阻塞 read，再驱动解码器和后续 Pipeline
+```
+
+其中“内核处理 TCP 握手”不表示应用已经执行了 `accept`。在服务端看来，监听 socket 的**可接受**只表示现在调用 `accept` 有机会取得一个连接；真正创建用户态 Channel、绑定 Pipeline 并选择 worker EventLoop，是 Netty 在 `accept` 返回后才完成的工作。监听队列的容量和溢出处理还受 `listen` 的 backlog、操作系统参数及负载影响，所以“客户端发了 SYN 就必然立刻得到一个 Netty Channel”当然不成立。
+
+### Netty 如何表达“我关心什么事件”
+
+注册不是简单地把 socket 名字交给操作系统，而是同时声明关注的操作类型。Java NIO 用 `SelectionKey` 的 **interest set**（兴趣集合）记录应用想关注的事件，并在选择完成后用 **ready set**（就绪集合）报告目前就绪的事件：
+
+| 兴趣 / 就绪操作 | 对应的内核状态 | Netty 常见动作 |
+| --------------- | -------------- | -------------- |
+| `OP_ACCEPT` | 监听 socket 有连接可被接受，或存在相应错误 | boss EventLoop 调用 `accept`，再把新连接交给 workerGroup。 |
+| `OP_READ` | 有数据可读、对端已关闭读方向、到达 EOF，或存在相应错误 | worker EventLoop 循环非阻塞读取，触发 `channelRead`、解码和关闭处理。 |
+| `OP_WRITE` | 发送缓冲区当前可以继续接收数据，或存在相应错误 | 当此前写入未能继续时重新尝试写出待发送数据。 |
+| `OP_CONNECT` | 非阻塞客户端连接可以完成，或存在相应错误 | 客户端 EventLoop 完成连接流程。 |
+
+这些 ready 操作的精确定义可见 [Java `SelectionKey` API](https://docs.oracle.com/javase/7/docs/api/java/nio/channels/SelectionKey.html)。注意两个细节：
+
+1. **就绪是一次“现在可以尝试”的提示，不是完整消息通知。**`OP_READ` 不承诺正好有一个完整 HTTP 请求；TCP 只提供连续字节，可能要多次读取和解码才组成消息。读取时也必须正确处理 `0`、`-1`（EOF）与异常。
+2. **`OP_WRITE` 通常不应永久关注。**TCP 发送缓冲区大部分时间都有空间，因此持续订阅可写事件可能让事件循环反复被唤醒。Netty 通常会先尽量直接写；只有内核暂时无法接收更多字节、存在待发送数据时，才关注写就绪，并在缓冲区腾出空间后继续写。这也是为什么“socket 可写”不等价于“对端已经收到响应”。
+
+在 Linux `epoll` 的语义中，`EPOLLIN` 表示关联文件描述符可供读操作，`EPOLLOUT` 表示可供写操作；`epoll_wait` 会阻塞到有事件、信号中断或超时为止，并从内核维护的就绪列表返回事件。[`epoll_ctl(2)`](https://man7.org/linux/man-pages/man2/epoll_ctl.2.html) 与 [`epoll_wait(2)`](https://man7.org/linux/man-pages/man2/epoll_wait.2.html) 这正是“操作系统确认哪些 socket 可以操作”的平台级版本。Java/Netty 会屏蔽许多平台差异，但不会改变这种责任分界。
+
+### “可以操作”不等于操作已经完成
+
+这一区别很重要，否则很容易把就绪模型误解成完成通知模型。
+
+- **可读**：内核告诉你读取大概率能取得数据、EOF 或错误；用户态仍要调用 `read`，并处理读取结果。
+- **可写**：内核告诉你发送缓冲区暂有空间；用户态仍要调用 `write`。写入内核缓冲区后，真正的网卡发送、对端接收、TCP 确认乃至必要的重传仍由内核继续推进。
+- **可接受**：内核告诉你监听队列中已有可取走的连接；用户态仍要调用 `accept`，再初始化该连接的用户态对象。
+
+所以更精确的说法是：**Netty 不是不断轮询每个 socket 来猜测状态，而是把兴趣集合交给操作系统，阻塞等待操作系统报告就绪集合；随后由 EventLoop 对报告的 socket 执行实际的非阻塞 I/O。**这便是 I/O 多路复用中“复用”的完整含义。
+
+## 三、多路复用没有消灭哪些成本
 
 `epoll` 的价值不是让 I/O 凭空消失。它主要降低了大量连接处于空闲状态时的**等待与调度成本**，并能高效地把已就绪连接交给应用处理。以下工作仍然真实发生：
 
@@ -66,7 +143,7 @@ title = 'Netty 中的 I/O 多路复用：阻塞在哪里，线程又如何分工
 
 因此，连接数很多但活跃连接很少时，I/O 多路复用特别有利；而请求一到就要进行长时间计算、同步查库或阻塞 RPC 时，瓶颈会转移到业务执行与下游资源。把后者塞进事件循环线程，等于亲手把节省下来的线程资源浪费掉，多少有些本末倒置。
 
-## 三、Netty 的两组 EventLoop：接收连接与处理连接
+## 四、Netty 的两组 EventLoop：接收连接与处理连接
 
 基于 Java NIO 的 Netty 服务端常创建两组 `NioEventLoopGroup`：
 
@@ -94,7 +171,7 @@ title = 'Netty 中的 I/O 多路复用：阻塞在哪里，线程又如何分工
 
 这带来一个非常重要的性质：**同一条连接上的事件通常由同一个 EventLoop 串行执行。**这样可以减少同一 `Channel` 上的并发协调，也使 Pipeline 中大量状态不必处处加锁。但代价是，该 EventLoop 上任意一个处理器运行太久，都会拖慢它管理的其他连接。
 
-## 四、Netty 默认并不会自动把请求分发到业务线程
+## 五、Netty 默认并不会自动把请求分发到业务线程
 
 先看一个最常见的启动方式：
 
@@ -133,7 +210,7 @@ protected void channelRead0(ChannelHandlerContext ctx, FullHttpRequest request) 
 
 同样需要避免的还有：长时间 `sleep`、同步文件 I/O、阻塞式 HTTP/RPC 调用、锁竞争严重的代码，以及无法快速结束的大量 CPU 计算。非阻塞网络框架不会把阻塞业务自动变成非阻塞业务，框架没有这种近乎魔法的职责。
 
-## 五、何时以及怎样把业务卸载出去
+## 六、何时以及怎样把业务卸载出去
 
 如果 Handler 中的工作无法在很短时间内完成，常见做法是为该 Handler 指定独立的 `EventExecutorGroup`。这样网络收发、编解码仍留在 `workerGroup`，而指定 Handler 的回调转移到业务执行器。
 
@@ -187,7 +264,7 @@ worker EventLoop
 
 所以，正确的架构不是“所有请求一律先切到业务线程”，而是：**让 EventLoop 保持短小、可预测；仅将确实会阻塞或明显耗时的工作卸载到受控的执行器。**
 
-## 六、一次请求在 Netty 中实际如何流动
+## 七、一次请求在 Netty 中实际如何流动
 
 假设客户端向服务端发送一个 HTTP 请求，业务需要访问数据库。一个较为准确的时序如下：
 
@@ -204,7 +281,7 @@ worker EventLoop
 
 第 2 步中 EventLoop 的阻塞等待，是 I/O 多路复用模型的正常组成部分；第 5 步中的数据库等待，则是业务层阻塞，需要隔离或改用异步客户端。二者不能混为一谈。至于第 8 步，网络传输和协议处理更不会因 Java 代码使用了 Netty 而不再耗费时间。
 
-## 七、几个常见误解
+## 八、几个常见误解
 
 ### 误解一：使用 `epoll` 后，`read` 一定不会阻塞
 
@@ -222,11 +299,13 @@ worker EventLoop
 
 它并非单连接低延迟的万能优化。连接很少、处理逻辑简单时，传统阻塞 I/O 的实现可能更直接；多路复用的优势主要出现在需要维持大量并发连接、而多数连接并不持续活跃的场景。性能结论应来自压测与剖析，不应来自对名词的迷信。
 
-## 八、总结
+## 九、总结
 
 读完后，至少应能分清以下几点：
 
 - I/O 多路复用让一个线程阻塞等待**多个**连接的就绪事件，它没有消除阻塞，只是改变了阻塞等待的组织方式。
+- TCP 连接状态、监听队列和 socket 收发缓冲区由操作系统内核维护；Netty 通过 `Selector` 或原生传输登记关注的事件，并取得内核报告的就绪 socket。
+- 就绪通知只表示“现在应尝试 `accept`、`read` 或 `write`”，不是连接、完整消息或网络发送已经完成的通知；尤其不应长期无条件关注 `OP_WRITE`。
 - 它节省的是空闲连接对应的线程、调度和无效轮询成本；网络收发、协议处理、复制、编解码与业务访问仍然有成本。
 - Netty 的 `NioEventLoop` 将多条连接复用到一个 Selector 上，并在默认情况下同时执行 I/O 和 Pipeline 回调。
 - `workerGroup` 不是自动的业务线程池。任何可能长时间阻塞或明显耗时的 Handler，都应显式卸载到有边界、有过载策略的业务执行器。
@@ -236,3 +315,7 @@ worker EventLoop
 
 - [Netty EventLoop API](https://netty.io/4.1/api/io/netty/channel/EventLoop.html)
 - [Netty NioEventLoop API](https://netty.io/4.1/api/io/netty/channel/nio/NioEventLoop.html)
+- [Java `Selector` API](https://docs.oracle.com/en/java/javase/26/docs/api/java.base/java/nio/channels/Selector.html)
+- [Java `SelectionKey` API](https://docs.oracle.com/javase/7/docs/api/java/nio/channels/SelectionKey.html)
+- [Linux `epoll_ctl(2)`](https://man7.org/linux/man-pages/man2/epoll_ctl.2.html)
+- [Linux `epoll_wait(2)`](https://man7.org/linux/man-pages/man2/epoll_wait.2.html)

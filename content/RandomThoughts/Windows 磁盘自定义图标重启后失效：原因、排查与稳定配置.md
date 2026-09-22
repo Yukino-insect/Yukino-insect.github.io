@@ -138,12 +138,19 @@ Windows 会在侧栏、小图标、列表、磁盘卡片等不同场景请求不
 
 下面脚本会直接使用这三份已经验证过的图标文件，为 C、D、E 写入 `DriveIcons`。它不会删除 `autorun.inf`，也不会重启资源管理器或清除图标缓存；它只完成刷新前必要的配置和验证。
 
-请在 **以管理员身份运行的 PowerShell** 中执行：
+请在 **以管理员身份运行的 PowerShell** 中执行。不要只根据当前目录是否是 `C:\Windows\System32` 判断权限；窗口标题必须以“管理员:”开头。
+
+如果把 `#Requires -RunAsAdministrator` 逐行粘贴到交互式 PowerShell，它只会被当成注释，**不会自动提升权限**。因此下面的脚本额外包含了可实际执行的管理员权限检查；若不是管理员窗口，它会在写入前明确停止。
 
 ```powershell
-#Requires -RunAsAdministrator
-
 $ErrorActionPreference = 'Stop'
+$currentIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
+$currentPrincipal = New-Object Security.Principal.WindowsPrincipal($currentIdentity)
+
+if (-not $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    throw '当前 PowerShell 未以管理员身份运行。请关闭此窗口，从开始菜单右键 PowerShell，选择“以管理员身份运行”后再执行。'
+}
+
 $registryRoot = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\DriveIcons'
 $icons = [ordered]@{
     C = 'C:\p.ico'
@@ -159,13 +166,13 @@ foreach ($driveLetter in $icons.Keys) {
     }
 
     $iconValue = "$iconPath,0"
-    $driveRegistryKey = "$registryRoot\$driveLetter"
-    $registryKey = "$driveRegistryKey\DefaultIcon"
+    $registryKey = "$registryRoot\$driveLetter\DefaultIcon"
 
-    New-Item -Path $registryRoot -Force | Out-Null
-    New-Item -Path $driveRegistryKey -Force | Out-Null
-    New-Item -Path $registryKey -Force | Out-Null
-    Set-Item -LiteralPath $registryKey -Value $iconValue
+    & reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\DriveIcons\$driveLetter\DefaultIcon" /ve /t REG_SZ /d $iconValue /f
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "无法写入 $driveLetter 盘的 DefaultIcon，reg.exe 退出码：$LASTEXITCODE"
+    }
 
     $actualValue = (Get-Item -LiteralPath $registryKey).GetValue('')
     Write-Host "已设置 $driveLetter 盘：$actualValue" -ForegroundColor Green
@@ -179,6 +186,7 @@ Write-Host "`n配置已完成。现在可在任务管理器中重新启动“Win
 | 步骤 | 作用 |
 | --- | --- |
 | 验证 `C:\p.ico`、`D:\p.ico`、`E:\p.ico` | 防止把不存在的路径写入注册表 |
+| 检查当前会话是否已提权 | 防止交互式粘贴 `#Requires` 后误以为已获得管理员权限 |
 | 为每个盘符写入 `DefaultIcon` | 让“此电脑”按官方驱动器图标机制读取资源 |
 | 回读注册表默认值 | 确认写入的实际路径与预期一致 |
 | 暂不刷新资源管理器 | 让配置和显示刷新成为两个可验证的步骤 |
@@ -239,7 +247,120 @@ C:\ProgramData\DriveIcons\E.ico
 - 文件不会被移动、重命名、清理或设为仅云端；
 - 文件最好包含从小到大的多种尺寸。
 
-## 八、如何撤销或恢复默认图标
+## 八、日后替换 ICO 时的操作
+
+完成 `DriveIcons` 配置后，日后更换图标并不需要重新建立整套注册表结构。关键是先判断：**图标的路径和文件名是否保持不变。**
+
+### 方案一：保持 `p.ico` 的路径和文件名不变
+
+这是最推荐的方式。当前三个盘符的注册表值分别是：
+
+```text
+C:\p.ico,0
+D:\p.ico,0
+E:\p.ico,0
+```
+
+因此，若只是想换一套视觉样式，应当用新的 ICO 覆盖对应盘根目录中的 `p.ico`：
+
+```text
+C:\p.ico
+D:\p.ico
+E:\p.ico
+```
+
+注册表不需要修改，因为它指向的仍是相同的绝对路径。根目录通常需要管理员权限才能覆盖文件；替换前建议先把旧文件复制到其他目录备份，而不是直接丢弃。
+
+新图标必须是实际的 `.ico` 文件，并尽量在一个文件中包含 `16×16`、`32×32`、`48×48`、`256×256` 等多个尺寸。不要将 PNG、JPG 仅改名为 `.ico`，也不要把多个单尺寸图标放进目录后期待 Shell 自动选择；注册表只会读取指定的那一个文件。
+
+替换完成后，执行下面的刷新命令。它会关闭并启动资源管理器，删除的只是当前用户的图标缓存：
+
+```powershell
+Stop-Process -Name explorer -Force
+
+Remove-Item -LiteralPath "$env:LOCALAPPDATA\IconCache.db" -Force -ErrorAction SilentlyContinue
+Remove-Item -Path "$env:LOCALAPPDATA\Microsoft\Windows\Explorer\iconcache*" -Force -ErrorAction SilentlyContinue
+
+Start-Process explorer.exe
+```
+
+这里的缓存刷新不能省略。即使路径不变，资源管理器也可能仍然拿着旧 `p.ico` 的缓存继续显示；这不是替换失败，而是它还没有重新读取文件。
+
+### 方案二：改用新的文件名或新的存放位置
+
+例如，若准备将图标改为：
+
+```text
+C:\drive-c-new.ico
+D:\drive-d-new.ico
+E:\drive-e-new.ico
+```
+
+则必须同时更新注册表中的 `DefaultIcon`。请在**以管理员身份运行**的 PowerShell 中，将以下脚本中的路径替换为实际的新路径后执行：
+
+```powershell
+$ErrorActionPreference = 'Stop'
+
+$currentIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
+$currentPrincipal = New-Object Security.Principal.WindowsPrincipal($currentIdentity)
+
+if (-not $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    throw '请在“管理员: Windows PowerShell”窗口中执行。'
+}
+
+$icons = [ordered]@{
+    C = 'C:\drive-c-new.ico'
+    D = 'D:\drive-d-new.ico'
+    E = 'E:\drive-e-new.ico'
+}
+
+foreach ($driveLetter in $icons.Keys) {
+    $iconPath = $icons[$driveLetter]
+
+    if (-not (Test-Path -LiteralPath $iconPath -PathType Leaf)) {
+        throw "找不到 $driveLetter 盘的新图标：$iconPath"
+    }
+
+    $iconValue = "$iconPath,0"
+    $regPath = "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\DriveIcons\$driveLetter\DefaultIcon"
+
+    & reg.exe add $regPath /ve /t REG_SZ /d $iconValue /f
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "无法写入 $driveLetter 盘图标配置，reg.exe 退出码：$LASTEXITCODE"
+    }
+}
+```
+
+当前根目录的 `autorun.inf` 仍写着：
+
+```ini
+[autorun]
+ICON=p.ico
+```
+
+如果采用新文件名并且希望保留 `autorun.inf` 作为兼容配置，则也要把对应盘根目录中的这一行改成新文件名，例如：
+
+```ini
+[autorun]
+ICON=drive-c-new.ico
+```
+
+`autorun.inf` 中应使用相对于该盘根目录的文件名或路径，不要写入另一个盘符的绝对路径。修改后同样刷新资源管理器图标缓存。
+
+### 替换后的核对清单
+
+每次更换图标后，按下面顺序检查即可：
+
+1. 新文件能在资源管理器的“更改图标”窗口中正常预览。
+2. `DefaultIcon` 的值是实际存在的**完整路径,0**。
+3. 若使用了 `autorun.inf`，其中的 `ICON=` 指向同一盘根目录下实际存在的文件。
+4. 重启资源管理器；显示旧图标时再重建图标缓存。
+5. 重新打开“此电脑”，同时检查主区域和左侧导航栏。
+
+保持 `p.ico` 原路径原文件名时，以上步骤中通常只需要第 1、4、5 步；这也是它最省心的原因。
+
+## 九、如何撤销或恢复默认图标
 
 如果不再需要自定义图标，打开管理员 PowerShell，执行：
 
@@ -252,7 +373,7 @@ $root = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\DriveIcons'
 
 之后重新启动“Windows 资源管理器”，Windows 就会回到对应磁盘类型的默认图标。这里仅删除 `DefaultIcon`，不会顺带清除同一盘符可能存在的 `DefaultLabel` 等其他设置。执行删除注册表项前，如果还想保留原有设置，可以先在注册表编辑器中导出 `DriveIcons` 项作为备份。
 
-## 九、总结
+## 十、总结
 
 磁盘自定义图标重启后不生效，通常不是“Windows 忘记了设置”，而是以下任一问题导致 Shell 在启动时无法正确提取图标：目录被误当作图标文件、路径不可访问、`desktop.ini` 与驱动器机制混用、ICO 文件不规范，或正确配置尚未被图标缓存重新读取。
 

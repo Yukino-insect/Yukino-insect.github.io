@@ -2,6 +2,9 @@
 date = '2026-09-13T2:00:00+08:00'
 draft = false
 title = 'SQLAlchemy 是什么：从零理解 Python ORM 与 SQLAlchemy 2.x 入门'
+aliases = [
+  '/python/sqlalchemy_intro/',
+]
 +++
 
 Python 程序需要访问关系型数据库时，你当然可以直接调用数据库驱动、手写每一条 SQL。这样做并不错误；错误的是以为“手写 SQL”和“使用 ORM”之间只能二选一。现实没有这么戏剧化，工具也不该逼迫人站队。

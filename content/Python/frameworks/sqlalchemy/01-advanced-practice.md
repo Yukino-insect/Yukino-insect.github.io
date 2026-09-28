@@ -2,10 +2,13 @@
 date = '2026-09-26T20:05:00+08:00'
 draft = false
 title = 'SQLAlchemy ORM 进阶实践：查询、事务、并发与迁移'
+aliases = [
+  '/python/sqlalchemy_orm_advanced_practice/',
+]
 +++
 ORM 的作用不是让 SQL 消失，而是把实体映射、连接管理、事务和查询组合成更安全的 Python 抽象。真正的难点也不在“会不会 `session.add()`”，而在于：会话应活多久？事务边界由谁决定？怎样防止列表页 N+1 查询？并发请求如何保证唯一性？模型声明改变后怎样安全升级线上表？
 
-本文以 SQLAlchemy 2.x 的类型化同步 ORM 为主线，适用于 FastAPI、命令行任务和普通 Python 服务。基础建模与 CRUD 可先阅读 [SQLAlchemy 2.0 ORM 入门](sqlalchemy_intro.md)；本文会在此基础上讨论更接近实际项目的查询、事务、并发与迁移问题。
+本文以 SQLAlchemy 2.x 的类型化同步 ORM 为主线，适用于 FastAPI、命令行任务和普通 Python 服务。基础建模与 CRUD 可先阅读 [SQLAlchemy 2.0 ORM 入门](00-introduction.md)；本文会在此基础上讨论更接近实际项目的查询、事务、并发与迁移问题。
 
 ## 一、建立正确的心智模型：Engine、Connection、Session
 
@@ -442,4 +445,4 @@ SQLAlchemy ORM 的主线并不复杂：
 - 业务预检查提升体验，唯一约束和事务才是并发下的最终裁判。
 - `create_all()` 不能代替生产迁移；表结构演进必须版本化、可验证、可审查。
 
-结合 [FastAPI 教程：从第一个接口到工程化服务](fastapi_from_basics_to_engineering.md) 阅读，就能把“请求进入服务”与“数据可靠落库”两部分拼成完整的 Python 后端基础。
+结合 [FastAPI 教程：从第一个接口到工程化服务](../fastapi/00-fastapi-from-basics-to-engineering.md) 阅读，就能把“请求进入服务”与“数据可靠落库”两部分拼成完整的 Python 后端基础。

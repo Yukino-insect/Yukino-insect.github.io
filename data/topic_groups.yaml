@@ -9,6 +9,7 @@ groups:
       - internet
       - linux
       - assembly
+      - docker
     lanes:
       - title: 系统底层
         slug: systems
@@ -22,6 +23,11 @@ groups:
             summary: 权限、文件描述符、多路复用、性能观察。
             sections:
               - linux
+          - title: Docker 容器技术教程
+            summary: 从容器、镜像与 Compose 入门，到网络存储、构建优化、底层隔离和工程化运维。
+            sort: file
+            paths:
+              - Docker/docker-course/
           - title: RISC-V 汇编与内核启动
             summary: 从寄存器、调用约定和栈，到 xv6 进入第一个 C 函数之前发生的事。
             sort: file
@@ -95,8 +101,8 @@ groups:
 
   - slug: data-store-search
     title: 数据存储与检索
-    subtitle: MySQL、Redis、ES、OSS
-    lead: 把持久化、缓存、索引和数据同步放在同一个入口里，才像一条完整的数据链路。
+    subtitle: 关系库、缓存、检索、对象与分析
+    lead: 把持久化、缓存、检索、对象存储与分析系统放在同一个入口里，数据链路才不会只剩产品名。
     sections:
       - mysql
       - redis
@@ -124,9 +130,9 @@ groups:
             summary: 缓存并不是把数据塞进去就完事，它也有自己的秩序。
             sections:
               - redis
-      - title: 搜索、同步与文件
+      - title: 搜索、对象存储与分析
         slug: search-sync
-        summary: Elasticsearch 查询、数据同步、文件服务和对象存储。
+        summary: 搜索与同步、S3 对象存储、向量与图检索，以及 ClickHouse 分析型数据库。
         modules:
           - title: Elasticsearch
             summary: 检索、聚合、同义词、同步方案和并发问题。
@@ -134,13 +140,35 @@ groups:
               - elasticsearch
           - title: OSS 与文件存储
             summary: MinIO、对象存储、文件访问路径和上传下载链路。
-            sections:
-              - oss
+            paths:
+              - OSS/
+            excludePaths:
+              - OSS/object-storage-course/
+          - title: RustFS、MinIO 与 S3 对象存储实战
+            summary: 从对象模型和请求签名，到分片上传、预签名、生命周期、备份恢复与故障排查。
+            sort: file
+            paths:
+              - OSS/object-storage-course/
+          - title: 向量数据库与向量检索
+            summary: Embedding、ANN、pgvector 与 Milvus 的数据模型、索引参数、压测、迁移与恢复。
+            sort: file
+            paths:
+              - VectorDB/vector-database-course/
+          - title: 图数据库、知识图谱与图检索
+            summary: Neo4j、Cypher、APOC、GDS、数据摄取、备份恢复；GraphRAG 仅作为一项应用。
+            sort: file
+            paths:
+              - GraphDB/graph-database-course/
+          - title: ClickHouse 列式分析数据库
+            summary: MergeTree、排序键、分区、批量摄入、系统表、TTL、备份与恢复。
+            sort: file
+            paths:
+              - ClickHouse/clickhouse-course/
 
   - slug: distributed-systems
     title: 分布式架构
-    subtitle: 微服务、治理、配置
-    lead: 服务拆开以后，真正的问题才刚刚开始。这里放注册配置、熔断降级、事务和系统边界。
+    subtitle: 微服务、治理、协调
+    lead: 服务拆开以后，真正的问题才刚刚开始。这里放注册配置、协调一致性、熔断降级、事务和系统边界。
     sections:
       - microservices
       - nacos
@@ -154,14 +182,19 @@ groups:
             summary: 一致性、降级、Outbox、Seata 这些绕不开的工程问题。
             sections:
               - microservices
-      - title: 服务治理
+      - title: 服务治理与协调
         slug: service-governance
-        summary: 注册发现、配置中心、灰度、标签路由与控制台运维。
+        summary: 注册发现、配置中心、协调元数据、灰度、标签路由与控制台运维。
         modules:
           - title: Nacos
             summary: 注册中心、配置中心、Tag 和一致性协议。
             sections:
               - nacos
+          - title: etcd 分布式协调服务
+            summary: Raft、MVCC revision、watch、lease、事务、选主、压缩、快照和灾难恢复。
+            sort: file
+            paths:
+              - Microservices/etcd-course/
       - title: 稳定性建设
         slug: stability
         summary: 限流、熔断、降级和系统在压力下的自我保护。
@@ -173,8 +206,8 @@ groups:
 
   - slug: ai-engineering
     title: AI 工程
-    subtitle: RAG、Agent、LangGraph
-    lead: RAG 系统、Agent 工程、模型调用基础设施和评测链路放在一起看，才不会把 AI 应用误会成几个接口调用。
+    subtitle: RAG、Agent、模型与中间件
+    lead: RAG、Agent、模型服务与数据中间件各有自己的运行规律；既要能组合成应用，也不能把它们误会成几个接口调用。
     sections:
       - agent
     lanes:
@@ -200,6 +233,8 @@ groups:
                 path: Agent/ai-course/05-rag-evaluation/
               - title: 面试考点
                 path: Agent/ai-course/06-interview/
+              - title: Java Agent 框架实战
+                path: Agent/ai-course/07-java-agent-runtime/
           - title: LangChain 与 LangGraph
             summary: LangChain、LangGraph、LangSmith、CLI、Server 和 Prompt 工程相关笔记。
             paths:
@@ -211,6 +246,25 @@ groups:
             summary: 从 Prompt、项目指令与可复用工作流，到外部工具连接和能力分发，建立一套不混淆职责的 Agent 工程认知。
             paths:
               - Agent/AgentEngineering/
+      - title: AI 模型服务与可观测性
+        slug: ai-middleware
+        summary: 模型推理、文档智能与 LLM/Agent 运行治理；数据存储和分布式协调请在各自分类学习。
+        modules:
+          - title: 深度学习、模型推理与重排序
+            summary: Transformer、PyTorch、CPU/GPU、FP16、FastAPI 与 BGE Reranker 的独立模型服务实践。
+            sort: file
+            paths:
+              - Agent/ai-middleware-courses/02-model-inference-and-rerank/
+          - title: 文档智能与 OCR
+            summary: OCR、版面分析、结构化文档资产、异步任务与解析服务部署。
+            sort: file
+            paths:
+              - Agent/ai-middleware-courses/03-document-intelligence-ocr/
+          - title: LLM 可观测性与运行治理
+            summary: Langfuse、ClickHouse、Trace、成本、隐私、队列背压与 Compose 运维。
+            sort: file
+            paths:
+              - Agent/ai-middleware-courses/05-llm-observability/
 
 
   - slug: random-thoughts
@@ -258,12 +312,13 @@ groups:
 
   - slug: frontend
     title: 前端知识
-    subtitle: JS/TS、HTML/CSS、Vue
+    subtitle: JS/TS、HTML/CSS、Vue、React
     lead: 前端并不只是页面样式，它还包括语言、构建、状态、接口、跨端和工程协作。把这些内容独立出来，学习路径会清楚很多。
     sections:
       - jsandts
       - htmlandcss
       - vue
+      - react
     lanes:
       - title: JS/TS 与构建工具
         slug: language-build
@@ -300,12 +355,12 @@ groups:
             summary: 移动端适配、响应式布局、CSS 变量、Vue scoped 样式、uni-app 样式和常见问题排查。
             paths:
               - HtmlAndCSS/03-responsive-engineering/
-      - title: Vue 与 uni-app
-        slug: vue-uniapp
-        summary: Vue 3、组合式 API、Pinia、uni-app、页面结构、测试、性能和大型项目组织。
+      - title: Vue 与 React
+        slug: vue-react
+        summary: Vue 3 与 React 的组件模型、状态管理、页面组织、测试、性能和工程实践。
         modules:
-          - title: Vue 3 与 uni-app 工程实战课程
-            summary: 从 Vue 核心语法、响应式、组件通信、Pinia、接口数据流，到路由、uni-app、测试部署和综合项目实战。
+          - title: Vue 3 工程实战课程
+            summary: 从 Vue 核心语法、响应式、组件通信、Pinia、接口数据流，到路由、测试部署和综合项目实战。
             intro:
               title: 课程导读
               path: Vue/README.md
@@ -318,6 +373,11 @@ groups:
                 path: Vue/03-engineering/
               - title: 综合练习
                 path: Vue/04-final-project/
+          - title: React 基础与工程实践
+            summary: 从声明式 UI、组件、状态和渲染模型出发，建立 React 应用的正确心智模型。
+            sort: file
+            paths:
+              - React/
 
   - slug: mq
     title: 消息队列
@@ -374,6 +434,11 @@ groups:
             sort: file
             paths:
               - Python/frameworks/sqlalchemy/
+          - title: PySide6 / Qt 桌面工程专题
+            summary: 从事件循环、对象树、信号槽和布局开始，进入模型视图、并发任务、进程通信与可维护桌面应用架构，并以净绘工坊为实战案例。
+            sort: file
+            paths:
+              - Python/qt-desktop-course/
 
   - slug: c-cpp
     title: C/C++

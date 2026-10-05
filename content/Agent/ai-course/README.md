@@ -75,13 +75,31 @@ title = "RAG 与 Agentic AI 工程课程"
 - [为什么不用 Python 实现 RAG 主链路](06-interview/02-why-java-not-python.md)
 - [为什么会从 Milvus 转向 PGVector](06-interview/03-milvus-vs-pgvector.md)
 
+### 7. Java Agent 框架实战
+
+这一章以 `agent` Maven 模块的实际代码为准，逐个讲 AgentScope Java、OpenAI 模型扩展、MCP Java SDK/AgentScope MCP 包装、Reactor 与 OpenTelemetry 的用法。每篇都有依赖、最小代码、API 语义、对应源码和测试点；不再重复泛泛的 Agent 架构概念。
+
+- [Java Agent 框架实战：AgentScope、MCP 与 OpenTelemetry](07-java-agent-runtime/README.md)
+- [ReActAgent：创建、调用、事件消费与中断](07-java-agent-runtime/01-agentscope-reactagent.md)
+- [OpenAIChatModel：兼容端点、流式、tools 与 DeepSeek](07-java-agent-runtime/02-openai-chat-model.md)
+- [AgentTool 与 Toolkit：Schema、结果状态、异步执行与注册](07-java-agent-runtime/03-agent-tool-toolkit.md)
+- [MiddlewareBase：`onReasoning`、`onActing` 与顺序](07-java-agent-runtime/04-middleware-api.md)
+- [AgentStateStore：用 PostgreSQL 保存并恢复 AgentScope 会话](07-java-agent-runtime/05-state-store-api.md)
+- [MCP Client：Streamable HTTP、initialize、tools/list 与 tools/call](07-java-agent-runtime/06-mcp-client-api.md)
+- [McpTool：把 MCP Tool 转为可由 ReActAgent 调用的 AgentScope 工具](07-java-agent-runtime/07-mcp-tool-proxy.md)
+- [OpenTelemetry：SDK、OTLP HTTP、AgentScope tracing 与工具 span](07-java-agent-runtime/08-otel-api.md)
+- [Reactor 与 SseEmitter：消费 `Flux<AgentEvent>`、取消和收尾](07-java-agent-runtime/09-reactor-sse-api.md)
+- [Skill、确认与框架契约测试](07-java-agent-runtime/10-skills-confirm-testing.md)
+
 ## 推荐学习顺序
 
 1. 先读 `01-rag-basics/`，建立术语和主链路。
 2. 再读 `02-knowledge-base/`，理解知识如何进入系统。
 3. 接着读 `03-model-infra/`，把模型调用从“接口”升级成“基础设施”。
 4. 然后读 `04-ai-qa/`，完整跟踪一次问答的执行路径。
-5. 最后读 `05-rag-evaluation/` 和 `06-interview/`，学会验证效果并表达工程取舍。
+5. 再读 `05-rag-evaluation/` 和 `06-interview/`，学会验证效果并表达工程取舍。
+6. 最后进入 `07-java-agent-runtime/`，按真实 API 学习 AgentScope、MCP、Reactor 和 OpenTelemetry。
+
 
 ## 学习方法
 

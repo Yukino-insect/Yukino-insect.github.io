@@ -396,19 +396,55 @@ body.is-background-preview .post-bg::after {
 }
 
 .post-content pre.mermaid {
+  position: relative;
   display: block;
   max-width: 100%;
   margin: 1.35rem 0 1.55rem;
-  padding: 1rem;
+  padding: clamp(1.15rem, 2.8vw, 1.75rem);
   overflow-x: auto;
-  border: 1px solid rgba(157, 194, 228, 0.34);
-  border-radius: 10px;
-  background: rgba(247, 251, 255, 0.78);
-  box-shadow: 0 12px 28px rgba(22, 51, 82, 0.05);
+  border: 1px solid rgba(157, 194, 228, 0.42);
+  border-radius: 12px;
+  background:
+    radial-gradient(
+      circle at 88% 8%,
+      rgba(205, 232, 255, 0.54),
+      rgba(205, 232, 255, 0) 31%
+    ),
+    linear-gradient(
+      135deg,
+      rgba(249, 253, 255, 0.94),
+      rgba(236, 247, 255, 0.82) 56%,
+      rgba(246, 251, 255, 0.88)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.86),
+    inset 0 0 0 1px rgba(230, 243, 253, 0.52),
+    0 12px 28px rgba(22, 51, 82, 0.06);
+  isolation: isolate;
+}
+
+.post-content pre.mermaid::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 9%;
+  right: 9%;
+  z-index: -1;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    rgba(105, 152, 197, 0),
+    rgba(153, 200, 237, 0.62) 24%,
+    rgba(255, 255, 255, 0.9) 50%,
+    rgba(153, 200, 237, 0.62) 76%,
+    rgba(105, 152, 197, 0)
+  );
 }
 
 .post-content pre.mermaid svg {
   display: block;
+  position: relative;
+  z-index: 1;
   max-width: none;
   height: auto;
   margin: 0 auto;
@@ -780,6 +816,11 @@ body.is-background-preview .post-bg::after {
 
   .post-content blockquote {
     padding-left: 0.85rem;
+  }
+
+  .post-content pre.mermaid {
+    padding: 1rem;
+    border-radius: 10px;
   }
 
   .post-content th,

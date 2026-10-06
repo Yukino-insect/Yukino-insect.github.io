@@ -38,7 +38,7 @@ title = 'IOPaint 精确去除文字与图片增强：Python 遮罩、局部修�
 
 ## 二、准备当前项目环境
 
-以下命令以 Windows PowerShell、项目位于 `D:\IOPaint` 为例。CPU 可以完成小面积修复，只是速度较慢；如果已经安装适配的 CUDA 版 PyTorch，可将 `cpu` 换成 `cuda`。
+以下命令以 Windows PowerShell、项目位于 [IOPaint](https://github.com/Sanster/IOPaint)。CPU 可以完成小面积修复，只是速度较慢；如果已经安装适配的 CUDA 版 PyTorch，可将 `cpu` 换成 `cuda`。
 
 ```powershell
 cd D:\IOPaint

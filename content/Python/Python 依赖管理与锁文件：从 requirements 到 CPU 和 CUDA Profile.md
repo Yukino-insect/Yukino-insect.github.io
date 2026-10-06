@@ -305,7 +305,7 @@ torch>=2.2
 
 看起来两份 `.in` 文件相同并不奇怪。差异由解析时选择的 PyTorch wheel 后端决定，最终体现在不同 lock：一个锁住 `+cpu`，另一个锁住 `+cu126`。这正是 lock 存在的意义：把“看起来一样的需求”落到可验证、可安装的具体产物。
 
-### 1. 为什么不把 CUDA 索引写进同一个 `requirements.txt`
+### 为什么不把 CUDA 索引写进同一个 `requirements.txt`
 
 PyTorch CUDA wheel 通常来自官方专用索引，而普通 Python 包来自 PyPI。如果把 `--index-url https://download.pytorch.org/whl/cu126` 全局写进一份通用 requirements，`pip` 可能会到错误的索引寻找 `pydantic`、`Pillow` 等普通依赖。
 
@@ -316,34 +316,6 @@ PyTorch CUDA wheel 通常来自官方专用索引，而普通 Python 包来自 P
 3. 运行 Python 验证脚本，确认 CUDA 构建与实际设备可用性。
 
 这也是为什么把安装步骤封装为脚本比要求每个人手输三条命令更可靠。人当然可以做到，但依赖管理本来就是为了少依赖人的记忆力。
-
-### 2. PowerShell 与 Bash 脚本示例
-
-PowerShell：
-
-```powershell
-.\scripts\install-runtime.ps1 `
-  -TorchBackend cu126 `
-  -Python .\.venv\Scripts\python.exe
-```
-
-Bash（Git Bash on Windows 或 Linux）：
-
-```bash
-bash scripts/install-runtime.sh \
-  --torch-backend cu126 \
-  --python .venv/Scripts/python.exe
-```
-
-这两个脚本应执行相同的逻辑：先安装基础 lock，再按选定 profile 安装 Torch，最后输出：
-
-```text
-torch=2.14.1+cu126
-cuda_build=12.6
-cuda_available=True
-```
-
-最后一行才是应用是否真的能使用 CUDA 的判据。拥有 NVIDIA 显卡、安装 CUDA Toolkit，甚至下载了 `+cu126` wheel，都不足以替代这一步验证。Bash 脚本可按解释器自动选择 Windows 或 Linux 的 x86_64 + CPython 3.12 lock；macOS、不同 Python 版本和其他架构仍需重新解析专用 lock，不能指望 shell 本身跨越二进制兼容性边界。
 
 ## 七、如何用 uv 生成 requirements lock
 

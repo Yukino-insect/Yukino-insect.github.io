@@ -21,9 +21,18 @@ title = '跨领域中间件与模型服务课程索引'
 - [Milvus 本地实验与使用](../../VectorDB/vector-database-course/04-milvus-practice.md)
 - [基准测试、选型与迁移](../../VectorDB/vector-database-course/05-benchmark-selection-and-migration.md)
 
+### PyTorch 前置理论：从机器学习到训练循环
+
+如果你刚接触 PyTorch，先从这里开始。它把“模型为什么能从数据中学习”拆成可检验的基本环节：数据集和泛化、张量与线性代数、计算图与反向传播，以及一个完整而小的训练循环。学完后，读模型推理、Transformer 或 GPU 文章时，就不必把 `loss.backward()` 当作某种必须照念的咒语。
+
+- [课程导读](01-pytorch-foundations/00-overview.md)
+- [机器学习的任务、数据与泛化](01-pytorch-foundations/01-machine-learning-data-and-generalization.md)
+- [张量、矩阵计算与导数：PyTorch 在计算什么](01-pytorch-foundations/02-tensor-linear-algebra-and-gradients.md)
+- [神经网络如何训练：前向计算、反向传播与优化](01-pytorch-foundations/03-neural-network-training-loop.md)
+
 ### 深度学习、模型推理与重排序
 
-这套课解释神经网络与 Transformer 需要知道的那部分底层原理，并以 BGE Reranker 为例讲清楚 Cross-Encoder、PyTorch、CPU/GPU、FP16、批处理和 FastAPI 服务化。
+这套课以前置理论为基础，解释 Transformer 在文本排序中做了什么，并以 BGE Reranker 为例讲清楚 Cross-Encoder、PyTorch、CPU/GPU、FP16、批处理和 FastAPI 服务化。
 
 - [课程导读](02-model-inference-and-rerank/00-overview.md)
 - [深度学习与 Transformer 基础](02-model-inference-and-rerank/01-deep-learning-transformer-foundations.md)

@@ -1,25 +1,80 @@
 +++
 date = '2026-10-07T19:00:00+08:00'
 draft = false
-title = '深度学习入门：神经网络训练循环、优化与过拟合'
+title = 'PyTorch 零基础实战：写出第一个训练循环并学会排错'
 math = true
 +++
 
-现在把前两篇的概念放进同一个可运行程序。一个训练循环并不复杂：模型前向计算预测，损失函数比较预测和标签，反向传播写出梯度，优化器依梯度改参数。然而每一步都有明确的边界；少一步、顺序错一次，程序也许还能执行，训练却不会按你以为的方式发生。
+现在已经有了数据、张量、模型、损失和梯度。它们并不是五个需要分别背诵的名词，而是同一条因果链上的五个环节：数据进入模型得到预测，预测与答案产生损失，损失产生梯度，优化器根据梯度修改模型。下面会先拆开完成**一次**更新，再把它放进完整训练循环。这样你看到 `backward()` 时，至少知道它不是某种必须原样念出的咒语。
 
-## 从线性模型到神经网络
+## 先完成一次参数更新
 
-线性层只能画出直线或平面。若输入与目标之间是弯曲关系，需要在层之间加入非线性激活函数。两层感知机可写为：
+以下代码只有四条样本。它并不追求学出好模型，只用来观察参数在 `step()` 前后真的发生变化。直接复制运行：
+
+```python
+import torch
+from torch import nn
+
+torch.manual_seed(42)
+
+# 四条样本，每条有两个特征；标签 0.0 / 1.0 表示二分类答案。
+features = torch.tensor(
+    [[0.0, 0.0], [0.0, 1.0], [1.0, 0.0], [1.0, 1.0]],
+    dtype=torch.float32,
+)
+labels = torch.tensor([0.0, 0.0, 0.0, 1.0], dtype=torch.float32)
+
+# 输入两个特征，输出一个原始分数（logit）。
+model = nn.Linear(2, 1)
+loss_fn = nn.BCEWithLogitsLoss()
+optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
+
+logits = model(features).squeeze(1)
+loss = loss_fn(logits, labels)
+
+print('更新前损失：', loss.item())
+print('更新前权重：', model.weight.detach().clone())
+
+optimizer.zero_grad()
+loss.backward()
+optimizer.step()
+
+print('更新后权重：', model.weight.detach())
+```
+
+请特别注意中间三句的顺序：
+
+1. `optimizer.zero_grad()`：清空上一次遗留的梯度；
+2. `loss.backward()`：从损失反向计算每个参数的梯度；
+3. `optimizer.step()`：读取梯度，真正改写模型参数。
+
+`model(features)` 只是在计算预测，`loss.backward()` 只是在填写“该怎么改”的信息；直到 `optimizer.step()`，权重才改变。可以试着临时注释最后一行再运行，便会发现权重保持不变。这比记住一句“step 很重要”更可靠。
+
+## 为什么二分类损失要使用 logit
+
+`nn.Linear(2, 1)` 的输出是任意实数，例如 `-1.7` 或 `2.4`，称为 **logit**。它还不是 0 到 1 的概率。若需要把它解释成概率，可使用 sigmoid：
 
 $$
-h=\operatorname{ReLU}(xW_1^T+b_1),\qquad z=hW_2^T+b_2
+p=\sigma(z)=\frac{1}{1+e^{-z}}
 $$
 
-ReLU 定义为 $\operatorname{ReLU}(a)=\max(0,a)$。它不是为了让公式显得更深奥，而是让若干线性变换的组合不再等价于单个线性变换。最后输出 $z$ 是二分类的 logit；交给 `BCEWithLogitsLoss` 即可，不要先自行 sigmoid。
+在上面的训练代码中，损失函数是 `BCEWithLogitsLoss`。它内部会以数值稳定的方式完成 sigmoid 和二元交叉熵计算，因此训练时应把**原始 logit** 直接传入：
 
-## 一个完整、最小的二分类训练脚本
+```python
+logits = model(features).squeeze(1)
+loss = loss_fn(logits, labels)
+```
 
-以下数据是人工构造的：当两个特征之和较大时，标签更可能为 `1`。它没有业务价值，正因为如此，才能把注意力放在训练步骤而非数据下载上。
+不要写成 `loss_fn(torch.sigmoid(logits), labels)`。这种把 sigmoid 做两次的错误经常不会立即报错，却会妨碍训练。只有在验证或预测阶段，要把分数转换为人能理解的概率并按阈值判类时，才调用 sigmoid：
+
+```python
+probabilities = torch.sigmoid(logits)
+predictions = (probabilities >= 0.5).float()
+```
+
+## 一个可直接运行的完整训练程序
+
+下面生成一份很简单的人工数据：两个输入数字相加大于 0 时，标签为 `1`，否则为 `0`。它没有业务价值，但规律足够清晰，可以让我们集中观察训练过程。这个程序使用 320 条训练样本和 80 条验证样本。
 
 ```python
 import torch
@@ -28,7 +83,7 @@ from torch.utils.data import DataLoader, TensorDataset, random_split
 
 torch.manual_seed(42)
 
-# 1. 准备并划分数据。每行一条样本、两列特征。
+# 1. 生成并切分数据。每一行是一个样本，每条样本有两个特征。
 features = torch.randn(400, 2)
 labels = ((features[:, 0] + features[:, 1]) > 0).float()
 dataset = TensorDataset(features, labels)
@@ -37,91 +92,97 @@ train_set, valid_set = random_split(dataset, [320, 80])
 train_loader = DataLoader(train_set, batch_size=32, shuffle=True)
 valid_loader = DataLoader(valid_set, batch_size=80, shuffle=False)
 
-# 2. 定义模型、损失和优化器。
+# 2. 定义模型、损失函数和优化器。
 model = nn.Sequential(
     nn.Linear(2, 8),
     nn.ReLU(),
     nn.Linear(8, 1),
 )
 loss_fn = nn.BCEWithLogitsLoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=1e-2)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
 for epoch in range(1, 31):
-    # 3. 训练：允许计算梯度，并让 optimizer 更新参数。
+    # 3. 训练：每一个 batch 都会更新一次参数。
     model.train()
+    total_train_loss = 0.0
+    total_train_items = 0
+
     for batch_features, batch_labels in train_loader:
-        logits = model(batch_features).squeeze(1)  # [B, 1] -> [B]
+        logits = model(batch_features).squeeze(1)
         loss = loss_fn(logits, batch_labels)
 
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
 
-    # 4. 验证：不更新参数，也不构建梯度图。
+        total_train_loss += loss.item() * batch_labels.size(0)
+        total_train_items += batch_labels.size(0)
+
+    # 4. 验证：只评估，不更新参数，也不记录梯度。
     model.eval()
-    correct = total = 0
+    correct = 0
+    total_valid_items = 0
     with torch.inference_mode():
         for batch_features, batch_labels in valid_loader:
             logits = model(batch_features).squeeze(1)
             predictions = (torch.sigmoid(logits) >= 0.5).float()
             correct += (predictions == batch_labels).sum().item()
-            total += batch_labels.numel()
+            total_valid_items += batch_labels.size(0)
 
     if epoch % 5 == 0:
-        print(f"epoch={epoch:02d}, train_loss={loss.item():.4f}, "
-              f"valid_accuracy={correct / total:.3f}")
+        average_loss = total_train_loss / total_train_items
+        accuracy = correct / total_valid_items
+        print(f'epoch={epoch:02d}, train_loss={average_loss:.4f}, valid_accuracy={accuracy:.3f}')
 ```
 
-正常情况下，验证准确率会逐渐升高。每次运行的具体数字可以不同，但若 loss 长期不下降、准确率接近随机猜测，应先检查标签是否与样本对齐、损失函数是否接受当前输出格式、是否漏写 `optimizer.step()`，而不是立刻增加层数。问题若在输入边界，堆叠网络只会更快地把它掩埋。
+正常情况下，`train_loss` 会总体下降，`valid_accuracy` 会升高并接近 `1.000`。每次的最后几位小数不必相同；`torch.manual_seed(42)` 固定了随机数来源，方便你在同一环境中反复比较改动。它只服务于调试和教学，不保证真实项目换设备、换库版本后仍得到完全相同的每一位结果。
 
-## 训练循环中每句代码的职责
+## 按职责阅读训练循环
 
-| 代码 | 职责 | 常见误用 |
-| ---- | ---- | -------- |
-| `model.train()` | 使 dropout、batch normalization 进入训练行为 | 验证时忘记切 `eval()` |
-| `logits = model(x)` | 前向计算原始输出 | 提前误做 sigmoid/softmax |
-| `loss_fn(logits, y)` | 将预测与标签变成可优化标量 | 标签 dtype 或 shape 不匹配 |
-| `zero_grad()` | 清空上个 batch 累积的梯度 | 误以为 `step()` 会自动清零 |
-| `loss.backward()` | 依计算图写出参数梯度 | 对非标量 loss 直接调用且没有说明 |
-| `optimizer.step()` | 使用梯度更新参数 | 漏写后参数永远不变 |
-| `model.eval()` + `inference_mode()` | 稳定且低开销地验证/推理 | 验证阶段仍保留梯度图 |
+完整代码变长并不是因为它突然有了魔法，而是因为把“训练”和“验证”明确分开了：
 
-`train()` 和 `eval()` 不会自动开关梯度；`inference_mode()` 也不会替模型切换 dropout 的行为，因此它们常成对出现却不能互相取代。理解两者差异，能避免很多“同一个输入为何每次预测不同”的困惑。
+| 代码 | 作用 | 初学者常见误解 |
+| ---- | ---- | -------------- |
+| `model.train()` | 切换到训练行为 | 它不会自动更新参数 |
+| `logits = model(x)` | 用当前参数计算预测 | 它本身不会学习 |
+| `loss_fn(logits, y)` | 计算“猜错多少” | 损失必须与输出、标签格式匹配 |
+| `zero_grad()` | 清除旧梯度 | `step()` 不会自动清空梯度 |
+| `backward()` | 计算梯度 | 它不直接修改权重 |
+| `step()` | 用梯度更新参数 | 漏掉它，训练永远不会发生 |
+| `model.eval()` | 切换到验证/推理行为 | 它不会关闭梯度记录 |
+| `inference_mode()` | 不记录梯度，节省资源 | 它不会代替 `eval()` |
 
-## batch、epoch、学习率与优化器
+`train()` 与 `eval()` 在包含 dropout、batch normalization 等层时尤其重要：它们会使这些层采用训练或推理时不同的行为。`inference_mode()` 则控制自动求导是否记录计算。二者经常一起出现，但职责不同，正如钥匙和门锁一样，长得不像也不应互相代替。
 
-- **batch**：一次用于计算一份梯度的样本数。更大 batch 的梯度通常更稳定，却需要更多内存，并不保证泛化更好。
-- **epoch**：训练集被完整遍历一次。30 个 epoch 不是普遍正确值，应由验证曲线决定。
-- **learning rate**：单步更新幅度。它通常是最敏感的超参数；过大使 loss 抖动或发散，过小则几乎不学习。
-- **SGD / Adam**：都是更新参数的优化器。SGD 简单直接；Adam 会基于历史梯度调整不同参数的步长，常是小实验方便的起点，但并不免除学习率调试。
+## 把“训练成功”理解得更谨慎
 
-训练 loss 只对应最后一个 batch 当然不够严谨；生产实验应累计所有 batch 的加权平均，并记录训练和验证的曲线。示例为了突出骨架而保持简短，不能因此误解为日志设计的范本。
+示例数据的规律被我们亲手设定得很简单，所以准确率很高是预期结果。真实数据不会这么配合。训练时请同时查看训练损失和验证指标：
 
-## 过拟合：会背题不等于会解题
+- 训练损失不下降：先确认 `zero_grad → backward → step` 都在循环中，标签与特征仍按同一行对应；
+- 训练好、验证差：先检查数据切分和泄漏，再考虑模型是否太复杂、训练是否过久；
+- loss 变为 `nan`：检查输入和标签是否包含 `NaN` / `Inf`，并尝试降低学习率；
+- 准确率很高却没有业务价值：检查类别是否极不平衡，并改看 Precision、Recall、F1 或业务成本；
+- 报形状错误：打印 `batch_features.shape`、`logits.shape` 和 `batch_labels.shape`，确认最后一维的含义。
 
-模型容量变大、训练太久、训练样本太少或标签存在偶然噪声时，训练 loss 可能持续下降，验证损失却先降后升。这就是过拟合。处理它应从证据出发：
+不要在第一个结果不理想时立刻增加层数或 epoch。先用极小数据集验证代码能够过拟合：若连四条样本都无法学对，问题更可能出在数据、损失或训练循环，而不是“模型不够大”。这个小实验是排错时极其有效的基线。
 
-1. 保持验证集独立，画出训练与验证曲线；
-2. 增加覆盖真实场景、标签可信的数据；
-3. 适当降低模型复杂度，或使用 weight decay、dropout、数据增强；
-4. 依据验证指标早停，而非机械追求更多 epoch；
-5. 最后用从未参与选择的测试集评估一次。
+## 可以安全尝试的三个改动
 
-weight decay 可以理解为对过大的权重施加约束，常在优化器中写为 `weight_decay=1e-4`。dropout 则在训练期随机置零一部分激活，迫使网络不过分依赖某一条路径。它们是降低过拟合风险的工具，不是弥补错误标签、泄漏数据或不匹配指标的万能药。
+在原程序运行成功后，依次只改一个地方并观察输出：
 
-## 常见现象的排查顺序
+1. 将 `batch_size=32` 改为 `16` 或 `64`，理解 batch 是一次更新使用的样本数量；
+2. 将 `lr=0.01` 改为 `0.001`，观察较小学习率通常让学习更慢；
+3. 删除 `optimizer.step()` 运行一次，再恢复它，确认参数更新发生在何处。
 
-- **loss 完全不变**：确认参数确实在优化器中、没有漏掉 `zero_grad → backward → step`，并打印一个参数在更新前后的值。
-- **loss 为 `nan`**：检查输入和标签是否有 `NaN`/`Inf`，再尝试降低学习率，确认损失函数的输入范围和 dtype。
-- **训练分数高、验证分数低**：检查数据泄漏与切分方式，再考虑正则化、早停或更多高质量数据。
-- **准确率很高但业务效果差**：检查类别是否极不平衡，改看 Precision、Recall、F1 或任务定义的成本指标。
-- **每次验证结果不同**：确认验证前调用 `model.eval()`，并固定随机种子以便调试；可复现不等于永远相同，却能让差异有迹可循。
+不要同时改五六个参数。否则结果变化后，你只能得到“似乎有影响”这种并不太有用的结论。一次只改变一个变量，是机器学习实验与普通调试都应保留的耐心。
 
 ## 小结
 
-- 最小训练循环的因果顺序是：前向预测、计算损失、清梯度、反向传播、更新参数。
-- `train/eval` 控制部分层的行为，梯度记录由自动求导上下文控制；二者不能相互替代。
-- 学习率、batch、epoch 和优化器是需要验证集支撑的超参数，不是可凭印象固定的常数。
-- 训练分数并不代表模型可用；泛化、数据泄漏和业务指标必须单独检验。
+- 训练的固定顺序是：前向预测、计算损失、清梯度、反向传播、更新参数。
+- `BCEWithLogitsLoss` 接收原始 logit；在评估时才用 sigmoid 将其转为概率和类别。
+- `train/eval` 控制某些层的行为，梯度记录由 `inference_mode()` 控制；二者职责不同。
+- 高训练分数不等于可用模型。必须用未参与更新的验证数据检查泛化，并首先从数据和形状排查问题。
 
-至此，你已经具备阅读和改写简单 PyTorch 训练代码所需的理论基础。接下来可进入[深度学习与 Transformer 基础](../02-model-inference-and-rerank/01-deep-learning-transformer-foundations.md)，将这套训练逻辑放到文本 token、embedding 和排序模型的真实结构中。
+至此，你已经可以理解并改写最小 PyTorch 训练脚本。下一阶段再学习 Transformer、embedding 或重排序模型时，仍然可以回到同一条主线：输入是什么、预测是什么、损失如何产生梯度、参数在哪里更新，以及用什么数据评价结果。
+
+接下来请继续阅读[沿着 CleanCanvas Studio 读懂 PyTorch 图像推理调用链](04-project-inference-reading-map.md)，将训练时建立的张量、模型和推理概念落实到本项目的图像修复与超分代码中。完成本专题后，再进入[深度学习与 Transformer 基础](../02-model-inference-and-rerank/01-deep-learning-transformer-foundations.md)，把同一套逻辑放入文本 token、embedding 和排序模型的真实结构中。

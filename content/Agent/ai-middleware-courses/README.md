@@ -21,14 +21,19 @@ title = '跨领域中间件与模型服务课程索引'
 - [Milvus 本地实验与使用](../../VectorDB/vector-database-course/04-milvus-practice.md)
 - [基准测试、选型与迁移](../../VectorDB/vector-database-course/05-benchmark-selection-and-migration.md)
 
-### PyTorch 前置理论：从机器学习到训练循环
+### PyTorch 与图像深度学习：从基础到项目推理
 
-如果你刚接触 PyTorch，先从这里开始。它把“模型为什么能从数据中学习”拆成可检验的基本环节：数据集和泛化、张量与线性代数、计算图与反向传播，以及一个完整而小的训练循环。学完后，读模型推理、Transformer 或 GPU 文章时，就不必把 `loss.backward()` 当作某种必须照念的咒语。
+如果你刚接触 PyTorch，先从这里开始。它先把“模型为什么能从数据中学习”拆成数据、张量、梯度与训练循环，再以 CleanCanvas Studio 的 LaMa、Manga 与 Real-ESRGAN 代码讲解图像张量、TorchScript、权重加载、CPU/GPU、FP16、卷积网络和分块推理。学完后，你可以顺着真实项目代码理解推理链路，而不必把 `loss.backward()` 或 `model.to(device)` 当作必须照念的咒语。
 
-- [课程导读](01-pytorch-foundations/00-overview.md)
-- [机器学习的任务、数据与泛化](01-pytorch-foundations/01-machine-learning-data-and-generalization.md)
-- [张量、矩阵计算与导数：PyTorch 在计算什么](01-pytorch-foundations/02-tensor-linear-algebra-and-gradients.md)
-- [神经网络如何训练：前向计算、反向传播与优化](01-pytorch-foundations/03-neural-network-training-loop.md)
+- [零基础 PyTorch 课程导读：从 Python 程序到第一个会学习的模型](01-pytorch-foundations/00-overview.md)
+- [机器学习零基础：样本、训练集、验证集与泛化](01-pytorch-foundations/01-machine-learning-data-and-generalization.md)
+- [PyTorch 零基础：张量、形状与自动求导](01-pytorch-foundations/02-tensor-linear-algebra-and-gradients.md)
+- [PyTorch 零基础实战：写出第一个训练循环并学会排错](01-pytorch-foundations/03-neural-network-training-loop.md)
+- [项目实战：沿着 CleanCanvas Studio 读懂 PyTorch 图像推理调用链](01-pytorch-foundations/04-project-inference-reading-map.md)
+- [项目实战：图像如何变成 PyTorch 张量——预处理、mask 与 LaMa 修复](01-pytorch-foundations/05-image-tensor-preprocessing-and-inpainting.md)
+- [项目实战：加载预训练权重、选择 CPU/GPU 与正确进入推理模式](01-pytorch-foundations/06-model-loading-device-and-inference-mode.md)
+- [项目实战：从卷积网络到分块推理——读懂 Real-ESRGAN 超分代码](01-pytorch-foundations/07-realesrgan-network-and-tiled-inference.md)
+- [项目实战：PyTorch 与深度学习面试问答、排错清单与学习路线](01-pytorch-foundations/08-project-interview-and-debugging.md)
 
 ### 深度学习、模型推理与重排序
 

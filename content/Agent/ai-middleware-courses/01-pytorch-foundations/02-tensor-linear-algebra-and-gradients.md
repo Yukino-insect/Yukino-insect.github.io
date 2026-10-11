@@ -28,6 +28,8 @@ print(four_houses.dtype)  # torch.float32：浮点数
 
 `shape`（形状）是最应该养成检查习惯的属性。`[4, 2]` 不只是“有 8 个数字”，更表示“有 4 条样本，每条样本有 2 个特征”。把它错误地当作“2 条样本、每条有 4 个特征”，程序不一定能从数字本身识别你的意图。很多看似冗长的模型报错，本质上都在提醒：两个张量对“每一维代表什么”的理解不一致。
 
+除 `shape` 外，排错时也应同时看 `dtype` 与 `device`：前者决定数值类型，如 `float32`、`int64`；后者说明数据位于 CPU 内存还是 CUDA 显存。它们是张量契约的一部分，而不是输出里可以忽略的装饰。
+
 ## `shape`：给每一个维度起名字
 
 以下是深度学习中最常见的约定。方括号里并非神秘代码，而是每个维度的长度：
@@ -72,6 +74,41 @@ print(scores + bias)
 ```
 
 `scores` 的形状是 `[2, 3]`，`bias` 是 `[3]`。PyTorch 会把 `bias` 看成对每一行都适用，这种规则叫做**广播（broadcasting）**。广播很方便，却不能拿来掩盖形状问题。比如预测是 `[batch, 1]`、标签是 `[batch]` 时，某些运算会把它们扩展成意料之外的矩阵。若模型输出一个二分类分数，应明确保证预测与标签同为 `[B]`，或者同为 `[B, 1]`。
+
+## 训练中最常见的形状操作
+
+项目代码里的 `unsqueeze`、`permute` 并不是视觉模型专属咒语；它们只是明确地变换维度。运行下面的代码并对照 shape，会比从长链式调用里猜效果可靠。
+
+```python
+import torch
+
+x = torch.arange(24).reshape(2, 3, 4)  # [2, 3, 4]
+
+print(x.unsqueeze(0).shape)       # [1, 2, 3, 4]：在第 0 维插入 batch 维
+print(x.squeeze(0).shape)         # [2, 3, 4]：第 0 维长度不是 1，因此不变
+print(x.reshape(6, 4).shape)      # [6, 4]：元素总数不变，重新组织为目标形状
+print(x.permute(0, 2, 1).shape)   # [2, 4, 3]：按指定顺序重排维度
+
+a = torch.ones(2, 3)
+b = torch.zeros(2, 3)
+print(torch.cat([a, b], dim=0).shape)    # [4, 3]：在已有维度上拼接
+print(torch.stack([a, b], dim=0).shape)  # [2, 2, 3]：新建一个维度再堆叠
+```
+
+`squeeze(dim)` 只会移除指定位置且长度为 1 的维度，因此比无参数的 `squeeze()` 更安全。`reshape()` 的目标元素总数必须一致；它回答的是“怎样看待同一批元素”，不是任意增删数据。`permute()` 只调整维度顺序，图像常用它从 HWC 变成 CHW。若后续操作要求连续内存，重排后的张量有时需要 `.contiguous()`；不要把它当成所有 `permute()` 后都必须盲加的一行。
+
+`torch.cat` 和 `torch.stack` 的区别也很重要：前者沿既有维度连接，后者新增维度。第七篇 RRDB 中的 `torch.cat(..., 1)` 正是在 NCHW 张量的通道维拼接特征，而不是在 batch 维把不同图片混到一起。
+
+改变 dtype 或设备时，`.float()`、`.long()`、`.to(device)` 通常返回新的张量，应接住返回值：
+
+```python
+labels = labels.long()
+image = image.to('cuda')
+```
+
+## `torch.tensor` 与 `torch.from_numpy`
+
+`torch.tensor([1, 2, 3])` 根据 Python 数据创建张量，通常会复制数据；`torch.from_numpy(array)` 则将一个 CPU NumPy 数组包装为张量，通常与原数组共享底层内存。后者适合高效地把图像交给 PyTorch，但也意味着之后原地修改 NumPy 数组，张量可能随之变化。第五篇会在 BGR/RGB 和图像预处理中实际使用它；在此之前只要记住：共享内存是优化方式，不是“两个对象永远互不影响”的承诺。
 
 ## 线性层实际上做了什么
 

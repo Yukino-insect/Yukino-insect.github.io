@@ -10,11 +10,13 @@ title = '零基础 PyTorch 课程导读：从 Python 程序到第一个会学习
 
 ## 这门课会带你做到什么
 
-完成前四篇基础文章和后续项目实践文章后，你应当能够：
+完成基础理论部分和后续项目实践文章后，你应当能够：
 
 - 说清楚“让程序预测一个答案”与“让程序从例子中学习”的区别；
 - 看懂一条样本、一个 batch（小批量）、训练集、验证集各自是什么；
 - 读懂常见的 `torch.tensor`、`nn.Linear`、`loss.backward()` 和 `optimizer.step()`；
+- 说明 `nn.Module`、`forward()`、激活函数、logit、损失函数和反向传播分别解决什么问题；
+- 根据回归、二分类或多分类任务，匹配模型输出、标签的形状/类型和合适的损失函数；
 - 运行一个二分类示例，并根据 loss、准确率和报错的形状信息做最初步的排查；
 - 知道一个模型在训练集表现好，并不自动表示它对新数据有用。
 - 沿着 CleanCanvas Studio 的真实调用链，读懂模型为何延迟加载、图像为何需要转成 `[1, C, H, W]`、权重如何加载到 CPU/GPU，以及为什么大图需要分块推理。
@@ -69,12 +71,14 @@ python -c "import torch; print(torch.__version__)"
 
 1. [任务、数据与泛化](01-machine-learning-data-and-generalization.md)：从一条带答案的样本开始，理解训练、验证和测试为什么不能混用。
 2. [张量、形状与自动求导](02-tensor-linear-algebra-and-gradients.md)：认识 PyTorch 存放数据的方式，并亲眼看一次导数如何给出调整方向。
-3. [第一个训练循环](03-neural-network-training-loop.md)：把前面的部件连起来，完成一次真正的训练、验证和排错。
-4. [从项目入口读 PyTorch 推理](04-project-inference-reading-map.md)：以 CleanCanvas Studio 为例，建立“媒体任务、mask、模型引擎、输出”的调用全景。
-5. [图像如何变成模型张量](05-image-tensor-preprocessing-and-inpainting.md)：逐步读懂 BGR/RGB、`uint8`/`float32`、NCHW、padding、mask 与后处理。
-6. [加载权重、选择设备与推理模式](06-model-loading-device-and-inference-mode.md)：解释 TorchScript、checkpoint、`state_dict`、CUDA 回退、`eval()`、FP16 与 `inference_mode()`。
-7. [Real-ESRGAN 的网络与分块推理](07-realesrgan-network-and-tiled-inference.md)：从卷积、残差、稠密连接到 4×超分、`PixelShuffle`、tile 与显存控制。
-8. [项目面试题与代码阅读清单](08-project-interview-and-debugging.md)：把前文汇总为可以用自己的话回答的项目问题、排障路径与边界。
+3. [神经网络、前向传播与激活函数](02-1-neural-networks-forward-and-activation.md)：从单个线性层进入 `nn.Module`，理解多层网络为何需要非线性。
+4. [损失函数、反向传播与梯度下降](02-2-loss-functions-and-backpropagation.md)：建立“任务、输出、标签、损失、梯度”的完整对应关系。
+5. [第一个训练循环](03-neural-network-training-loop.md)：把前面的部件连起来，完成一次真正的训练、验证和排错。
+6. [从项目入口读 PyTorch 推理](04-project-inference-reading-map.md)：以 CleanCanvas Studio 为例，建立“媒体任务、mask、模型引擎、输出”的调用全景。
+7. [图像如何变成模型张量](05-image-tensor-preprocessing-and-inpainting.md)：逐步读懂 BGR/RGB、`uint8`/`float32`、NCHW、padding、mask 与后处理。
+8. [加载权重、选择设备与推理模式](06-model-loading-device-and-inference-mode.md)：解释 TorchScript、checkpoint、`state_dict`、CUDA 回退、`eval()`、FP16 与 `inference_mode()`。
+9. [Real-ESRGAN 的网络与分块推理](07-realesrgan-network-and-tiled-inference.md)：从卷积、残差、稠密连接到 4×超分、`PixelShuffle`、tile 与显存控制。
+10. [项目面试题与代码阅读清单](08-project-interview-and-debugging.md)：把前文汇总为可以用自己的话回答的项目问题、排障路径与边界。
 
 建议采用“读一小节、运行一段、故意改坏一次、再改回来”的节奏。比如把 `batch_size=32` 改成 `16`，观察输出是否仍合理；或删掉 `optimizer.step()`，观察模型为何不再进步。对初学者来说，能解释一次失败，常常比顺利运行十次更有价值。
 

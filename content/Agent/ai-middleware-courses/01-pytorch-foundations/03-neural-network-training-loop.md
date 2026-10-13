@@ -202,4 +202,4 @@ for epoch in range(1, 31):
 
 至此，你已经可以理解并改写最小 PyTorch 训练脚本。下一阶段再学习 Transformer、embedding 或重排序模型时，仍然可以回到同一条主线：输入是什么、预测是什么、损失如何产生梯度、参数在哪里更新，以及用什么数据评价结果。
 
-接下来请继续阅读[沿着 CleanCanvas Studio 读懂 PyTorch 图像推理调用链](04-project-inference-reading-map.md)，将训练时建立的张量、模型和推理概念落实到本项目的图像修复与超分代码中。完成本专题后，再进入[深度学习与 Transformer 基础](../02-model-inference-and-rerank/01-deep-learning-transformer-foundations.md)，把同一套逻辑放入文本 token、embedding 和排序模型的真实结构中。
+接下来请继续阅读[优化器、批训练、正则化与训练稳定性](03a-optimizers-regularization-and-training-stability.md)，把这个最小闭环扩展为可控、可评估的训练实验。完成训练基础补充后，再进入[沿着 CleanCanvas Studio 读懂 PyTorch 图像推理调用链](04-project-inference-reading-map.md)，将这些概念落实到项目的图像修复与超分代码中。

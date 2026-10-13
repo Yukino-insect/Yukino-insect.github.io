@@ -74,11 +74,15 @@ python -c "import torch; print(torch.__version__)"
 3. [神经网络、前向传播与激活函数](02-1-neural-networks-forward-and-activation.md)：从单个线性层进入 `nn.Module`，理解多层网络为何需要非线性。
 4. [损失函数、反向传播与梯度下降](02-2-loss-functions-and-backpropagation.md)：建立“任务、输出、标签、损失、梯度”的完整对应关系。
 5. [第一个训练循环](03-neural-network-training-loop.md)：把前面的部件连起来，完成一次真正的训练、验证和排错。
-6. [从项目入口读 PyTorch 推理](04-project-inference-reading-map.md)：以 CleanCanvas Studio 为例，建立“媒体任务、mask、模型引擎、输出”的调用全景。
-7. [图像如何变成模型张量](05-image-tensor-preprocessing-and-inpainting.md)：逐步读懂 BGR/RGB、`uint8`/`float32`、NCHW、padding、mask 与后处理。
-8. [加载权重、选择设备与推理模式](06-model-loading-device-and-inference-mode.md)：解释 TorchScript、checkpoint、`state_dict`、CUDA 回退、`eval()`、FP16 与 `inference_mode()`。
-9. [Real-ESRGAN 的网络与分块推理](07-realesrgan-network-and-tiled-inference.md)：从卷积、残差、稠密连接到 4×超分、`PixelShuffle`、tile 与显存控制。
-10. [项目面试题与代码阅读清单](08-project-interview-and-debugging.md)：把前文汇总为可以用自己的话回答的项目问题、排障路径与边界。
+6. [优化器、批训练、正则化与训练稳定性](03a-optimizers-regularization-and-training-stability.md)：理解学习率、AdamW、正则化、梯度裁剪与最佳 checkpoint。
+7. [评估指标与分类阈值](03b-evaluation-metrics-and-thresholds.md)：用混淆矩阵、Precision、Recall、F1 与错误代价评价模型。
+8. [网络架构与迁移学习](03c-network-architectures-and-transfer-learning.md)：分清 MLP、CNN、RNN、Transformer 的归纳偏置和预训练策略。
+9. [训练实验与诊断](03d-training-experiments-and-diagnostics.md)：建立可追溯实验，并按固定顺序定位 loss、数值与泛化问题。
+10. [从项目入口读 PyTorch 推理](04-project-inference-reading-map.md)：以 CleanCanvas Studio 为例，建立“媒体任务、mask、模型引擎、输出”的调用全景。
+11. [图像如何变成模型张量](05-image-tensor-preprocessing-and-inpainting.md)：逐步读懂 BGR/RGB、`uint8`/`float32`、NCHW、padding、mask 与后处理。
+12. [加载权重、选择设备与推理模式](06-model-loading-device-and-inference-mode.md)：解释 TorchScript、checkpoint、`state_dict`、CUDA 回退、`eval()`、FP16 与 `inference_mode()`。
+13. [Real-ESRGAN 的网络与分块推理](07-realesrgan-network-and-tiled-inference.md)：从卷积、残差、稠密连接到 4×超分、`PixelShuffle`、tile 与显存控制。
+14. [项目面试题与代码阅读清单](08-project-interview-and-debugging.md)：把前文汇总为可以用自己的话回答的项目问题、排障路径与边界。
 
 建议采用“读一小节、运行一段、故意改坏一次、再改回来”的节奏。比如把 `batch_size=32` 改成 `16`，观察输出是否仍合理；或删掉 `optimizer.step()`，观察模型为何不再进步。对初学者来说，能解释一次失败，常常比顺利运行十次更有价值。
 

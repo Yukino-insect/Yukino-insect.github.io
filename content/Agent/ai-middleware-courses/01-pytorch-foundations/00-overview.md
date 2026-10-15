@@ -78,7 +78,9 @@ python -c "import torch; print(torch.__version__)"
 7. [评估指标与分类阈值](03b-evaluation-metrics-and-thresholds.md)：用混淆矩阵、Precision、Recall、F1 与错误代价评价模型。
 8. [网络架构与迁移学习](03c-network-architectures-and-transfer-learning.md)：分清 MLP、CNN、RNN、Transformer 的归纳偏置和预训练策略。
 9. [训练实验与诊断](03d-training-experiments-and-diagnostics.md)：建立可追溯实验，并按固定顺序定位 loss、数值与泛化问题。
-10. [从项目入口读 PyTorch 推理](04-project-inference-reading-map.md)：以 CleanCanvas Studio 为例，建立“媒体任务、mask、模型引擎、输出”的调用全景。
+10. [项目实战总览：从机器学习到预训练模型推理](04-project-inference-reading-map.md)：先用可运行的预训练模型例子，再以 CleanCanvas Studio 为例建立“媒体任务、mask、模型引擎、输出”的调用全景。
+11. [PyTorch 预训练模型推理详解](04a-pretrained-model-inference-tutorial.md)：从分类器、`state_dict`、TorchScript 到 LaMa 和 Real-ESRGAN，完整走一遍模型输入、前向计算与输出后处理。
+12. [图像张量基础：NumPy 与 PyTorch 的数组、通道、mask 和内存](04b-image-arrays-numpy-pytorch.md)：补齐图像 shape、dtype、颜色顺序、切片、设备和 mask 的基础。
 11. [图像如何变成模型张量](05-image-tensor-preprocessing-and-inpainting.md)：逐步读懂 BGR/RGB、`uint8`/`float32`、NCHW、padding、mask 与后处理。
 12. [加载权重、选择设备与推理模式](06-model-loading-device-and-inference-mode.md)：解释 TorchScript、checkpoint、`state_dict`、CUDA 回退、`eval()`、FP16 与 `inference_mode()`。
 13. [Real-ESRGAN 的网络与分块推理](07-realesrgan-network-and-tiled-inference.md)：从卷积、残差、稠密连接到 4×超分、`PixelShuffle`、tile 与显存控制。

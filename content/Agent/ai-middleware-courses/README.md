@@ -23,7 +23,7 @@ title = '跨领域中间件与模型服务课程索引'
 
 ### PyTorch 与图像深度学习：从基础到项目推理
 
-如果你刚接触 PyTorch，先从这里开始。它先把“模型为什么能从数据中学习”拆成数据、张量、神经网络、损失、梯度与训练循环，再以 CleanCanvas Studio 的 LaMa、Manga 与 Real-ESRGAN 代码讲解图像张量、TorchScript、权重加载、CPU/GPU、FP16、卷积网络和分块推理。学完后，你可以顺着真实项目代码理解推理链路，而不必把 `loss.backward()` 或 `model.to(device)` 当作必须照念的咒语。
+如果你刚接触 PyTorch，先从这里开始。它先把“模型为什么能从数据中学习”拆成数据、张量、神经网络、损失、梯度与训练循环，再以 [CleanCanvas Studio GitHub 仓库](https://github.com/Yukino-insect/clean-canvas-studio) 的 LaMa、Manga 与 Real-ESRGAN 代码讲解图像张量、TorchScript、权重加载、CPU/GPU、FP16、卷积网络和分块推理。项目篇先给通用的预训练模型下载与使用例子，再进入具体代码，避免把 `loss.backward()` 或 `model.to(device)` 当作必须照念的咒语。
 
 - [零基础 PyTorch 课程导读：从 Python 程序到第一个会学习的模型](01-pytorch-foundations/00-overview.md)
 - [机器学习零基础：样本、训练集、验证集与泛化](01-pytorch-foundations/01-machine-learning-data-and-generalization.md)
@@ -36,6 +36,8 @@ title = '跨领域中间件与模型服务课程索引'
 - [深度学习架构入门：MLP、CNN、RNN、Transformer 与迁移学习](01-pytorch-foundations/03c-network-architectures-and-transfer-learning.md)
 - [PyTorch 训练诊断：实验复现、Loss 排查与泛化问题定位](01-pytorch-foundations/03d-training-experiments-and-diagnostics.md)
 - [项目实战：沿着 CleanCanvas Studio 读懂 PyTorch 图像推理调用链](01-pytorch-foundations/04-project-inference-reading-map.md)
+- [PyTorch 预训练模型推理详解：从分类器到 CleanCanvas 的图像模型](01-pytorch-foundations/04a-pretrained-model-inference-tutorial.md)
+- [图像张量基础：NumPy 与 PyTorch 的数组、通道、mask 和内存](01-pytorch-foundations/04b-image-arrays-numpy-pytorch.md)
 - [项目实战：图像如何变成 PyTorch 张量——预处理、mask 与 LaMa 修复](01-pytorch-foundations/05-image-tensor-preprocessing-and-inpainting.md)
 - [项目实战：加载预训练权重、选择 CPU/GPU 与正确进入推理模式](01-pytorch-foundations/06-model-loading-device-and-inference-mode.md)
 - [项目实战：从卷积网络到分块推理——读懂 Real-ESRGAN 超分代码](01-pytorch-foundations/07-realesrgan-network-and-tiled-inference.md)

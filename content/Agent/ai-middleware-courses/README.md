@@ -28,6 +28,7 @@ title = '跨领域中间件与模型服务课程索引'
 - [零基础 PyTorch 课程导读：从 Python 程序到第一个会学习的模型](01-pytorch-foundations/00-overview.md)
 - [机器学习零基础：样本、训练集、验证集与泛化](01-pytorch-foundations/01-machine-learning-data-and-generalization.md)
 - [PyTorch 零基础：张量、形状与自动求导](01-pytorch-foundations/02-tensor-linear-algebra-and-gradients.md)
+- [PyTorch 自动求导与模型参数：计算图、Tensor 存储、state_dict 和 checkpoint](01-pytorch-foundations/02-0-autograd-computation-graph-and-model-state.md)
 - [深度学习零基础：神经网络、前向传播与激活函数](01-pytorch-foundations/02-1-neural-networks-forward-and-activation.md)
 - [深度学习零基础：损失函数、反向传播与梯度下降](01-pytorch-foundations/02-2-loss-functions-and-backpropagation.md)
 - [PyTorch 零基础实战：写出第一个训练循环并学会排错](01-pytorch-foundations/03-neural-network-training-loop.md)

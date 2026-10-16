@@ -71,16 +71,17 @@ python -c "import torch; print(torch.__version__)"
 
 1. [任务、数据与泛化](01-machine-learning-data-and-generalization.md)：从一条带答案的样本开始，理解训练、验证和测试为什么不能混用。
 2. [张量、形状与自动求导](02-tensor-linear-algebra-and-gradients.md)：认识 PyTorch 存放数据的方式，并亲眼看一次导数如何给出调整方向。
-3. [神经网络、前向传播与激活函数](02-1-neural-networks-forward-and-activation.md)：从单个线性层进入 `nn.Module`，理解多层网络为何需要非线性。
-4. [损失函数、反向传播与梯度下降](02-2-loss-functions-and-backpropagation.md)：建立“任务、输出、标签、损失、梯度”的完整对应关系。
-5. [第一个训练循环](03-neural-network-training-loop.md)：把前面的部件连起来，完成一次真正的训练、验证和排错。
-6. [优化器、批训练、正则化与训练稳定性](03a-optimizers-regularization-and-training-stability.md)：理解学习率、AdamW、正则化、梯度裁剪与最佳 checkpoint。
-7. [评估指标与分类阈值](03b-evaluation-metrics-and-thresholds.md)：用混淆矩阵、Precision、Recall、F1 与错误代价评价模型。
-8. [网络架构与迁移学习](03c-network-architectures-and-transfer-learning.md)：分清 MLP、CNN、RNN、Transformer 的归纳偏置和预训练策略。
-9. [训练实验与诊断](03d-training-experiments-and-diagnostics.md)：建立可追溯实验，并按固定顺序定位 loss、数值与泛化问题。
-10. [项目实战总览：从机器学习到预训练模型推理](04-project-inference-reading-map.md)：先用可运行的预训练模型例子，再以 CleanCanvas Studio 为例建立“媒体任务、mask、模型引擎、输出”的调用全景。
-11. [PyTorch 预训练模型推理详解](04a-pretrained-model-inference-tutorial.md)：从分类器、`state_dict`、TorchScript 到 LaMa 和 Real-ESRGAN，完整走一遍模型输入、前向计算与输出后处理。
-12. [图像张量基础：NumPy 与 PyTorch 的数组、通道、mask 和内存](04b-image-arrays-numpy-pytorch.md)：补齐图像 shape、dtype、颜色顺序、切片、设备和 mask 的基础。
+3. [自动求导与模型参数](02-0-autograd-computation-graph-and-model-state.md)：从计算图、`nn.Parameter`、优化器状态到 `state_dict`、checkpoint 和 TorchScript，回答参数和梯度究竟存在哪里。
+4. [神经网络、前向传播与激活函数](02-1-neural-networks-forward-and-activation.md)：从单个线性层进入 `nn.Module`，理解多层网络为何需要非线性。
+5. [损失函数、反向传播与梯度下降](02-2-loss-functions-and-backpropagation.md)：建立“任务、输出、标签、损失、梯度”的完整对应关系。
+6. [第一个训练循环](03-neural-network-training-loop.md)：把前面的部件连起来，完成一次真正的训练、验证和排错。
+7. [优化器、批训练、正则化与训练稳定性](03a-optimizers-regularization-and-training-stability.md)：理解全量/小批量梯度的统计意义、SGD、Momentum、AdamW、正则化、梯度裁剪与最佳 checkpoint。
+8. [评估指标与分类阈值](03b-evaluation-metrics-and-thresholds.md)：用混淆矩阵、Precision、Recall、F1 与错误代价评价模型。
+9. [网络架构与迁移学习](03c-network-architectures-and-transfer-learning.md)：分清 MLP、CNN、RNN、Transformer 的归纳偏置、计算结构与预训练策略。
+10. [训练实验与诊断](03d-training-experiments-and-diagnostics.md)：建立可追溯实验，并按固定顺序定位 loss、数值与泛化问题。
+11. [项目实战总览：从机器学习到预训练模型推理](04-project-inference-reading-map.md)：先用可运行的预训练模型例子，再以 CleanCanvas Studio 为例建立“媒体任务、mask、模型引擎、输出”的调用全景。
+12. [PyTorch 预训练模型推理详解](04a-pretrained-model-inference-tutorial.md)：从分类器、`state_dict`、TorchScript 到 LaMa 和 Real-ESRGAN，完整走一遍模型输入、前向计算与输出后处理。
+13. [图像张量基础：NumPy 与 PyTorch 的数组、通道、mask 和内存](04b-image-arrays-numpy-pytorch.md)：补齐图像 shape、dtype、颜色顺序、切片、设备和 mask 的基础。
 11. [图像如何变成模型张量](05-image-tensor-preprocessing-and-inpainting.md)：逐步读懂 BGR/RGB、`uint8`/`float32`、NCHW、padding、mask 与后处理。
 12. [加载权重、选择设备与推理模式](06-model-loading-device-and-inference-mode.md)：解释 TorchScript、checkpoint、`state_dict`、CUDA 回退、`eval()`、FP16 与 `inference_mode()`。
 13. [Real-ESRGAN 的网络与分块推理](07-realesrgan-network-and-tiled-inference.md)：从卷积、残差、稠密连接到 4×超分、`PixelShuffle`、tile 与显存控制。

@@ -175,10 +175,50 @@ main[role="main"] {
     line-height: 1.82;
 }
 
+/*
+ * 宽屏两列分类页：标题区仍沿用“头像 → 标题 → 导语”的紧凑节奏，
+ * 但导语与下方 720px 的两列卡片使用相同左右边界。
+ */
+@media (min-width: 1120px) {
+    .group-hero--two-column-lanes {
+        grid-template-columns: 92px 40px minmax(0, 720px) minmax(0, 1fr);
+        column-gap: 24px;
+        row-gap: 24px;
+    }
+
+    .group-hero--two-column-lanes .group-cover {
+        grid-column: 1;
+        grid-row: 1 / span 3;
+    }
+
+    .group-hero--two-column-lanes .group-title-block {
+        grid-column: 2 / -1;
+        grid-row: 1;
+    }
+
+    .group-hero--two-column-lanes .group-lead {
+        grid-column: 3;
+        grid-row: 2;
+        width: 100%;
+        max-width: none;
+        margin: 0;
+    }
+}
+
 .lane-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 18px;
+}
+
+/*
+ * 三个及以内的二级分类保持三栏，避免少量卡片显得过宽；
+ * 超过三个时改为两栏，并限制网格宽度，让卡片仍以页面中心为基准排列。
+ */
+.lane-grid--two-columns {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: min(720px, 100%);
+    margin: 0 auto;
 }
 
 .lane-card {
@@ -814,7 +854,7 @@ main[role="main"] {
       {{ end }}
     </div>
   {{ else if $currentGroup.title }}
-    <div class="group-hero">
+    <div class="group-hero{{ if gt (len $currentGroup.lanes) 3 }} group-hero--two-column-lanes{{ end }}">
       <div class="group-cover">
         {{ if gt (len $secondaryIcons) 0 }}
           <img class="js-random-secondary-cover" src="{{ index $secondaryIcons 0 }}" alt="{{ $currentGroup.title }}">
@@ -822,14 +862,14 @@ main[role="main"] {
           <div class="group-cover-fallback">{{ upper (slicestr $currentGroup.title 0 1) }}</div>
         {{ end }}
       </div>
-      <div>
+      <div class="group-title-block">
         <div class="group-kicker">{{ $currentGroup.subtitle }}</div>
         <h1 class="group-title">{{ $currentGroup.title }}</h1>
       </div>
       <p class="group-lead">{{ $currentGroup.lead }}</p>
     </div>
 
-    <div class="lane-grid">
+    <div class="lane-grid{{ if gt (len $currentGroup.lanes) 3 }} lane-grid--two-columns{{ end }}">
       {{ range $lane := $currentGroup.lanes }}
         <a class="lane-card" href="/groups/{{ $currentGroup.slug }}/{{ $lane.slug }}/">
           <div class="lane-title">{{ $lane.title }}</div>

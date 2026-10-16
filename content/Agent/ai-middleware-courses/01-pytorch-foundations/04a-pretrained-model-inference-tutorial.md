@@ -2,6 +2,7 @@
 date = '2026-10-15T21:00:00+08:00'
 draft = false
 title = 'PyTorch 预训练模型推理详解：从分类器到 CleanCanvas 的图像模型'
+math = true
 +++
 
 前一篇建立了 CleanCanvas Studio 的项目地图，但地图不能代替走一遍道路。本篇专门回答一个更具体的问题：**拿到一个已经训练好的 PyTorch 模型后，程序究竟怎样完成一次推理？**
@@ -235,6 +236,40 @@ result_bgr = cv2.cvtColor((result * 255).round().astype(np.uint8), cv2.COLOR_RGB
 这就是“深入实际模型”的正确入口：不是先记住整个项目的类层次，而是先用小例子掌握推理协议，再逐个验证真实模型在哪些地方增加了输入、状态和后处理复杂度。
 
 如果你对 `HWC`、`CHW`、mask、NumPy 切片或 CPU/GPU Tensor 还不熟，请先阅读[图像张量基础：NumPy 与 PyTorch 的数组、通道、mask 和内存](04b-image-arrays-numpy-pytorch.md)，再继续看 LaMa 的预处理代码。
+
+## 把模型推理真正跑在 CleanCanvas 上
+
+前面的最小代码帮助你理解模型边界；接下来可以在 [CleanCanvas Studio 仓库](https://github.com/Yukino-insect/clean-canvas-studio) 实际运行同一条推理链。以下命令以 Windows PowerShell、CPython 3.12 和 CPU 为例；GPU wheel、PaddleOCR 与模型缓存的具体要求应以仓库当前 README 为准。
+
+```powershell
+git clone https://github.com/Yukino-insect/clean-canvas-studio.git
+Set-Location clean-canvas-studio
+
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+.\scripts\install-runtime.ps1 -TorchBackend cpu -Python .\.venv\Scripts\python.exe
+```
+
+先不依赖 OCR，也不依赖 GUI。准备一张 `input.png`，选择一个明确包含水印的区域，执行：
+
+```powershell
+python backend/main.py `
+  -i .\input.png `
+  -o .\output.png `
+  --mode anime_lama --device cpu --no-ocr `
+  --manual-area 120 560 620 710
+```
+
+`--manual-area` 的四个数创建最终 mask；项目将 OpenCV BGR `uint8` 图像和该 mask 传给 `TorchScriptLaMaEngine.inpaint()`。首次选择 AI 模式时，仓库会按自己的模型缓存策略校验或下载所需权重；之后才进入本篇案例三讲解的 TorchScript 前向推理。命令完成后应检查三件事，而不是只看“没有报错”：
+
+1. `output.png` 的尺寸应与输入相同；
+2. mask 外像素应保持原图不变；
+3. mask 内是否既清除了水印，也没有重建明显错误的线条、文字或人物细节。
+
+要验证 Real-ESRGAN，应在 GUI 的“画质增强”页面选择 Anime 或 General 模式，或跟随仓库当前 README 的增强命令。它的输出原生为 4×，请求 1×、1.5×、2×或 3×时会先进行 4×网络推理，再缩放到目标大小；因此“输出不是精确 4×”不表示模型没有运行。
+
+这个步骤的价值在于把抽象知识落到可观察现象：断网会停在权重获取，颜色异常通常出在 BGR/RGB 边界，设备错误出在 `.to(device)`，显存不足通常和输入尺寸/tile 有关，而不是被一个笼统的“AI 模型坏了”掩盖。
 
 ## 小结
 

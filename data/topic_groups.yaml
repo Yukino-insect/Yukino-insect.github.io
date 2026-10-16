@@ -44,6 +44,10 @@ groups:
             summary: 权限、文件描述符、多路复用、性能观察。
             sections:
               - linux
+      - title: 工程环境与启动链路
+        slug: platform-engineering
+        summary: 容器如何交付应用，以及程序如何从内核启动到第一行 C 代码。
+        modules:
           - title: Docker 容器技术教程
             summary: 从容器、镜像与 Compose 入门，到网络存储、构建优化、底层隔离和工程化运维。
             sort: file
@@ -166,14 +170,28 @@ groups:
             summary: 缓存并不是把数据塞进去就完事，它也有自己的秩序。
             sections:
               - redis
-      - title: 搜索、对象存储与分析
-        slug: search-sync
-        summary: 搜索与同步、S3 对象存储、向量与图检索，以及 ClickHouse 分析型数据库。
+      - title: 搜索与知识检索
+        slug: search-retrieval
+        summary: 全文检索、向量检索与图检索分别如何找到需要的数据。
         modules:
           - title: Elasticsearch
             summary: 检索、聚合、同义词、同步方案和并发问题。
             sections:
               - elasticsearch
+          - title: 向量数据库与向量检索
+            summary: Embedding、ANN、pgvector 与 Milvus 的数据模型、索引参数、压测、迁移与恢复。
+            sort: file
+            paths:
+              - VectorDB/vector-database-course/
+          - title: 图数据库、知识图谱与图检索
+            summary: Neo4j、Cypher、APOC、GDS、数据摄取、备份恢复；GraphRAG 仅作为一项应用。
+            sort: file
+            paths:
+              - GraphDB/graph-database-course/
+      - title: 对象与分析存储
+        slug: object-analytics
+        summary: 面向文件、对象和海量分析数据的存储模型、接口与运维方式。
+        modules:
           - title: OSS 与文件存储
             summary: MinIO、对象存储、文件访问路径和上传下载链路。
             paths:
@@ -185,16 +203,6 @@ groups:
             sort: file
             paths:
               - OSS/object-storage-course/
-          - title: 向量数据库与向量检索
-            summary: Embedding、ANN、pgvector 与 Milvus 的数据模型、索引参数、压测、迁移与恢复。
-            sort: file
-            paths:
-              - VectorDB/vector-database-course/
-          - title: 图数据库、知识图谱与图检索
-            summary: Neo4j、Cypher、APOC、GDS、数据摄取、备份恢复；GraphRAG 仅作为一项应用。
-            sort: file
-            paths:
-              - GraphDB/graph-database-course/
           - title: ClickHouse 列式分析数据库
             summary: MergeTree、排序键、分区、批量摄入、系统表、TTL、备份与恢复。
             sort: file
@@ -247,12 +255,12 @@ groups:
     sections:
       - agent
     lanes:
-      - title: RAG 与 Agent
-        slug: rag-agent
-        summary: 从 RAG 基础、知识库建设、模型调度、问答链路到评测和面试表达。
+      - title: RAG 与知识库
+        slug: rag-knowledge
+        summary: 从检索增强生成的基本链路，到知识库构建、评测与改进。
         modules:
-          - title: RAG 与 Agentic AI 工程课程
-            summary: 按课程章节组织的系列文章。
+          - title: RAG 工程课程
+            summary: 以检索、知识库和评测为主线，建立可验证的 RAG 闭环。
             intro:
               title: 课程导读
               path: Agent/ai-course/README.md
@@ -261,16 +269,31 @@ groups:
                 path: Agent/ai-course/01-rag-basics/
               - title: 知识库建设
                 path: Agent/ai-course/02-knowledge-base/
+              - title: RAG 评测
+                path: Agent/ai-course/05-rag-evaluation/
+      - title: Agent 应用与运行时
+        slug: agent-applications
+        summary: 模型调度、问答链路、工具调用与 Java Agent 运行时的实现边界。
+        modules:
+          - title: Agent 应用工程课程
+            summary: 从模型路由到问答状态、流式响应，再落到 Java Agent 框架实战。
+            sort: file
+            tabs:
               - title: 模型调度
                 path: Agent/ai-course/03-model-infra/
               - title: 知识问答
                 path: Agent/ai-course/04-ai-qa/
-              - title: RAG 评测
-                path: Agent/ai-course/05-rag-evaluation/
-              - title: 面试考点
-                path: Agent/ai-course/06-interview/
               - title: Java Agent 框架实战
                 path: Agent/ai-course/07-java-agent-runtime/
+          - title: RAG 工程面试要点
+            summary: 用框架选择、语言选型和存储方案比较，检验是否理解系统的取舍。
+            sort: file
+            paths:
+              - Agent/ai-course/06-interview/
+      - title: Agent 框架与协作
+        slug: agent-tooling
+        summary: 用 LangChain、LangGraph 与可复用的 Agent 能力组织多步骤工作流。
+        modules:
           - title: LangChain 与 LangGraph
             summary: LangChain、LangGraph、LangSmith、CLI、Server 和 Prompt 工程相关笔记。
             paths:
@@ -282,9 +305,9 @@ groups:
             summary: 从 Prompt、项目指令与可复用工作流，到外部工具连接和能力分发，建立一套不混淆职责的 Agent 工程认知。
             paths:
               - Agent/AgentEngineering/
-      - title: AI 模型服务与可观测性
-        slug: ai-middleware
-        summary: 模型推理、文档智能与 LLM/Agent 运行治理；数据存储和分布式协调请在各自分类学习。
+      - title: 模型训练与推理
+        slug: model-development
+        summary: 用数据、梯度和模型服务把训练概念连接到可部署的推理链路。
         modules:
           - title: PyTorch 与图像深度学习：从基础到项目推理
             summary: 从数据、梯度与训练循环入门，结合 CleanCanvas Studio 的 LaMa、Manga 和 Real-ESRGAN 代码理解图像张量、权重、设备、FP16、卷积与分块推理。
@@ -296,6 +319,10 @@ groups:
             sort: file
             paths:
               - Agent/ai-middleware-courses/02-model-inference-and-rerank/
+      - title: 文档智能与运行治理
+        slug: document-operations
+        summary: 让文档解析服务可用、可观测、可持续运行，而不是只在演示时成功。
+        modules:
           - title: 文档智能与 OCR
             summary: OCR、版面分析、结构化文档资产、异步任务与解析服务部署。
             sort: file
@@ -317,15 +344,19 @@ groups:
       - middleware
       - git
     lanes:
-      - title: 零散问题
-        slug: fragmented-questions
-        summary: 日常项目经验、方案设计、通用中间件、工程问题和一些临时想法。
+      - title: 工程杂项
+        slug: engineering-notes
+        summary: 日常项目经验、方案设计、通用中间件与暂不属于单一技术栈的工程问题。
         modules:
           - title: 胡思乱想
             summary: 项目经验、方案设计、Canal、Nginx、FTP 和其他暂时不必单独成类的工程问题。
             sections:
               - randomthoughts
               - middleware
+      - title: 英语学习
+        slug: english-study
+        summary: 先按语法问题检索，再沿长难句和翻译课程建立系统理解。
+        modules:
           - title: 英语语法问题索引
             summary: 介词、名词作定语、固定句式与易混小词等可按问题查阅的语法笔记。
             paths:
@@ -337,11 +368,22 @@ groups:
             paths:
               - English/exam-grammar-course/
             sort: file
-          - title: 数学
-            summary: 从极限、连续到微分，讨论变化如何被精确地描述。
+      - title: 数学学习
+        slug: mathematics
+        summary: 从数学分析的基本概念开始，再进入排列组合的计数与构造问题。
+        modules:
+          - title: 数学分析与基础数学
+            summary: 从函数、极限、连续到微分，讨论变化如何被精确地描述；排列组合课程单列在下方。
             sort: file
-            sections:
-              - math
+            paths:
+              - Math/
+            excludePaths:
+              - Math/permutation-combinatorics/
+          - title: 排列组合与全排列
+            summary: 从计数原理、排列和组合出发，理解全排列、去重、字典序、逆序数与康托展开，并知道何时不该枚举。
+            sort: file
+            paths:
+              - Math/permutation-combinatorics/
       - title: Git
         slug: git
         summary: Git 命令、分支、提交对象和日常协作。

@@ -2,6 +2,7 @@
 date = '2026-10-09T20:00:00+08:00'
 draft = false
 title = '项目实战：图像如何变成 PyTorch 张量——预处理、mask 与 LaMa 修复'
+math = true
 +++
 
 深度学习图像代码最容易让初学者困惑的部分，往往不是网络，而是网络前后的十几行转换。它们看似只是 `transpose`、`astype`、`unsqueeze`，却决定模型看到的是正确颜色、正确范围、正确形状，还是一张被悄悄打乱的数据。以 `TorchScriptLaMaEngine.inpaint()` 为例，我们把这条链路完整拆开。

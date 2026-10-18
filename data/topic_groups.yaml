@@ -15,12 +15,22 @@ groups:
         slug: systems
         summary: 计算机组成、操作系统、进程线程、内存与 I/O。
         modules:
-          - title: 组成原理与操作系统
-            summary: CPU、进程、线程、内存、磁盘这些不常露面但始终在场的东西。
+          - title: 数据表示与校验编码
+            summary: 进制、补码、字符编码，以及奇偶校验、汉明码、CRC 和 ECC 的工作边界。
             paths:
-              - ComputerOrganization/
-            excludePaths:
-              - ComputerOrganization/data-representation-course/
+              - ComputerOrganization/01-data-representation/
+          - title: CPU、总线与主存
+            summary: 时钟周期、地址总线、Cache、物理地址、RAM/ROM 与 CPU 的基本运行方式。
+            paths:
+              - ComputerOrganization/02-cpu-memory/
+          - title: 操作系统、进程与虚拟内存
+            summary: 用户态与内核态、进程线程、中断、页表、虚拟内存和 I/O 抽象。
+            paths:
+              - ComputerOrganization/03-operating-systems/
+          - title: 文件系统与程序装载
+            summary: 磁盘空间、文件位置、页缓存、ELF，以及代码从存储介质进入 CPU 的过程。
+            paths:
+              - ComputerOrganization/04-files-and-programs/
           - title: 数据表示与文本处理课程
             summary: 从比特、类型、整数和浮点数，到 Unicode、字符串、文件与网络中的编码边界。
             sort: file
@@ -53,11 +63,26 @@ groups:
             sort: file
             paths:
               - Docker/docker-course/
-          - title: RISC-V 汇编与内核启动
-            summary: 从寄存器、调用约定和栈，到 xv6 进入第一个 C 函数之前发生的事。
+          - title: RISC-V 汇编基础
+            summary: CPU 如何执行指令、寄存器和最小程序，以及标签、伪指令、段和汇编方言。
             sort: file
-            sections:
-              - assembly
+            paths:
+              - Assembly/01-riscv-and-assembly-basics/
+          - title: 启动环境、栈与链接
+            summary: 调用约定、栈帧、QEMU、链接脚本和特权级如何共同准备内核启动环境。
+            sort: file
+            paths:
+              - Assembly/02-boot-and-linking/
+          - title: 特权级、页表与 CSR
+            summary: RISC-V 的 M/S/U 特权级、trap、Sv39 页表、TLB、CSR 和内存顺序。
+            sort: file
+            paths:
+              - Assembly/03-privilege-and-memory/
+          - title: xv6 早期启动
+            summary: 从 entry.S 设置栈，到第一张页表和 riscv.h 中的底层系统接口。
+            sort: file
+            paths:
+              - Assembly/04-xv6-startup/
       - title: 算法能力
         slug: algorithms
         summary: 大学算法设计、考研数据结构、排序、查找、字符串与常见题型。
@@ -74,21 +99,42 @@ groups:
                 path: Algorithm/university-algorithms-course/02-design/
               - title: 考研数据结构
                 path: Algorithm/考研数据结构/
-          - title: 经典数据结构与算法题
-            summary: 二分、链表、树、KMP、缓存和动态规划等独立练习；它们适合在学完课程后用来检验是否真的理解了。
+          - title: 线性结构、查找与字符串
+            summary: 二分、链表、滑动窗口、LRU、字符串转换与 KMP 等基础题型。
             paths:
-              - Algorithm/
-            excludePaths:
-              - Algorithm/university-algorithms-course/
-              - Algorithm/考研数据结构/
+              - Algorithm/01-linear-and-strings/
+          - title: 树与二叉树
+            summary: 树的基本概念、平衡判断、右视图与二叉搜索树的第 k 大问题。
+            paths:
+              - Algorithm/02-trees/
+          - title: 排序与选择
+            summary: 快速排序、归并排序、堆排序，以及借助分区寻找第 k 大元素。
+            paths:
+              - Algorithm/03-sorting-and-selection/
+          - title: 动态规划与回溯
+            summary: 用零钱兑换和复原 IP 地址理解状态转移与搜索分支。
+            paths:
+              - Algorithm/04-dynamic-and-backtracking/
       - title: 网络基础
         slug: network
         summary: DNS、TCP、HTTPS、代理、跨域与浏览器请求行为。
         modules:
-          - title: 互联网协议
-            summary: 从点击链接到服务返回之间发生的那些事。
-            sections:
-              - internet
+          - title: 网络分层与 TCP 基础
+            summary: 网络分层、子网掩码、TCP 报文与连接建立/关闭的基本机制。
+            paths:
+              - Internet/01-network-foundations/
+          - title: HTTP、HTTPS 与浏览器行为
+            summary: 跨域、协议升级、请求超时，以及快速点击链接时浏览器如何处理导航。
+            paths:
+              - Internet/02-http-and-browser/
+          - title: DNS、代理与连通性
+            summary: 域名解析、系统代理、内网穿透和 SSH 组成的访问链路。
+            paths:
+              - Internet/03-dns-proxy-and-connectivity/
+          - title: 网络安全与运维设备
+            summary: 证书、令牌认证和防火墙设备在网络边界中的职责。
+            paths:
+              - Internet/04-security-and-operations/
 
   - slug: java-stack
     title: Java
@@ -107,10 +153,22 @@ groups:
         slug: language
         summary: 类型、集合、异常、反射、IO、NIO 与常用 API。
         modules:
-          - title: 语言机制与设计思想
-            summary: 语言特性和标准库，写业务代码之前最好先把它们看顺眼。
-            sections:
-              - java
+          - title: 语言基础与对象模型
+            summary: 基本类型、对象、构造器、接口、枚举、字符串、值传递和表达式。
+            paths:
+              - Java/01-language-object-model/
+          - title: 集合与函数式处理
+            summary: 集合、优先队列、比较器、Fail-Fast、数组性能与 Stream 的执行边界。
+            paths:
+              - Java/02-collections-and-functional/
+          - title: 异常、反射与设计模式
+            summary: 异常的成本和捕获机制、反射，以及常见面向对象设计模式。
+            paths:
+              - Java/03-exceptions-reflection-design/
+          - title: I/O、NIO 与网络编程
+            summary: 文件、流、Channel/Buffer/Selector、URL、Socket 与 Netty 的线程分工。
+            paths:
+              - Java/04-io-and-networking/
       - title: Android 开发
         slug: android
         summary: 面向有 Java 基础的初学者，从项目结构和 UI 对象树进入资源、Activity、事件、布局与 APK 构建。
@@ -128,18 +186,46 @@ groups:
             summary: 对象、类加载、GC、调优，都是运行时给出的答案。
             sections:
               - jvm
-          - title: JUC 并发
-            summary: 线程协作、锁、AQS、线程池和异步编排。
-            sections:
-              - juc
+          - title: 线程生命周期与内存可见性
+            summary: 进程线程、线程创建与通信、CAS、volatile 和 ThreadLocal 的边界。
+            paths:
+              - JUC/01-threads-and-memory/
+          - title: 锁、AQS 与同步器
+            summary: synchronized、显式锁、AQS、读写锁、信号量、死锁与同步协调。
+            paths:
+              - JUC/02-locks-and-aqs/
+          - title: 并发容器与协作工具
+            summary: BlockingQueue、DelayQueue、CountDownLatch 和 CyclicBarrier 的使用场景。
+            paths:
+              - JUC/03-coordination-and-containers/
+          - title: 线程池与异步编排
+            summary: ThreadPoolExecutor、关闭与异常处理，以及 CompletableFuture 的任务组合。
+            paths:
+              - JUC/04-executors-and-futures/
       - title: Spring 生态
         slug: spring-ecosystem
         summary: 从 IoC、AOP、MVC 到 Boot、Security、Gateway、持久层和常用三方库。
         modules:
-          - title: Spring Framework
-            summary: 容器、Web、事务、安全和扩展点。
-            sections:
-              - spring
+          - title: Spring 核心容器与 Boot
+            summary: IoC、事件、扩展点、配置、自动装配、组件扫描与 Starter 的启动链路。
+            paths:
+              - Spring/01-core-and-boot/
+          - title: Web MVC 与响应式编程
+            summary: MVC、参数绑定、校验、上传、跨域、SSE、WebFlux 与异步请求边界。
+            paths:
+              - Spring/02-web-and-reactive/
+          - title: AOP、缓存与事务
+            summary: 横切逻辑、缓存、声明式事务和编程式事务如何共同组织业务一致性。
+            paths:
+              - Spring/03-data-and-transactions/
+          - title: Security 与 Gateway
+            summary: 方法授权、安全框架与网关在服务入口处的职责划分。
+            paths:
+              - Spring/04-security-and-gateway/
+          - title: 测试、日志与工程结构
+            summary: 单元/集成测试、日志、多模块工程、依赖打包与内嵌 Tomcat 的运行边界。
+            paths:
+              - Spring/05-testing-and-engineering/
           - title: MyBatis
             summary: SQL 映射、分页、事务、插件和 MyBatis-Plus。
             sections:
@@ -164,10 +250,22 @@ groups:
         slug: relational-database
         summary: SQL、事务、索引、锁、复制和表结构设计。
         modules:
-          - title: MySQL
-            summary: 从执行顺序到事务边界，再到索引结构和主从复制。
-            sections:
-              - mysql
+          - title: SQL、查询与视图
+            summary: SQL 执行顺序、连接、递归、排序、IN 条件、视图及常用查询特性。
+            paths:
+              - Mysql/01-sql-and-query/
+          - title: 表结构、主键与索引
+            summary: Schema 模式、自增主键和索引如何影响数据模型与查询代价。
+            paths:
+              - Mysql/02-schema-and-indexes/
+          - title: 事务、锁与一致性
+            summary: 事务边界、FOR UPDATE 与多数据源下的一致性问题。
+            paths:
+              - Mysql/03-transactions-and-locks/
+          - title: 复制与运维
+            summary: MySQL 主从复制的角色、数据同步与日常运维关注点。
+            paths:
+              - Mysql/04-replication-and-operations/
           - title: SQLite
             summary: 认识嵌入式数据库 SQLite 
             sections:
@@ -184,10 +282,22 @@ groups:
         slug: search-retrieval
         summary: 全文检索、向量检索与图检索分别如何找到需要的数据。
         modules:
-          - title: Elasticsearch
-            summary: 检索、聚合、同义词、同步方案和并发问题。
-            sections:
-              - elasticsearch
+          - title: Elasticsearch 基础、集群与存储
+            summary: 索引、集群、内部数据组织和学习导读，先建立检索系统的整体视图。
+            paths:
+              - Elasticsearch/01-foundations-and-storage/
+          - title: 查询、聚合与搜索提示
+            summary: 查询 DSL、聚合和搜索提示词如何把用户意图转成检索请求。
+            paths:
+              - Elasticsearch/02-query-and-aggregation/
+          - title: 相关性、多语言与相似检索
+            summary: 同义词、国际化分析和相似性搜索分别解决哪些召回与匹配问题。
+            paths:
+              - Elasticsearch/03-relevance-and-language/
+          - title: 客户端、同步与并发
+            summary: Java 客户端、Binlog/双写同步，以及并发更新中的一致性处理。
+            paths:
+              - Elasticsearch/04-integration-and-sync/
           - title: 向量数据库与向量检索
             summary: Embedding、ANN、pgvector 与 Milvus 的数据模型、索引参数、压测、迁移与恢复。
             sort: file
@@ -232,10 +342,18 @@ groups:
         slug: microservice-design
         summary: 服务边界、事务一致性、发件箱模式和哈希分布。
         modules:
-          - title: 微服务与分布式事务
-            summary: 一致性、降级、Outbox、Seata 这些绕不开的工程问题。
-            sections:
-              - microservices
+          - title: 服务架构与调用
+            summary: 微服务边界、一致性哈希、Feign/OpenFeign 和基于 Header 的灰度发布。
+            paths:
+              - Microservices/01-architecture-and-communication/
+          - title: 一致性与分布式事务
+            summary: 发件箱、分布式日志存储与 Seata 如何处理跨服务的数据一致性。
+            paths:
+              - Microservices/02-consistency-and-data/
+          - title: 韧性与可观测性
+            summary: 熔断降级和 SkyWalking 帮助系统在故障与压力下保持可理解、可恢复。
+            paths:
+              - Microservices/03-resilience-and-observability/
       - title: 服务治理与协调
         slug: service-governance
         summary: 注册发现、配置中心、协调元数据、灰度、标签路由与控制台运维。
@@ -311,7 +429,7 @@ groups:
             excludePaths:
               - Agent/ai-course/
               - Agent/AgentEngineering/
-              - Agent\ai-middleware-courses
+              - Agent/ai-middleware-courses
           - title: Agent 工程核心概念
             summary: 从 Prompt、项目指令与可复用工作流，到外部工具连接和能力分发，建立一套不混淆职责的 Agent 工程认知。
             paths:
@@ -359,21 +477,46 @@ groups:
         slug: engineering-notes
         summary: 日常项目经验、方案设计、通用中间件与暂不属于单一技术栈的工程问题。
         modules:
-          - title: 胡思乱想
-            summary: 项目经验、方案设计、Canal、Nginx、FTP 和其他暂时不必单独成类的工程问题。
+          - title: 后端设计与可靠性
+            summary: 异常、降级、Token、下载、常量、ID、URL 与 N+1 等日常服务设计问题。
+            paths:
+              - RandomThoughts/01-backend-design/
+          - title: Web 安全与网络边界
+            summary: 代理/VPN、加密、XSS/CSRF 等跨越客户端和服务端的安全主题。
+            paths:
+              - RandomThoughts/02-security-and-network/
+          - title: 交付、自动化与客户端
+            summary: 定时任务、CI/CD、Hugo 部署、软件更新和 Android 自动化控制。
+            paths:
+              - RandomThoughts/03-delivery-and-automation/
+          - title: 前端协作与文档工具
+            summary: ECharts 数据展示与 LaTeX 公式渲染等前端协作、技术文档相关问题。
+            paths:
+              - RandomThoughts/04-frontend-and-docs/
+          - title: 桌面环境排错
+            summary: Windows 磁盘图标等桌面系统问题的原因、排查与稳定配置。
+            paths:
+              - RandomThoughts/05-desktop-troubleshooting/
+          - title: 通用中间件
+            summary: Canal、Nginx 与 FTP 服务，分别处理数据同步、反向代理和文件传输。
             sections:
-              - randomthoughts
               - middleware
       - title: 英语学习
         slug: english-study
         summary: 先按语法问题检索，再沿长难句和翻译课程建立系统理解。
         modules:
-          - title: 英语语法问题索引
-            summary: 介词、名词作定语、固定句式与易混小词等可按问题查阅的语法笔记。
+          - title: 词类、短语与易混小词
+            summary: 介词、介词短语、名词作定语、as/like 与 the 加形容词等基础结构。
             paths:
-              - English/
-            excludePaths:
-              - English/exam-grammar-course/
+              - English/01-word-classes-and-phrases/
+          - title: 句子结构与疑问句
+            summary: 状语和定语、特殊疑问句与多词谓语，先判断句法角色再理解语义。
+            paths:
+              - English/02-sentence-structure-and-questions/
+          - title: 阅读、长难句与翻译
+            summary: 固定句型、长难句主干和自然翻译的训练方法。
+            paths:
+              - English/03-reading-and-translation/
           - title: 考研英语长难句与翻译课程
             summary: 从有限谓语和句子主干出发，系统掌握名词修饰、动词、介词、从句、倒装、比较与翻译。
             paths:
@@ -383,13 +526,26 @@ groups:
         slug: mathematics
         summary: 从数学分析的基本概念开始，再进入排列组合的计数与构造问题。
         modules:
-          - title: 数学分析与基础数学
-            summary: 从函数、极限、连续到微分，讨论变化如何被精确地描述；排列组合课程单列在下方。
+          - title: 函数、三角与反函数
+            summary: 函数变换、三角函数、反三角函数与反函数的定义域、值域和图像边界。
             sort: file
             paths:
-              - Math/
-            excludePaths:
-              - Math/permutation-combinatorics/
+              - Math/01-functions-and-trigonometry/
+          - title: 极限与无穷小
+            summary: 极限存在与不存在、分母不为零、无穷小比较和极限运算法则。
+            sort: file
+            paths:
+              - Math/02-limits-and-infinitesimals/
+          - title: 微分、中值定理与泰勒展开
+            summary: 导数与微分、拉格朗日中值定理、佩亚诺余项和泰勒公式的应用。
+            sort: file
+            paths:
+              - Math/03-differentiation-and-expansion/
+          - title: 证明方法
+            summary: 数学归纳法的适用条件、证明结构和常见错误。
+            sort: file
+            paths:
+              - Math/04-proof-methods/
           - title: 排列组合与全排列
             summary: 从计数原理、排列和组合出发，理解全排列、去重、字典序、逆序数与康托展开，并知道何时不该枚举。
             sort: file
@@ -516,13 +672,30 @@ groups:
         slug: language
         summary: 语法机制、迭代器、生成器和常用语言特性。
         modules:
-          - title: 语言机制
-            summary: Python 语法和运行机制相关笔记。
+          - title: 基础语法与数据处理
+            summary: 数值、序列、推导式、括号、星号参数、对象引用、异常与 JSON/HTTP 基础。
             paths:
-              - Python/
-            excludePaths:
-              - Python/frameworks/
-              - Python/qt-desktop-course/
+              - Python/01-language-basics/
+          - title: 函数、类与对象机制
+            summary: 可调用对象、装饰器、类注解、描述符、元类、生成器与函数边界。
+            paths:
+              - Python/02-functions-and-objects/
+          - title: 模块、解释器与脚本运行时
+            summary: import、字节码缓存、日志和 argparse，理解脚本从启动到执行的过程。
+            paths:
+              - Python/03-modules-and-runtime/
+          - title: 并发与资源管理
+            summary: GIL、asyncio、协程、线程/进程池和上下文管理器的协作边界。
+            paths:
+              - Python/04-concurrency-and-resources/
+          - title: 虚拟环境与依赖管理
+            summary: venv、pip、uv、requirements、锁文件与 CPU/CUDA Profile 的可复现环境。
+            paths:
+              - Python/05-environment-and-dependencies/
+          - title: 图像处理与 GPU
+            summary: CUDA、OpenCV 与 IOPaint，将像素、遮罩和硬件资源连接到实际图像任务。
+            paths:
+              - Python/06-image-and-gpu/
       - title: Python 框架
         slug: frameworks
         summary: FastAPI 的 Web 服务能力与 SQLAlchemy 的 ORM 映射，分别处理接口层和持久化层的问题。
@@ -554,12 +727,26 @@ groups:
         slug: language
         summary: C/C++ 语法、内存、指针、编译链接和标准库。
         modules:
-          - title: 语言与运行模型
-            summary: 语言基础、内存管理、指针引用、编译链接和常用标准库。
+          - title: 语言基础、类型与对象
+            summary: 进制、整数转换、字符/字符串、bool、初始化、auto、结构化绑定和变量初始值。
             paths:
-              - C&C++/
-            excludePaths:
-              - C&C++/stl/
+              - C&C++/01-language-foundations/
+          - title: 内存、指针与对象布局
+            summary: 指针、引用、结构体、offsetof、对象切片与 container_of 的内存模型。
+            paths:
+              - C&C++/02-memory-and-objects/
+          - title: 构建、编译与链接
+            summary: 头文件、翻译单元、ODR、extern/static、CMake/Make、ELF 与程序装载。
+            paths:
+              - C&C++/03-build-and-linkage/
+          - title: 函数与现代 C++
+            summary: 函数指针、Lambda、std::function、右值引用与移动语义。
+            paths:
+              - C&C++/04-functions-and-modern-cpp/
+          - title: 系统接口与并发
+            summary: volatile、位运算、线程内存模型和 xv6 VirtIO/MMIO 等系统编程边界。
+            paths:
+              - C&C++/05-systems-and-concurrency/
           - title: C++ STL 常用用法
             summary: 从 vector、unordered_map 和迭代器入门，再认识常用算法的职责边界。
             sort: file

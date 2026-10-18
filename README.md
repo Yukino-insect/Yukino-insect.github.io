@@ -256,6 +256,33 @@ modules:
 3. `paths` 适合“同一个 Hugo section 下有普通文章和系列文章，需要分开展示”的情况。
 4. 如果只是展示整个 `content/<目录>/`，优先使用 `sections`，配置更短。
 
+### 拆分过载的普通专题
+
+当一个二级分类下只有一个三级模块，而该模块已经聚集了多个彼此独立的主题时，不要继续把文章直接放在 `content/<目录>/` 根目录。应先按稳定主题建立子目录，再为每个子目录配置一个 `paths` 模块；这样目录结构、模块卡片和后续新增文章的归属能够保持一致。
+
+例如，原先聚合在 `content/Java/` 的文章可拆为：
+
+```text
+content/Java/01-language-object-model/
+content/Java/02-collections-and-functional/
+content/Java/03-exceptions-reflection-design/
+content/Java/04-io-and-networking/
+```
+
+对应配置使用多个模块：
+
+```yaml
+modules:
+  - title: 语言基础与对象模型
+    paths:
+      - Java/01-language-object-model/
+  - title: 集合与函数式处理
+    paths:
+      - Java/02-collections-and-functional/
+```
+
+目录名建议使用 `01-`、`02-` 这类稳定前缀和英文主题名。它们表达的是**内容归属**，不是教程章节编号；因此普通模块默认仍按 `date-desc` 排序。只有本身是循序课程的目录，才应设置 `sort: file` 并让文件名承担章节顺序。
+
 ### 新增系列专题
 
 系列专题使用 `tabs`，适合下面这种目录：

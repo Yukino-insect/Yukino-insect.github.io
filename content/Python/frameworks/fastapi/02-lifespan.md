@@ -11,7 +11,7 @@ aliases = [
 
 FastAPI 的 `lifespan` 就是为这段**应用级生命周期**准备的接口。它以 `@asynccontextmanager` 把“启动”和“关闭”配成同一个结构：`yield` 前准备资源，`yield` 后清理资源。这样写并不是语法上的小花样，而是在明确资源的所有者、可用时段、失败边界和测试方式。
 
-本文只讨论通用的 FastAPI 基础机制。若还不熟悉 Python 的异步上下文管理器，可先阅读 [Python 的 `@contextmanager` 与 `@asynccontextmanager`：用生成器管理资源、异常与取消](../../Python 的 contextmanager 与 asynccontextmanager：用生成器管理资源、异常与取消.md)；路由、依赖注入等基础可参见 [FastAPI 教程：从第一个接口到工程化服务](00-fastapi-from-basics-to-engineering.md)。
+本文只讨论通用的 FastAPI 基础机制。若还不熟悉 Python 的异步上下文管理器，可先阅读 [Python 的 `@contextmanager` 与 `@asynccontextmanager`：用生成器管理资源、异常与取消](../../04-concurrency-and-resources/Python 的 contextmanager 与 asynccontextmanager：用生成器管理资源、异常与取消.md)；路由、依赖注入等基础可参见 [FastAPI 教程：从第一个接口到工程化服务](00-fastapi-from-basics-to-engineering.md)。
 
 ## 一、先分清三种“生命周期”
 

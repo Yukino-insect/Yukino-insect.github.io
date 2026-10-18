@@ -183,7 +183,7 @@ content/groups/ai-engineering/rag-agent/_index.md
 
 ## 新增专题章节
 
-这里的“专题章节”分两类：普通专题和系列专题。普通专题适合直接把某个 `content/<目录>/` 下的文章列出来；系列专题适合像 `content/Agent/ai-course/` 这样有多级目录、每个子目录又是一章的课程。
+这里的“专题章节”分两类：普通专题和系列专题。普通专题适合直接把某个 `content/<目录>/` 下的文章列出来；系列专题适合像 `content/Agent/01-rag-agent-engineering-course/` 这样有多级目录、每个子目录又是一章的课程。
 
 ### 新增普通专题
 
@@ -237,7 +237,7 @@ lane = "notes"
 
 二级分类卡片的列数由模板按该一级分类下的 `lanes` 数量自动决定：不超过 3 个时三列并排；超过 3 个时两列并排，网格以页面中心对齐。这个规则不需要、也不应为每个一级分类单独配置。
 
-如果只想收集某个目录的文章，同时排除它下面的某个系列目录，可以使用 `paths` 和 `excludePaths`。例如 `content/Agent/` 下既有普通 LangChain/LangGraph 文章，也有 `content/Agent/ai-course/` 系列课程时：
+如果只想收集某个目录的文章，同时排除它下面的某个系列目录，可以使用 `paths` 和 `excludePaths`。例如 `content/Agent/` 下既有普通框架文章，也有 `content/Agent/01-rag-agent-engineering-course/` 系列课程时：
 
 ```yaml
 modules:
@@ -246,7 +246,7 @@ modules:
     paths:
       - Agent/
     excludePaths:
-      - Agent/ai-course/
+      - Agent/01-rag-agent-engineering-course/
 ```
 
 规则：
@@ -288,12 +288,12 @@ modules:
 系列专题使用 `tabs`，适合下面这种目录：
 
 ```text
-content/Agent/ai-course/
-content/Agent/ai-course/README.md
-content/Agent/ai-course/01-rag-basics/README.md
-content/Agent/ai-course/01-rag-basics/01-what-is-rag.md
-content/Agent/ai-course/02-knowledge-base/README.md
-content/Agent/ai-course/02-knowledge-base/01-architecture-and-upload.md
+content/Agent/01-rag-agent-engineering-course/
+content/Agent/01-rag-agent-engineering-course/README.md
+content/Agent/01-rag-agent-engineering-course/01-rag-foundations/README.md
+content/Agent/01-rag-agent-engineering-course/01-rag-foundations/01-what-is-rag.md
+content/Agent/01-rag-agent-engineering-course/02-knowledge-base/README.md
+content/Agent/01-rag-agent-engineering-course/02-knowledge-base/01-architecture-and-upload.md
 ```
 
 在 `data/topic_groups.yaml` 的某个二级分类模块下配置：
@@ -304,18 +304,18 @@ modules:
     summary: 按课程章节组织的系列文章。
     intro:
       title: 课程导读
-      path: Agent/ai-course/README.md
+      path: Agent/01-rag-agent-engineering-course/README.md
     tabs:
       - title: RAG 基础
-        path: Agent/ai-course/01-rag-basics/
+        path: Agent/01-rag-agent-engineering-course/01-rag-foundations/
       - title: 知识库建设
-        path: Agent/ai-course/02-knowledge-base/
+        path: Agent/01-rag-agent-engineering-course/02-knowledge-base/
 ```
 
 规则：
 
 1. `path` 写相对 `content/` 的目录路径，不要以 `/` 开头也可以，模板会兼容。
-2. `intro.path` 可选，用来指定整套系列的总导读文章，例如 `content/Agent/ai-course/README.md`；`intro.title` 是导读 tab 的显示名称。
+2. `intro.path` 可选，用来指定整套系列的总导读文章，例如 `content/Agent/01-rag-agent-engineering-course/README.md`；`intro.title` 是导读 tab 的显示名称。
 3. 每个 `tabs` 项会收集该目录下的 Markdown 文章。
 4. `README.md` 会被保留：如果写在 `intro.path` 中，它会出现在导读 tab 中，样式和普通文章链接一致；如果写在某个 tab 目录下，它会排在对应 tab 的最前面，适合作为本章导读或总览。
 5. 页面标题优先读取 front matter 的 `title`；没有 `title` 时，会读取正文第一个 `# 一级标题`；再没有才退回文件名。
@@ -583,7 +583,7 @@ data/page_backgrounds.yaml
 
 新增一篇系列文章：
 
-1. 找到系列目录，例如 `content/Agent/ai-course/01-rag-basics/`。
+1. 找到系列目录，例如 `content/Agent/01-rag-agent-engineering-course/01-rag-foundations/`。
 2. 新建按顺序命名的 Markdown，例如 `10-new-topic.md`。
 3. 写好 front matter，正文从 `##` 开始。
 4. 如果该章节 README 里维护了目录链接，同步追加一条相对链接。
@@ -628,7 +628,7 @@ data/page_backgrounds.yaml
 9. 文章必须尽量补齐 front matter；缺少 `title` 时虽然有兜底，但排序、元信息和页面标题都不够稳定。
 10. 不要在已有 `title` 的文章正文开头重复写同名 `# 一级标题`，否则文章页会出现重复标题。
 11. `paths` 和 `excludePaths` 写的是相对 `content/` 的路径，不要写成 `content/Agent/...`。
-12. YAML 列表的 `-` 后面必须有空格，例如 `- Agent/ai-course/`，不要写成 `-Agent/ai-course/`。
+12. YAML 列表的 `-` 后面必须有空格，例如 `- Agent/01-rag-agent-engineering-course/`，不要写成 `-Agent/01-rag-agent-engineering-course/`。
 
 ## 修改后检查
 

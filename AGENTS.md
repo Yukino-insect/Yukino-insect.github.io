@@ -139,6 +139,8 @@ lane = "<lane-slug>"
 
 改动任何 `slug` 时，必须同步重命名或新建相应目录和 `_index.md`，否则会出现 `Page Not Found`。`sections` 写 Hugo section key，通常是 `content/<目录名>/` 的小写名称，例如 `content/JavaSE/` 对应 `javase`，不能写展示标题或任意路径。
 
+新增文章或教程时，除非用户明确要求新增首页一级分类，否则必须归入现有一级分类；可以在现有分类内新增或调整二级分类、三级模块和内容目录，但不得仅因主题较新就创建新的 `groups` 一级项。
+
 ### 普通专题：`sections`、`paths`、`excludePaths`
 
 模块用 `sections` 聚合一个或多个完整 Hugo section：
@@ -153,7 +155,7 @@ modules:
 
 - 展示完整 `content/<目录>/` 时优先使用 `sections`。
 - 若同一 section 下要只收集某些路径，使用 `paths`；它写相对 `content/` 的路径，例如 `Agent/`，不能写成 `content/Agent/`，也不应以 `/` 开头。
-- `excludePaths` 是可选项，用于排除 `paths` 下的子目录，例如 `Agent/ai-course/`。
+- `excludePaths` 是可选项，用于排除 `paths` 下的子目录，例如 `Agent/01-rag-agent-engineering-course/`。
 - `paths` 的前缀匹配会包含子目录；规划专题时应避免彼此重叠，或明确使用 `excludePaths`。
 
 ```yaml
@@ -163,12 +165,25 @@ modules:
     paths:
       - Agent/
     excludePaths:
-      - Agent/ai-course/
+      - Agent/01-rag-agent-engineering-course/
 ```
 
-### 系列专题：`intro` 与 `tabs`
+### 系列专题：何时使用 `sort: file`，何时使用 `tabs`
 
-多章节课程或系列应在模块中使用 `tabs`，而不是用普通 `sections` 混在一起：
+连续教程默认使用一个按文件名排序的普通模块。尤其当教程的每个主题目录大多只有一篇文章时，**不得为了展示目录层级使用 `tabs`**；`tabs` 只会增加一次无意义的点击，不能让单篇文章忽然变得更有条理。
+
+此时将文章按 `00-`、`01-`、`02-` 等前缀直接放在课程目录中，并使用 `sort: file`：
+
+```yaml
+modules:
+  - title: Python 网络编程教程
+    summary: 从协议概念到可运行客户端的连续教程。
+    sort: file
+    paths:
+      - Python/network-programming-course/
+```
+
+只有当一个系列同时满足“存在可独立阅读的主题分组”且“每个主题分组下通常有多篇文章”时，才使用 `tabs`。`tabs` 用于在多篇文章组成的章节之间切换，不是目录树的装饰品：
 
 ```yaml
 modules:
@@ -176,16 +191,16 @@ modules:
     summary: 按章节组织的系列文章。
     intro:
       title: 课程导读
-      path: Agent/ai-course/README.md
+      path: Agent/01-rag-agent-engineering-course/README.md
     tabs:
       - title: RAG 基础
-        path: Agent/ai-course/01-rag-basics/
+        path: Agent/01-rag-agent-engineering-course/01-rag-foundations/
       - title: 知识库建设
-        path: Agent/ai-course/02-knowledge-base/
+        path: Agent/01-rag-agent-engineering-course/02-knowledge-base/
 ```
 
 - `intro.path` 可选，指向系列总导读；`tabs[].path` 指向章节目录。两者都写相对 `content/` 的路径。
-- 每个 tab 收集目标目录下的 Markdown 文章；章节内的 `README.md` 会排在该 tab 最前，适合作为章节导读。
+- 每个 tab 收集目标目录下的 Markdown 文章；每个 tab 应通常包含多篇文章。若某个主题只有一篇文章，应将它直接纳入按 `sort: file` 排序的课程列表，而非单独建立 tab。
 - 若不希望生成 `/readme/` URL，把导读文件命名为 `00-overview.md`、`00-intro.md` 或 `00-导读.md`，并以文件名顺序排序。
 - 专题显示标题依次取 front matter 的 `title`、正文第一个 H1、文件名；仍应优先填写 `title`，不要依赖兜底。
 

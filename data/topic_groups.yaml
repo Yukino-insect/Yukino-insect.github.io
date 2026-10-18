@@ -32,24 +32,10 @@ groups:
             paths:
               - ComputerOrganization/04-files-and-programs/
           - title: 数据表示与文本处理课程
-            summary: 从比特、类型、整数和浮点数，到 Unicode、字符串、文件与网络中的编码边界。
+            summary: 从比特、语言数据类型和数字编码，到 Unicode、UTF-8 与文件、网络、数据库之间的文本边界。
             sort: file
-            intro:
-              title: 课程导读
-              path: ComputerOrganization/data-representation-course/00-overview.md
-            tabs:
-              - title: 类型与内存
-                path: ComputerOrganization/data-representation-course/01-type-and-memory/
-              - title: 整数编码
-                path: ComputerOrganization/data-representation-course/02-integers/
-              - title: 浮点数
-                path: ComputerOrganization/data-representation-course/03-floating-point/
-              - title: 字符与字符串
-                path: ComputerOrganization/data-representation-course/04-character-and-string/
-              - title: 从源文件到 CPU
-                path: ComputerOrganization/data-representation-course/05-program-execution/
-              - title: 文件与网络
-                path: ComputerOrganization/data-representation-course/06-file-and-network/
+            paths:
+              - ComputerOrganization/data-representation-course/
           - title: Linux 与 I/O
             summary: 权限、文件描述符、多路复用、性能观察。
             sections:
@@ -391,14 +377,14 @@ groups:
             summary: 以检索、知识库和评测为主线，建立可验证的 RAG 闭环。
             intro:
               title: 课程导读
-              path: Agent/ai-course/README.md
+              path: Agent/01-rag-agent-engineering-course/README.md
             tabs:
               - title: RAG 基础
-                path: Agent/ai-course/01-rag-basics/
+                path: Agent/01-rag-agent-engineering-course/01-rag-foundations/
               - title: 知识库建设
-                path: Agent/ai-course/02-knowledge-base/
+                path: Agent/01-rag-agent-engineering-course/02-knowledge-base/
               - title: RAG 评测
-                path: Agent/ai-course/05-rag-evaluation/
+                path: Agent/01-rag-agent-engineering-course/05-rag-evaluation/
       - title: Agent 应用与运行时
         slug: agent-applications
         summary: 模型调度、问答链路、工具调用与 Java Agent 运行时的实现边界。
@@ -408,32 +394,36 @@ groups:
             sort: file
             tabs:
               - title: 模型调度
-                path: Agent/ai-course/03-model-infra/
+                path: Agent/01-rag-agent-engineering-course/03-model-routing/
               - title: 知识问答
-                path: Agent/ai-course/04-ai-qa/
+                path: Agent/01-rag-agent-engineering-course/04-ai-qa-workflow/
               - title: Java Agent 框架实战
-                path: Agent/ai-course/07-java-agent-runtime/
+                path: Agent/01-rag-agent-engineering-course/07-java-agent-runtime/
           - title: RAG 工程面试要点
             summary: 用框架选择、语言选型和存储方案比较，检验是否理解系统的取舍。
             sort: file
             paths:
-              - Agent/ai-course/06-interview/
+              - Agent/01-rag-agent-engineering-course/06-rag-engineering-interview/
       - title: Agent 框架与协作
         slug: agent-tooling
         summary: 用 LangChain、LangGraph 与可复用的 Agent 能力组织多步骤工作流。
         modules:
-          - title: LangChain 与 LangGraph
-            summary: LangChain、LangGraph、LangSmith、CLI、Server 和 Prompt 工程相关笔记。
+          - title: LangChain 与 Prompt 工程
+            summary: LangChain 的模型、消息、工具与 Agent 抽象，以及 Prompt、MCP 的工程化使用。
             paths:
-              - Agent/
-            excludePaths:
-              - Agent/ai-course/
-              - Agent/AgentEngineering/
-              - Agent/ai-middleware-courses
-          - title: Agent 工程核心概念
-            summary: 从 Prompt、项目指令与可复用工作流，到外部工具连接和能力分发，建立一套不混淆职责的 Agent 工程认知。
+              - Agent/04-agent-framework-ecosystem/01-langchain-and-prompt/
+          - title: LangGraph 工作流与运行时
+            summary: 图工作流、状态、子图、可视化调试与服务化部署。
             paths:
-              - Agent/AgentEngineering/
+              - Agent/04-agent-framework-ecosystem/02-langgraph-workflows/
+          - title: Agent 工具与可观测性
+            summary: LangCLI、LangSmith 的命令行工作流、追踪、调试、评测与生产监控。
+            paths:
+              - Agent/04-agent-framework-ecosystem/03-tooling-and-observability/
+          - title: Agent 工程基础
+            summary: 从 Prompt、项目指令与可复用工作流，到外部工具连接、能力分发和多智能体编排，建立清晰的职责边界。
+            paths:
+              - Agent/03-agent-engineering-fundamentals/
       - title: 模型训练与推理
         slug: model-development
         summary: 用数据、梯度和模型服务把训练概念连接到可部署的推理链路。
@@ -442,12 +432,12 @@ groups:
             summary: 从数据、梯度与训练循环入门，结合 CleanCanvas Studio 的 LaMa、Manga 和 Real-ESRGAN 代码理解图像张量、权重、设备、FP16、卷积与分块推理。
             sort: file
             paths:
-              - Agent/ai-middleware-courses/01-pytorch-foundations
+              - Agent/02-model-inference-and-infrastructure/01-pytorch-foundations
           - title: 深度学习、模型推理与重排序
             summary: Transformer、PyTorch、CPU/GPU、FP16、FastAPI 与 BGE Reranker 的独立模型服务实践。
             sort: file
             paths:
-              - Agent/ai-middleware-courses/02-model-inference-and-rerank/
+              - Agent/02-model-inference-and-infrastructure/02-model-inference-and-rerank/
       - title: 文档智能与运行治理
         slug: document-operations
         summary: 让文档解析服务可用、可观测、可持续运行，而不是只在演示时成功。
@@ -456,12 +446,12 @@ groups:
             summary: OCR、版面分析、结构化文档资产、异步任务与解析服务部署。
             sort: file
             paths:
-              - Agent/ai-middleware-courses/03-document-intelligence-ocr/
+              - Agent/02-model-inference-and-infrastructure/03-document-intelligence-ocr/
           - title: LLM 可观测性与运行治理
             summary: Langfuse、ClickHouse、Trace、成本、隐私、队列背压与 Compose 运维。
             sort: file
             paths:
-              - Agent/ai-middleware-courses/05-llm-observability/
+              - Agent/02-model-inference-and-infrastructure/04-llm-observability/
 
 
   - slug: random-thoughts

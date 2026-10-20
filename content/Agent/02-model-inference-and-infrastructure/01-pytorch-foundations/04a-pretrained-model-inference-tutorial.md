@@ -9,8 +9,6 @@ math = true
 
 我们会从最容易观察的分类模型开始，逐步进入图像到图像模型，最后对照 [CleanCanvas Studio](https://github.com/Yukino-insect/clean-canvas-studio) 中的 LaMa 和 Real-ESRGAN。每一步都记录输入的 `shape`、`dtype`、设备和值域，因为模型推理失败或结果异常，通常不是“网络不够聪明”，而是这几个契约没有对齐。
 
-项目代码部分以 2026-10-13 的 [`ebf875e` 提交](https://github.com/Yukino-insect/clean-canvas-studio/commit/ebf875ee72451ab02f586b81b83150ffd873c529) 为准。示例的通用思想可以迁移，但 `TorchScriptLaMaEngine`、`MangaEngine`、`RealESRGANEnhancer` 以及模型文件名都属于该项目当时的实现细节；升级项目后请先对照源码中的函数签名和输入契约。
-
 ## 推理不是一个函数调用，而是一条边界协议
 
 可以把推理拆成六个阶段：
@@ -274,7 +272,7 @@ def inpaint(self, image_bgr: np.ndarray, mask: np.ndarray) -> np.ndarray:
     ...
 ```
 
-这行类型标注就是调用者必须满足的契约：传入 OpenCV BGR 的 `uint8 [H,W,3]` 图和 `uint8 [H,W]` mask；返回同尺寸的 BGR `uint8 [H,W,3]` 图。`SubtitleRemover` 因此不用导入 `torch`。在 `__init__()` 中，项目先用 `ModelStore.ensure()` 获取并校验 `big-lama.pt` 或 `anime-manga-big-lama.pt`，再执行等价于下面的加载流程：
+这行类型标注就是调用者必须满足的契约：传入 OpenCV BGR 的 `uint8 [H,W,3]` 图和 `uint8 [H,W]` mask；返回同尺寸的 BGR `uint8 [H,W,3]` 图。`ContentRepairProcessor` 因此不用导入 `torch`。在 `__init__()` 中，项目先用 `ModelStore.ensure()` 获取并校验 `big-lama.pt` 或 `anime-manga-big-lama.pt`，再执行等价于下面的加载流程：
 
 ```python
 self.model = torch.jit.load(str(path), map_location="cpu").to(self.device).eval()
@@ -400,7 +398,7 @@ if device == "cuda":
 
 回到仓库代码时，可以这样对应：
 
-- `SubtitleRemover._repair()` 对应“先建 mask；空 mask 直接返回原帧；否则调用统一 `inpaint()`”；
+- `ContentRepairProcessor._repair()` 对应“先建 mask；空 mask 直接返回原帧；否则调用统一 `inpaint()`”；
 - `TorchScriptLaMaEngine.__init__()` 对应“校验/取得 TorchScript 权重 + `torch.jit.load(...).to(device).eval()`”；
 - `TorchScriptLaMaEngine.inpaint()` 对应“OpenCV BGR → RGB/CHW/float32 → 8 的倍数 padding → 两个输入前向 → 裁回、恢复 mask 外像素”；
 - `MangaEngine.inpaint()` 说明一个项目可能串联两个模型，先得到线稿先验，再将归一化灰度、线稿、mask、噪声和全 1 条件交给修复模型；

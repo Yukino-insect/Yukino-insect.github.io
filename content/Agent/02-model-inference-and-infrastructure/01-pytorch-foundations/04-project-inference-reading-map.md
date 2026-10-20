@@ -6,9 +6,7 @@ title = '项目实战总览：从机器学习到 CleanCanvas Studio 的预训练
 
 前半部分我们训练过一个很小的分类器。现在换一个更接近真实工作的场景：用户上传一张图片，框选一段文字，程序调用已经训练好的模型完成修复，再把结果交给界面或视频编码器。读这类代码时，最容易犯的错误是直接钻进某个网络类，结果看见几十个卷积层，却不知道它在整条链路中解决什么问题。
 
-本章先建立通用地图，再把地图映射到 [CleanCanvas Studio GitHub 仓库](https://github.com/Yukino-insect/clean-canvas-studio)。仓库地址比作者电脑上的目录更重要：读者可以克隆、查看提交和对照版本；本文只把仓库中的接口作为案例，不要求读者拥有相同的本地路径。
-
-本文的代码解读以 2026-10-13 的 [`ebf875e` 提交](https://github.com/Yukino-insect/clean-canvas-studio/commit/ebf875ee72451ab02f586b81b83150ffd873c529) 为准。项目会继续演进，类名、模型 URL 或 GUI 事件可能改变；遇到差异时，应以该版本的 `backend/main.py`、`backend/inpaint/engine.py`、`backend/enhance/realesrgan.py` 和 `backend/enhance/media_enhancer.py` 为事实来源，而不要把本文的示意图当成 API 规范。
+本节涉及到的 github 仓库为 [CleanCanvas Studio GitHub](https://github.com/Yukino-insect/clean-canvas-studio)。
 
 ## 先把三个容易混淆的词分开
 
@@ -57,16 +55,16 @@ print(weights.meta['categories'][class_id], probability[0, class_id].item())
 
 ## CleanCanvas 的实际数据流：先找编排器，再找模型
 
-不要从 `RRDBNet` 或 LaMa 权重文件开始读。真实项目的第一层并不是网络，而是两个“把输入交给模型”的编排器：内容修复使用 `backend/main.py` 中的 `SubtitleRemover`，画质增强使用 `backend/enhance/media_enhancer.py` 中的 `MediaEnhancer`。前者的名字来自项目历史；它现在处理的不只是字幕，也包括手工框选、涂鸦和颜色筛选得到的任意修复区域。
+不要从 `RRDBNet` 或 LaMa 权重文件开始读。真实项目的第一层并不是网络，而是两个“把输入交给模型”的编排器：内容修复使用 `backend/main.py` 中的 `ContentRepairProcessor`，画质增强使用 `backend/enhance/media_enhancer.py` 中的 `MediaEnhancer`。前者统一编排图片和视频的手工框选、涂鸦、颜色筛选及 OCR 文字区域修复。
 
 内容修复的一次实际调用链如下。箭头两侧的函数名可以直接作为读源码时的搜索关键词：
 
 ```text
 GUI 任务快照，或 backend/main.py 的 CLI 参数
         ↓
-SubtitleRemover.run()
-  ├─ 图片：remove_image_subtitles()
-  └─ 视频：remove_video_subtitles()，逐帧读取/编码
+ContentRepairProcessor.run()
+  ├─ 图片：repair_image()
+  └─ 视频：repair_video()，逐帧读取/编码
         ↓
 _repair(frame, polygons=None)
   ├─ _mask() → build_mask(...) / polygon_mask(...)
@@ -81,7 +79,7 @@ create_inpaint_engine(mode, device, model_dir)
 引擎返回 BGR uint8 [H, W, 3] → UI 预览、图片编码或视频写入/音频回封装
 ```
 
-这里的 `frame` 是 OpenCV 读取的 `numpy.ndarray`，通常为 BGR、`uint8`、形状 `[H, W, 3]`；`mask` 是 `[H, W]` 的 `uint8` 数组，0 表示不修复，非 0 表示可修改。`_repair()` 的返回值仍是与输入同尺寸、同颜色布局的 BGR 图像。这个稳定的业务接口很重要：`SubtitleRemover` 不需要知道 LaMa 的 Tensor 是 RGB/CHW，也不需要为 Manga 的五个模型输入写分支。
+这里的 `frame` 是 OpenCV 读取的 `numpy.ndarray`，通常为 BGR、`uint8`、形状 `[H, W, 3]`；`mask` 是 `[H, W]` 的 `uint8` 数组，0 表示不修复，非 0 表示可修改。`_repair()` 的返回值仍是与输入同尺寸、同颜色布局的 BGR 图像。这个稳定的业务接口很重要：`ContentRepairProcessor` 不需要知道 LaMa 的 Tensor 是 RGB/CHW，也不需要为 Manga 的五个模型输入写分支。
 
 ### `Protocol`、工厂和缓存：项目如何抽象“可修复”
 
@@ -92,18 +90,18 @@ class InpaintEngine(Protocol):
     def inpaint(self, image_bgr: np.ndarray, mask: np.ndarray) -> np.ndarray: ...
 ```
 
-它不是一个装着共享代码的“模型父类”，而是 Python 类型提示里的**结构性接口**：只要对象有同样签名的 `inpaint()`，就可被 `SubtitleRemover` 当作修复引擎使用。`OpenCVEngine`、`TorchScriptLaMaEngine`、`MangaEngine` 不必继承同一个运行时基类。这正是 Python 的鸭子类型在工程中的克制用法：调用方只依赖输入、返回值和副作用的契约，不依赖具体算法。
+它不是一个装着共享代码的“模型父类”，而是 Python 类型提示里的**结构性接口**：只要对象有同样签名的 `inpaint()`，就可被 `ContentRepairProcessor` 当作修复引擎使用。`OpenCVEngine`、`TorchScriptLaMaEngine`、`MangaEngine` 不必继承同一个运行时基类。这正是 Python 的鸭子类型在工程中的克制用法：调用方只依赖输入、返回值和副作用的契约，不依赖具体算法。
 
-真正决定实现的是工厂函数 `create_inpaint_engine(mode, *, device="auto", model_dir=None)`。它把字符串模式转换为 `InpaintMode` 枚举，返回上述三个实现之一；`opencv` 路径完全不导入 PyTorch。`SubtitleRemover._engine()` 又把这个结果保存在 `self._inpaint_engine`：第一个有非空 mask 的图片/视频帧才会调用工厂，后续帧复用同一个对象。因此“惰性加载”包含两个条件：任务要真的进入修复，且 mask 不能为空。
+真正决定实现的是工厂函数 `create_inpaint_engine(mode, *, device="auto", model_dir=None)`。它把字符串模式转换为 `InpaintMode` 枚举，返回上述三个实现之一；`opencv` 路径完全不导入 PyTorch。`ContentRepairProcessor._engine()` 又把这个结果保存在 `self._inpaint_engine`：第一个有非空 mask 的图片/视频帧才会调用工厂，后续帧复用同一个对象。因此“惰性加载”包含两个条件：任务要真的进入修复，且 mask 不能为空。
 
-`ModelStore.ensure(asset)` 是权重取得的另一层边界。它先检查模型缓存和 MD5，再下载到临时文件，校验通过后才移动到正式位置；断网或下载到一半不会被当成可加载权重。`model_dir` 参数优先于环境变量 `VSR_MODEL_DIR`，否则落到项目默认模型目录。模型缓存解决的是文件和完整性问题；`_inpaint_engine`/`RealESRGANEnhancer` 的实例缓存解决的是反序列化和显存重复占用问题，二者不可混为一谈。
+`ModelStore.ensure(asset)` 是权重取得的另一层边界。它先检查模型缓存和 MD5，再下载到临时文件，校验通过后才移动到正式位置；断网或下载到一半不会被当成可加载权重。`model_dir` 参数优先于环境变量 `CLEAN_CANVAS_MODEL_DIR`，否则落到项目默认模型目录。模型缓存解决的是文件和完整性问题；`_inpaint_engine`/`RealESRGANEnhancer` 的实例缓存解决的是反序列化和显存重复占用问题，二者不可混为一谈。
 
 ### 修复、增强与媒体层各自应知道什么
 
 | 组件 | 真实职责与关键入口 | 不应承担的职责 | 与基础课程的对应 |
 | ---- | ---------------- | -------------- | ---------------- |
 | `backend/masking.py` | `MaskPlan` 冻结矩形、涂鸦、颜色筛选；`build_mask()` 产出 `[H,W]` `uint8` mask | 不加载权重，不做神经网络前向 | 输入契约、NumPy shape、可序列化状态 |
-| `backend/main.py` | `SubtitleRemover._repair()` 短路空 mask，调用统一 `inpaint()`；图片/视频调度 | 不知道 LaMa 的 padding、Tensor 值域或 checkpoint 键 | 函数调用、缓存、副作用与边界 |
+| `backend/main.py` | `ContentRepairProcessor._repair()` 短路空 mask，调用统一 `inpaint()`；图片/视频调度 | 不知道 LaMa 的 padding、Tensor 值域或 checkpoint 键 | 函数调用、缓存、副作用与边界 |
 | `backend/inpaint/engine.py` | 工厂、权重缓存、设备回退、OpenCV/LaMa/Manga 的模型适配 | 不负责 GUI 交互、视频容器与音频 | `nn.Module` 前向、`eval()`、推理模式 |
 | `backend/enhance/realesrgan.py` | 构造匹配网络、加载 checkpoint、tile 推理、BGR↔RGB/Tensor 转换 | 不负责逐帧读写、取消按钮或音频 | `Conv2d`、激活、残差、NCHW、`state_dict` |
 | `backend/enhance/media_enhancer.py` | `MediaEnhancer.run()` 创建增强器，处理图片或逐帧视频，写文件/回封装音频 | 不定义 Real-ESRGAN 网络或解释权重键 | 模型之外的任务生命周期与 I/O |

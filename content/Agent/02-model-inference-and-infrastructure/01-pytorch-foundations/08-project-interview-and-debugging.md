@@ -12,16 +12,16 @@ title = '项目实战收束：沿 CleanCanvas Studio 调用链读懂 PyTorch 推
 
 ## 先把两个真实调用链分开
 
-项目的命令行入口是 [`backend/main.py`](https://github.com/Yukino-insect/clean-canvas-studio/blob/main/backend/main.py)，不是 HTTP 服务。它通过 [`backend/tools/args_handler.py`](https://github.com/Yukino-insect/clean-canvas-studio/blob/main/backend/tools/args_handler.py) 解析参数，构造 `SubtitleRemover`，再调用 `run()`。图形界面走的也是相同的 `SubtitleRemover` 编排器，只是参数和进度回调来自 GUI。
+项目的命令行入口是 [`backend/main.py`](https://github.com/Yukino-insect/clean-canvas-studio/blob/main/backend/main.py)，不是 HTTP 服务。它通过 [`backend/tools/args_handler.py`](https://github.com/Yukino-insect/clean-canvas-studio/blob/main/backend/tools/args_handler.py) 解析参数，构造 `ContentRepairProcessor`，再调用 `run()`。图形界面走的也是相同的 `ContentRepairProcessor` 编排器，只是参数和进度回调来自 GUI。
 
 画质增强则由 [`backend/enhance/media_enhancer.py`](https://github.com/Yukino-insect/clean-canvas-studio/blob/main/backend/enhance/media_enhancer.py) 的 `MediaEnhancer` 调度；实际 PyTorch 网络和权重加载封装在 [`backend/enhance/realesrgan.py`](https://github.com/Yukino-insect/clean-canvas-studio/blob/main/backend/enhance/realesrgan.py)。因此，读到 `inpaint` 时不要误以为它会自动进入 Real-ESRGAN，读到 `enhance` 时也不要期待它接收 mask。
 
 ```mermaid
 flowchart TD
-    CLI[CLI: backend/main.py] --> SR[SubtitleRemover]
-    GUI[GUI task] --> SR
-    SR --> MASK[MaskPlan / OCR polygon -> uint8 mask]
-    SR --> FACTORY[create_inpaint_engine]
+    CLI[CLI: backend/main.py] --> CR[ContentRepairProcessor]
+    GUI[GUI task] --> CR
+    CR --> MASK[MaskPlan / OCR polygon -> uint8 mask]
+    CR --> FACTORY[create_inpaint_engine]
     FACTORY --> OPENCV[OpenCVEngine]
     FACTORY --> LAMA[TorchScriptLaMaEngine]
     FACTORY --> MANGA[MangaEngine]
@@ -35,7 +35,7 @@ flowchart TD
     ESRT --> ENHANCED[enhanced BGR uint8 result]
 ```
 
-这张图不是抽象的“理想架构”，而是当前代码的职责边界：`SubtitleRemover` 和 `MediaEnhancer` 负责媒体、掩膜、进度、视频编码与输出；引擎类才负责把 NumPy 数组转换成模型输入并执行 `model(...)`。
+这张图不是抽象的“理想架构”，而是当前代码的职责边界：`ContentRepairProcessor` 和 `MediaEnhancer` 负责媒体、掩膜、进度、视频编码与输出；引擎类才负责把 NumPy 数组转换成模型输入并执行 `model(...)`。
 
 ## 从命令行进入修复任务
 
@@ -45,25 +45,25 @@ flowchart TD
 python -m backend.main --input sample.png --manual-area 100 420 80 160 --mode lama --device auto
 ```
 
-这个例子并不表示“只要提供一张图，模型就知道删什么”。`--manual-area` 被转换为 `MaskPlan`；`run()` 会拒绝没有最终掩膜、也没有启用视频动态 OCR 的任务。对于图片，当前 CLI 的 `--subtitle-area-coords` 是 OCR 候选区域，不等价于最终 mask；想做一个可重复的最小实验时，应优先用 `--manual-area`。
+这个例子并不表示“只要提供一张图，模型就知道删什么”。`--manual-area` 被转换为 `MaskPlan`；`run()` 会拒绝没有最终掩膜、也没有启用视频动态 OCR 的任务。对于图片，当前 CLI 的 `--ocr-region-coords` 是 OCR 候选区域，不等价于最终 mask；想做一个可重复的最小实验时，应优先用 `--manual-area`。
 
 入口在 `main.py` 的 `if __name__ == "__main__"` 分支，关键赋值可概括为：
 
 ```python
 args = parse_args()
-remover = SubtitleRemover(args.input)
-remover.mask_plan = MaskPlan(...).to_dict()  # 来自 --manual-area
-remover.inpaint_mode = args.mode             # opencv / lama / anime_lama / manga
-remover.ai_device = args.device              # auto / cuda / cpu
-remover.model_dir = args.model_dir
-remover.run()
+repair_processor = ContentRepairProcessor(args.input)
+repair_processor.mask_plan = MaskPlan(...).to_dict()  # 来自 --manual-area
+repair_processor.inpaint_mode = args.mode             # opencv / lama / anime_lama / manga
+repair_processor.ai_device = args.device              # auto / cuda / cpu
+repair_processor.model_dir = args.model_dir
+repair_processor.run()
 ```
 
-这里没有 PyTorch 张量。此时 `SubtitleRemover` 只是任务编排对象：它保存输入媒体的宽高、输出路径、掩膜计划和用户选择的模式。把业务参数留在这个层面，能避免底层 LaMa 引擎知道命令行、GUI 或 FFmpeg 的细节。
+这里没有 PyTorch 张量。此时 `ContentRepairProcessor` 只是任务编排对象：它保存输入媒体的宽高、输出路径、掩膜计划和用户选择的模式。把业务参数留在这个层面，能避免底层 LaMa 引擎知道命令行、GUI 或 FFmpeg 的细节。
 
 ### `run()` 到 `_repair()`：先有业务区域，才有模型
 
-对单张图片，`run()` 最终调用 `remove_image_subtitles()`；该方法读取 OpenCV BGR 图像，再调用 `_repair(original_frame)`。对视频，`remove_video_subtitles()` 逐帧读取，每一帧同样进入 `_repair(frame)`。因此图像和视频共享了“单帧修复”的核心逻辑。
+对单张图片，`run()` 最终调用 `repair_image()`；该方法读取 OpenCV BGR 图像，再调用 `_repair(original_frame)`。对视频，`repair_video()` 逐帧读取，每一帧同样进入 `_repair(frame)`。因此图像和视频共享了“单帧修复”的核心逻辑。
 
 `_repair()` 的顺序很重要：
 
@@ -80,7 +80,7 @@ return repaired
 - 空 mask 直接返回原帧，既节省模型计算，也避免“没有指定区域却改坏整张图”。
 - `_engine()` 才会按模式创建引擎。结果缓存在 `self._inpaint_engine` 中，所以一个图片任务或一个视频任务不会为每帧重新下载权重、重建网络、占用一次新的显存。
 
-这里的“只初始化一次”是**每个 `SubtitleRemover` 任务实例一次**，不是进程全局的永久单例；创建新的任务对象仍可能重新加载模型。这种措辞比笼统地说“模型只加载一次”更准确。
+这里的“只初始化一次”是**每个 `ContentRepairProcessor` 任务实例一次**，不是进程全局的永久单例；创建新的任务对象仍可能重新加载模型。这种措辞比笼统地说“模型只加载一次”更准确。
 
 ## 修复引擎：接口统一，模型约定不同
 
@@ -178,7 +178,7 @@ def describe_model(model):
 
 ## Real-ESRGAN：从 checkpoint 到逐帧结果
 
-超分链路不是 `SubtitleRemover` 的一部分。`MediaEnhancer.run()` 在一次图片或视频任务开始时创建一个 `RealESRGANEnhancer`，随后 `_run_image()` 调用一次 `enhancer.enhance(...)`，`_run_video()` 则对每一帧调用它。网络实例在本次 `run()` 中复用，避免视频每帧重新加载 checkpoint。
+超分链路不是 `ContentRepairProcessor` 的一部分。`MediaEnhancer.run()` 在一次图片或视频任务开始时创建一个 `RealESRGANEnhancer`，随后 `_run_image()` 调用一次 `enhancer.enhance(...)`，`_run_video()` 则对每一帧调用它。网络实例在本次 `run()` 中复用，避免视频每帧重新加载 checkpoint。
 
 ### 为什么 `.pth` 不能直接执行
 
@@ -276,7 +276,7 @@ print("model:", self.device, "training=", self.model.training)
 
 | 现象 | 首先检查的位置 | 针对性结论或动作 |
 | ---- | -------------- | ---------------- |
-| 一开始就提示没有可修复区域 | `SubtitleRemover.run()`、`mask_plan`、`video_dynamic_ocr` | 图片最小复现使用 `--manual-area`；确认 mask 内确实有非零像素 |
+| 一开始就提示没有可修复区域 | `ContentRepairProcessor.run()`、`mask_plan`、`video_dynamic_ocr` | 图片最小复现使用 `--manual-area`；确认 mask 内确实有非零像素 |
 | 下载失败或 MD5 不匹配 | `ModelStore.ensure()`、模型目录、网络/代理/磁盘 | 不要复用临时 `.download` 文件；重新下载并保留期望哈希校验 |
 | `load_state_dict` 有 missing / unexpected keys | `RealESRGANEnhancer._asset_and_model()` 与 checkpoint 文件名 | 确认动漫/通用模式与权重配套；不要直接用 `strict=False` 跳过错误 |
 | `Expected all tensors to be on the same device` | 模型参数、`image_tensor.device`、`mask_tensor.device` | 模型和每个输入都必须是同一设备；只迁移图像而漏迁移 mask 仍会失败 |
@@ -309,7 +309,7 @@ assert result.dtype == np.uint8
 
 面对这个项目，可以按以下顺序说明，而不是只说“我调用了一个 AI 模型”：
 
-1. **任务与入口**：`main.py` 的 CLI 或 GUI 任务先创建 `SubtitleRemover`；修复与超分是独立的两条业务链路。
+1. **任务与入口**：`main.py` 的 CLI 或 GUI 任务先创建 `ContentRepairProcessor`；修复与超分是独立的两条业务链路。
 2. **输入契约**：修复层接收 OpenCV BGR `uint8` 图像和二维 mask；LaMa 转为 RGB 的 `[1,3,H,W]` 浮点 Tensor，mask 转为 `[1,1,H,W]`。超分同样从 BGR 转 RGB，但不接收 mask，输出原生 4×。
 3. **模型与状态**：LaMa/Manga 是 `torch.jit.load` 得到的 TorchScript 模型；Real-ESRGAN 是先构建 `nn.Module` 网络、再用严格 `load_state_dict` 注入 checkpoint。两者都 `.eval()`，每次前向都在 `torch.inference_mode()` 中执行。
 4. **设备与精度**：权重先在 CPU 读取，再迁移到实际设备；`auto` 会真实尝试 CUDA 后回退 CPU。Real-ESRGAN 在 CUDA 上同步使用模型/输入 `float16`，CPU 使用 `float32`。

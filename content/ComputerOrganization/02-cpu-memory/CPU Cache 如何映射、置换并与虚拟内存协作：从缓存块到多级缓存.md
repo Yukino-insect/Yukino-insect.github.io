@@ -100,7 +100,7 @@ CPU 发出一次读写请求后，该级的 **Cache controller** 用 index 读�
 
 ## 四、Cache 与虚拟内存：相邻协作，不是同一个功能
 
-程序中的 load/store 指令通常先产生**虚拟地址**。MMU 通过 TLB 或页表把它翻译为物理地址；随后访问 Cache 与主存。关于页表、TLB 和缺页，可先阅读[虚拟内存](../03-operating-systems/虚拟内存.md)。
+程序中的 load/store 指令通常先产生**虚拟地址**。MMU 通过 TLB 或页表把它翻译为物理地址；随后访问 Cache 与主存。关于页表、TLB 和缺页，可先阅读[CPU 如何通过页表访问内存：虚拟地址、物理页与缺页](../os-memory-file-io-course/02-virtual-memory-and-page-tables.md)。
 
 两套机制缓存的东西完全不同：
 

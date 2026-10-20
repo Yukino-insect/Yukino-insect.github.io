@@ -261,6 +261,323 @@ result_rgb = (
 
 `clamp` 是 PyTorch Tensor 方法；`np.clip` 是 NumPy 函数。它们都表达限制区间的数学动作，但前者在模型当前 device 上处理 Tensor，后者在 CPU 数组上处理 ndarray。不要为了名字相似而把 CUDA Tensor 传给 `np.clip`，也不要把 ndarray 当作 Tensor 调用 `.clamp()`。
 
+## 项目实战：矩形坐标怎样成为可供模型使用的像素 mask
+
+修复模型并不理解“这是字幕框”这种业务概念。它只接收两张同尺寸的数值图：原图和 mask。项目的 `backend/inpaint/mask.py` 把 OCR 或手工输入的矩形翻译为 shape `[H, W]`、dtype `uint8`、数值只取 `0` 或 `255` 的单通道 mask；`backend/inpaint/engine.py` 再将它和图像送进不同修复引擎。
+
+| mask 中的数值 | 像素语义 | 引擎最终应做什么 |
+| --- | --- | --- |
+| `0`（黑） | 不需要修复 | 恢复原图像素，绝不允许模型改写 |
+| `255`（白） | 需要修复 | 允许 OpenCV 或神经网络生成新像素 |
+
+这不是灰度图的“深浅程度”，而是集合：白色像素组成待修复集合 $M$，黑色像素组成补集 $\bar M$。项目随后会执行 `(mask > 0)`，故任何正数都被归为需要修复；当前 AI 路径把 mask 视为**二值**数据，不是软 alpha 遮罩。
+
+### 坐标规范化：外部输入为何要变成半开区间
+
+项目的矩形类型是：
+
+```python
+Rectangle = tuple[int, int, int, int]  # xmin, xmax, ymin, ymax
+```
+
+请留意顺序是 `(xmin, xmax, ymin, ymax)`，不是许多图形库采用的 `(x1, y1, x2, y2)`。`normalize_regions()` 的核心是：
+
+```python
+raw_left, raw_right = sorted((int(xmin), int(xmax)))
+raw_top, raw_bottom = sorted((int(ymin), int(ymax)))
+
+left, right = max(0, raw_left), min(width, raw_right)
+top, bottom = max(0, raw_top), min(height, raw_bottom)
+
+if right > left and bottom > top:
+    normalized.append((left, right, top, bottom))
+```
+
+这段代码依次处理浮点/字符串坐标、反向拖拽、越出图像边界，以及零面积区域。它把矩形统一表示为 `[left, right) × [top, bottom)`：左上端包含、右下端不包含。假设图像宽 `100`、高 `60`，外部坐标为 `(120, -10, 50, 20)`，规范化后是 `(0, 100, 20, 50)`，覆盖 x 的 `0…99`、y 的 `20…49`，恰好 `100 × 30` 个像素。
+
+这种约定与 Python 切片 `image[top:bottom, left:right]` 完全一致，但 OpenCV 的矩形两个端点都包含。因此画 mask 时必须写：
+
+```python
+cv2.rectangle(mask, (left, top), (right - 1, bottom - 1), 255, thickness=-1)
+```
+
+`right - 1` 和 `bottom - 1` 并非魔法数字。若漏掉它们，每个框都会额外吞掉一列和一行像素；相邻的 OCR 框甚至会覆盖本应保留的边缘。最后的 `set` 去重和排序不改变最终白色集合，却使日志、单元测试和排障时的区域顺序可复现。
+
+### 二值填充、形态学膨胀与未实现的羽化参数
+
+一张空 mask 由下列代码创建：
+
+```python
+mask = np.zeros((height, width), dtype=np.uint8)
+```
+
+它是 `[H, W]` 而不是 `[H, W, 1]`，这正是 OpenCV 单通道图像的常规表示。`uint8` 足够保存 0/255；若误用 NumPy 默认的 `float64`，不仅多占八倍内存，也会给后续 OpenCV/PyTorch 转换增加不必要的 dtype 边界。
+
+OCR 框通常只包住文字主体，抗锯齿、描边与阴影可能留在框外。`expand_pixels=r` 用椭圆形结构元素做形态学**膨胀**：
+
+```python
+kernel_size = expand_pixels * 2 + 1
+kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size, kernel_size))
+mask = cv2.dilate(mask, kernel)
+```
+
+当 `r=2` 时得到 `5×5` 的近似圆形印章：每个白色像素向周围盖章，白色区域向外扩展约两像素。椭圆核会比全 1 的方形核少一些对角方向的扩张；图像边界外不会新建数组，只会自然截断。`np.any(mask)` 则是空集合短路：没有待修复像素时，根本不必创建核或调用 OpenCV。
+
+函数虽接受 `feather_pixels`，其 docstring 已明确说明目前仍保持二值输出。换言之，传 `feather_pixels=10` 不会得到羽化边缘；这只是为未来保留的接口。更关键的是，即使未来真的输出灰度边缘，目前 LaMa 路径的 `(mask > 0)` 也会将所有正值压成 1。要实现软 mask，必须同时确认模型输入契约并修改引擎，不能只改这个参数名。
+
+## 更完整的 `masking.py`：把多种用户意图编译成一张 mask
+
+前面的 `backend/inpaint/mask.py` 是轻量的“矩形列表 → 二值图”工具；项目用于 GUI、视频和多种交互方式的上层模块则是 `backend/masking.py`。它不运行模型，而是根据可序列化的 `MaskPlan` 构造最终 mask。前者负责一种简单表示，后者负责把多种用户意图组合为模型可理解的像素集合，二者不能混为一谈。
+
+`MaskPlan` 的三种主要来源如下：
+
+| 字段 | 用户意图 | 生成函数 | 像素语义 |
+| --- | --- | --- | --- |
+| `manual_regions` | 明确框选区域 | `rectangle_mask()` | 整个矩形允许修复 |
+| `brush_strokes` | 手绘涂抹 | `brush_mask()` | 路径周围的笔刷圆盘允许修复 |
+| `candidate_regions` 与颜色条件 | 只移除框内特定颜色文字 | `color_mask()` | 只选择 ROI 内通过颜色判定的字形 |
+
+最终 mask 不是三选一。`build_mask()` 从全黑数组开始，按像素合并三种来源：
+
+```python
+mask = np.zeros(image_bgr.shape[:2], dtype=np.uint8)
+mask = cv2.bitwise_or(mask, rectangle_mask(...))
+mask = cv2.bitwise_or(mask, brush_mask(...))
+mask = cv2.bitwise_or(mask, color_mask(...))
+```
+
+对于每个 $(y,x)$，这等价于：
+
+$$
+M(y,x)=M_{\text{rectangle}}(y,x)\lor M_{\text{brush}}(y,x)\lor M_{\text{color}}(y,x)
+$$
+
+所以用户先框选字幕、再涂抹另一处、最后以颜色补选时，先前确认的区域不会被替换。这里不能使用 Python `or`：它只判断数组对象的真假并返回某一个对象，既不会逐像素计算，还可能报“数组真值不明确”；`cv2.bitwise_or` 才会合并同 shape 的 `uint8` 像素。
+
+`MaskPlan` 会把笔刷点、半径和颜色容差序列化为普通字典，再由子进程重建。所谓“冻结计划”并非形式上的配置保存：视频任务已经开始后，GUI 中用户继续拖动选区或修改笔刷粗细，不应反过来改变正在处理的帧。`to_dict()`、`from_dict()` 与 `_normalize_brush_strokes()` 应被理解为数值输入的可复现快照。
+
+### OCR 多边形：顶点与矩形结束边界为何使用不同上界
+
+`OcrPolygon` 保存 OCR 检测器输出的轮廓顶点；它代表“文字可能出现的区域”，不等于字形的逐像素分割。`polygon_mask()` 先将它转成 `int32` 数组：
+
+```python
+points = np.asarray(polygon.points, dtype=np.int32)
+points[:, 0] = np.clip(points[:, 0], 0, max(0, width - 1))
+points[:, 1] = np.clip(points[:, 1], 0, max(0, height - 1))
+
+if cv2.contourArea(points) < 1:
+    return None
+cv2.fillPoly(mask, normalized, 255)
+```
+
+这里上界为 `width - 1`、`height - 1`，与矩形的 `right <= width` 看似不同，实际对应两种语义：多边形存的是**实际像素顶点**，x 合法范围只能是 `0…W-1`；矩形存的是半开区间的结束边界，因此合法结束值可等于 `W`。`contourArea < 1` 则排除重合、共线或裁剪后退化的多边形，避免把一条线误填成文本区域。
+
+动态 OCR 中的 `filter_polygons_by_regions()` 只把用户 ROI 当候选筛选器：中心点或任一顶点落入 ROI 就保留。它不是精确的多边形相交算法，而是为避免细长文字擦过 ROI 边缘时被过早丢弃；真正决定哪些像素被改写的仍是后面的颜色筛选和最终 mask。
+
+### 相对坐标笔刷：预览缩放后为何仍能对齐原图
+
+笔刷不能保存屏幕像素坐标；预览可能缩放，而视频原帧也可能远大于 GUI 画布。项目将每个点规范为 `[0,1]`，并在每一笔中冻结当时半径：
+
+```python
+points.append([
+    max(0.0, min(1.0, float(point[0]))),
+    max(0.0, min(1.0, float(point[1]))),
+])
+
+pixel_points = [
+    (round(x * max(0, width - 1)), round(y * max(0, height - 1)))
+    for x, y in stroke["points"]
+]
+```
+
+`x=0` 映射到左边第 0 列，`x=1` 映射到右边最后一列 `W-1`；乘 `W-1` 而非 `W` 是为了不生成越界坐标。`round` 会带来至多约半像素的离散化误差，却能使同一份计划在不同分辨率上稳定重建，这比保留不存在的“小数像素”更有意义。
+
+多点笔刷会画折线并补上两个圆帽：
+
+```python
+cv2.polylines(mask, [np.asarray(points, dtype=np.int32)], False,
+              255, thickness=stroke_radius * 2, lineType=cv2.LINE_AA)
+cv2.circle(mask, points[0], stroke_radius, 255, thickness=-1, lineType=cv2.LINE_AA)
+cv2.circle(mask, points[-1], stroke_radius, 255, thickness=-1, lineType=cv2.LINE_AA)
+```
+
+折线连接路径，圆帽防止端点被削平。`LINE_AA` 会在视觉边缘写出 0 到 255 之间的灰度，因此 `brush_mask()` 的结果未必严格只有 0/255。这不是疏漏：后续 AI 引擎执行 `(mask > 0)`，OpenCV 修复也以非零表示需要修复，抗锯齿边缘最终都会算作完整 mask 像素，从而不留下笔刷边缘的原始文字。若将来需要“半透明修复强度”，必须修改整个引擎契约，不能只依赖 `LINE_AA`。
+
+### 颜色筛选：`#RRGGBB`、Lab 距离与 NumPy 广播
+
+颜色模式不是在整张图上搜索“白色”。它先构建用户确认的 ROI，再只在 ROI 内选择接近前景色的像素：
+
+```python
+roi = rectangle_mask(image_bgr.shape, regions)
+selected = foreground_mask_in_roi(
+    image_bgr, roi, foreground, background, tolerance,
+)
+return _dilate_mask(selected, outline_expand_pixels)
+```
+
+因此画面中的白云、衣服和高光不会仅因颜色相近就被修复：它们还必须落在用户框选的候选区域内。GUI 颜色是 `#RRGGBB`，而 OpenCV 图像为 BGR，`_hex_to_bgr()` 解析十六进制 RGB 后以 `rgb[::-1]` 翻转通道；遗漏此步骤会把红蓝混淆，颜色距离“能算出数”，却会选择错误像素。
+
+核心判定如下：
+
+```python
+lab = cv2.cvtColor(image_bgr[:, :, :3], cv2.COLOR_BGR2LAB).astype(np.float32)
+foreground_distance = np.linalg.norm(lab - foreground_lab, axis=2)
+background_distance = np.linalg.norm(lab - background_lab, axis=2)
+
+selected = (
+    (roi_mask > 0)
+    & (foreground_distance <= max(0, int(tolerance)))
+    & (foreground_distance < background_distance)
+)
+```
+
+| 数组 | shape | 含义 |
+| --- | --- | --- |
+| `lab` | `[H,W,3]` | 每个像素的三维 Lab 向量 |
+| `foreground_lab` | `[3]` | 一个前景颜色向量 |
+| `lab - foreground_lab` | `[H,W,3]` | NumPy 将 `[3]` 广播给每一个像素 |
+| `foreground_distance` | `[H,W]` | 每个像素到前景色的欧氏距离 |
+| `selected` | `[H,W]` bool | 同时满足 ROI、容差与前景更近 |
+
+第二个条件要求“足够像前景”，第三个条件要求“比背景更像前景”。二者距离相等时使用严格小于，像素不会被选中；这是保守策略，宁可少选模糊边缘，也不要把背景误交给模型。`np.where(selected, 255, 0).astype(np.uint8)` 最后才把 bool 图变回所有引擎通用的 0/255 mask。
+
+`outline_expand_pixels` 放在颜色筛选**之后**：先精确找到字形，再向外膨胀少量范围，才能覆盖描边和抗锯齿。它故意不裁回 ROI，故恰好压在用户框边缘的文字描边仍可清除；这是一项有明确边界的召回优先取舍，并非无意越界。
+
+### 动态 OCR：多边形先限缩候选，再按颜色缩到字形
+
+视频路径中的 `refine_ocr_polygon_mask()` 不会直接把 OCR 多边形整块交给修复模型：
+
+```python
+roi = polygon_mask(image_bgr.shape, polygons)
+refined = foreground_mask_in_roi(image_bgr, roi, foreground, background, tolerance)
+return _dilate_mask(refined, outline_expand_pixels)
+```
+
+OCR 多边形常包含文字行之间的背景空白；直接填满它会把气泡、字幕条或画面细节一起交给修复模型。这里先用多边形做候选 ROI，随后按 Lab 距离缩到目标前景色的字形，最后才小幅膨胀纳入描边。检测框追求召回，而最终 pixel mask 决定哪些原始像素会被替换——两者必须分层理解。
+
+## LaMa 的像素预处理：相同尺寸，却有两种 padding 策略
+
+`TorchScriptLaMaEngine.inpaint()` 接受 BGR `uint8` 图像及上述 mask 后，首先运行：
+
+```python
+rgb = cv2.cvtColor(image_bgr[:, :, :3], cv2.COLOR_BGR2RGB)
+binary_mask = (mask > 0).astype(np.uint8)
+
+padded_image = _pad_to_modulo(rgb, 8)
+padded_mask = _pad_to_modulo(binary_mask, 8, constant=True)[:, :, 0]
+```
+
+这四行同时定义了几个边界：`image_bgr[:, :, :3]` 丢弃可能存在的 alpha，仅给模型 B、G、R 三通道；`cvtColor` 只是 BGR→RGB 重排，尚未改变 `[0,255]` 值域；非零 mask 被规范为 `0/1`。LaMa 的空间尺寸需要是 8 的倍数，所以补齐仅发生在右侧和下侧，之后便能用 `[:height, :width]` 无偏移地裁回原图。
+
+图像和 mask 补到相同高宽，却故意使用不同策略：
+
+```python
+np.pad(image, padding, mode="symmetric")  # 原图
+np.pad(mask, padding, mode="constant")    # mask，常数为 0
+```
+
+原图的 `symmetric` 会在边缘镜像像素，避免模型看到突兀的纯黑边；mask 的补区必须全为 0，因为那里是原图外的虚拟区域，绝不能被误标为“需要修复”。若对 mask 也做镜像 padding，贴边的白色区域可能被复制进补区，改变模型真正看到的任务。
+
+`_pad_to_modulo()` 接到二维灰度或 mask 时，会临时增加通道：
+
+```python
+if image.ndim == 2:
+    image = image[:, :, np.newaxis]  # [H,W] -> [H,W,1]
+```
+
+因此 mask 后面才需要 `[:, :, 0]` 还原二维数组。以 `H=721`、`W=1282` 为例，8 倍数对齐后为 `728×1288`；模型的图像输入是 `[1,3,728,1288]`，mask 输入是 `[1,1,728,1288]`。
+
+```python
+image_tensor = self.torch.from_numpy(
+    padded_image.transpose(2, 0, 1).astype(np.float32) / 255.0
+)
+mask_tensor = self.torch.from_numpy(
+    padded_mask[np.newaxis].astype(np.float32)
+)
+result = self.model(
+    image_tensor.unsqueeze(0).to(self.device),
+    mask_tensor.unsqueeze(0).to(self.device),
+)
+```
+
+图像完成 `HWC→CHW`、`uint8→float32`、`[0,255]→[0,1]`、`CHW→NCHW` 四次明确转换；mask 完成 `HW→1HW→N1HW`，数值保持 `0.0/1.0`。shape 看似相近，并不意味着可交换：把 0/255 mask 误当作图像输入，或把 RGB 图像送入 mask 参数，即使没有立刻报错，模型的语义也已经完全失效。
+
+## LaMa 的输出后处理：裁剪、量化、平坦背景收尾与像素不变量
+
+模型输出是 device 上的 `[1,3,H_p,W_p]` Tensor，项目用下面的顺序变回 OpenCV 图像：
+
+```python
+result_rgb = result[0].permute(1, 2, 0).detach().cpu().numpy()
+result_bgr = cv2.cvtColor(
+    np.clip(result_rgb[:height, :width] * 255, 0, 255).astype(np.uint8),
+    cv2.COLOR_RGB2BGR,
+)
+```
+
+先去掉 batch 维、将 `CHW` 改回 `HWC`，再离开 GPU 并转为 NumPy；接着移除右、下补区，逆转 `[0,1]` 归一化，**先** `clip`、**后**量化为 `uint8`，最后 RGB→BGR。`astype(np.uint8)` 并不是饱和截断；交换 `clip` 与 `astype` 的顺序时，负值或大于 255 的浮点值可能变成错误颜色。裁剪也应在浮点阶段完成，以免对补区白做颜色转换。
+
+网络输出之后还有 `_finish_ink_on_flat_background()`。它的用途并非把模型结果一律涂平，而是针对“白色对话框内的稀疏深色文字”可能留下的灰色幽灵笔画，谨慎采用真实邻域背景色收尾：
+
+```python
+source_lab = cv2.cvtColor(source_bgr[:, :, :3], cv2.COLOR_BGR2LAB).astype(np.float32)
+component_count, labels, stats, _ = cv2.connectedComponentsWithStats(
+    binary_mask.astype(np.uint8), connectivity=8,
+)
+
+component = labels == label
+dilated = cv2.dilate(component.astype(np.uint8), kernel)
+ring = (dilated > 0) & ~binary_mask.astype(bool)
+```
+
+`connectedComponentsWithStats` 将每块相连的白色区域编号；8 连通使对角相接的抗锯齿笔画也可归为同一组件。9×9 椭圆核向外膨胀当前组件，形成候选采样环；`~binary_mask.astype(bool)` 排除**所有** mask 区域，防止相邻字幕框中的文字混入背景样本。Lab 空间将亮度与色彩轴分开，比逐通道比较 BGR 更适合做“周围是否近似同色”的判断，但阈值 `16.0`、`22.0` 是本项目 OpenCV Lab 编码下的经验量，并非可机械迁移的通用常数。
+
+```python
+ring_lab = source_lab[ring]                    # [K,3]
+background_lab = np.median(ring_lab, axis=0)   # [3]
+distances = np.linalg.norm(ring_lab - background_lab, axis=1)
+inliers = distances <= 16.0
+
+background_bgr = np.median(source_bgr[:, :, :3][ring][inliers], axis=0)
+repaired[component] = np.clip(background_bgr, 0, 255).astype(np.uint8)
+```
+
+这里若采样环有 $K$ 个像素，布尔索引结果是 `[K,3]`；减去 `[3]` 中位数会由 NumPy 广播成 `[K,3]`，`norm(..., axis=1)` 计算每个像素到背景中心的三维距离。中位数不像均值那样容易被气泡边框、JPEG 色块或残留笔画拉偏；再要求至少 80% 采样像素是 inlier，并要求原 mask 区域的第 75 百分位亮度明显低于背景亮度。于是复杂纹理、渐变、彩色物体和宽泛涂鸦会保留 AI 输出，而不会被粗暴填成单色。
+
+无论上述收尾是否发生，最后都会执行项目最重要的像素不变量：
+
+```python
+result_bgr[binary_mask == 0] = image_bgr[:, :, :3][binary_mask == 0]
+```
+
+两侧由相同的二维布尔索引各取出 `[K,3]` 个未遮罩像素。赋值后严格有：
+
+$$
+\forall (y,x)\notin M,\quad \mathrm{result}(y,x)=\mathrm{source}(y,x)
+$$
+
+也就是说，即使模型在上下文区域轻微改写了图像，mask 外的像素仍被原图精确覆盖。这是排查“为什么没有选中的地方也变了”时应首先验证的业务断言。
+
+## Manga 模式：灰度、线稿与 $[-1,1]$ 并不是 LaMa 的重复
+
+`MangaEngine` 的模型契约不同，不能照搬 LaMa 的 `[0,1]` 彩色输入：
+
+```python
+gray = cv2.cvtColor(image_bgr[:, :, :3], cv2.COLOR_BGR2GRAY)
+padded_gray = _pad_to_modulo(gray, 16)[:, :, 0]
+gray_tensor = torch.from_numpy(padded_gray[np.newaxis, np.newaxis].astype(np.float32))
+normalized_gray = gray_tensor / 255 * 2 - 1.0
+```
+
+彩色 `[H,W,3]` 先变成单通道 `[H,W]`，两个 `newaxis` 则形成 `[1,1,H_p,W_p]`；空间尺寸要求是 16 的倍数。它的值域为：
+
+$$
+x_{[-1,1]}=\frac{x_{[0,255]}}{255}\times2-1
+$$
+
+所以黑色 0 变为 `-1`，中灰 127.5 变为 0，白色 255 变为 1；输出以 $(x+1)\times127.5$ 逆变换回 `[0,255]`。若把 LaMa 的 `[0,1]` 公式误用在这里，亮度会整体错误，并不是“模型随机发挥”。
+
+该模式还在每次调用前固定 Python、NumPy 与 PyTorch 的随机种子，以使 `torch.randn_like(mask_tensor)` 可复现。这有利于复现同一问题，但也会重置当前进程的全局随机序列；将来若改造成并行任务，应把“可复现性”和“任务之间的随机状态隔离”一起设计。
+
 ## 将三层操作放回 CleanCanvas 的真实数据流
 
 下面用一张 `720×1280` 的 BGR 图、用户请求 `1.5×` 为例，完整列出 Real-ESRGAN 的数值状态。假设使用 Anime/General 任一 4×模型，模型输出值域暂按通常的 `[0,1]` 约定理解：

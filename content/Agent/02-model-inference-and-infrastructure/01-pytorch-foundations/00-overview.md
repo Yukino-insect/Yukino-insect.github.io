@@ -83,9 +83,10 @@ python -c "import torch; print(torch.__version__)"
 12. [PyTorch 视觉预训练模型推理详解](04a-pretrained-model-inference-tutorial.md)：先分清 PyTorch、`torchvision`、Pillow 与模型权重的职责，再从分类器、`state_dict`、TorchScript 到 LaMa 和 Real-ESRGAN，完整走一遍模型输入、前向计算与输出后处理。
 13. [图像张量基础：NumPy 与 PyTorch 的数组、通道、mask 和内存](04b-image-arrays-numpy-pytorch.md)：补齐图像 shape、dtype、颜色顺序、切片、设备和 mask 的基础。
 14. [图像如何变成模型张量](05-image-tensor-preprocessing-and-inpainting.md)：逐步读懂 BGR/RGB、`uint8`/`float32`、NCHW、padding、mask 与后处理。
-15. [加载权重、选择设备与推理模式](06-model-loading-device-and-inference-mode.md)：解释 TorchScript、checkpoint、`state_dict`、CUDA 回退、`eval()`、FP16 与 `inference_mode()`。
-16. [Real-ESRGAN 的网络与分块推理](07-realesrgan-network-and-tiled-inference.md)：从卷积、残差、稠密连接到 4×超分、`PixelShuffle`、tile 与显存控制。
-17. [项目面试题与代码阅读清单](08-project-interview-and-debugging.md)：把前文汇总为可以用自己的话回答的项目问题、排障路径与边界。
+15. [读懂图像推理中的数值计算](05a-numerical-operations-python-numpy-pytorch.md)：从 Python 标量、NumPy 数组到 PyTorch Tensor，逐行解释 padding、mask、tile、dtype、shape、device 与值域操作。
+16. [加载权重、选择设备与推理模式](06-model-loading-device-and-inference-mode.md)：解释 TorchScript、checkpoint、`state_dict`、CUDA 回退、`eval()`、FP16 与 `inference_mode()`。
+17. [从 PyTorch 基础读懂 Real-ESRGAN](07-realesrgan-network-and-tiled-inference.md)：从网络类、卷积、残差、稠密连接到 4×超分、`PixelShuffle`、tile 与显存控制。
+18. [项目面试题与代码阅读清单](08-project-interview-and-debugging.md)：把前文汇总为可以用自己的话回答的项目问题、排障路径与边界。
 
 建议采用“读一小节、运行一段、故意改坏一次、再改回来”的节奏。比如把 `batch_size=32` 改成 `16`，观察输出是否仍合理；或删掉 `optimizer.step()`，观察模型为何不再进步。对初学者来说，能解释一次失败，常常比顺利运行十次更有价值。
 

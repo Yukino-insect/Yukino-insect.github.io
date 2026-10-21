@@ -170,4 +170,4 @@ CREATE TABLE order_item (
 - 主键、唯一约束、非空、检查和外键共同把业务规则变成数据库可执行的边界。
 - 当前价格与订单成交价不是重复，而是不同时间语义的事实；冗余设计必须说明一致性维护责任。
 
-至此，后续文章已有可操作的对象：`customer`、`book`、`author`、`book_author`、`book_order` 与 `order_item`。接下来可以围绕这份 schema 练习 DDL、插入数据、连接查询、聚合统计，以及最终的事务下单流程。
+至此，后续文章已有可操作的对象：`customer`、`book`、`author`、`book_author`、`book_order` 与 `order_item`。在真正执行 DDL 前，先阅读[函数依赖、规范化与模式分解](03a-functional-dependencies-and-normalization.md)：它会检验这份拆分是否消除了不该存在的重复，并解释为什么订单成交价仍然应该保留。随后再围绕这份 schema 练习 DDL、插入数据、连接查询、聚合统计，以及最终的事务下单流程。

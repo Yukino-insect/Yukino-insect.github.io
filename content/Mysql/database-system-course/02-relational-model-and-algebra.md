@@ -2,6 +2,7 @@
 date = '2026-10-19T20:00:00+08:00'
 draft = false
 title = '关系模型与关系代数：理解 SQL 查询的计算骨架'
+math = true
 +++
 
 关系模型之所以经久不衰，不是因为它把数据排成了网格，而是因为它用有限而严谨的结构描述事实，并用一组可组合的运算表达查询。SQL 的写法看似繁多，背后常可还原为“先筛选哪些行、再保留哪些列、再按什么条件关联”。一旦掌握这个过程，面对多表查询时便不必靠猜。
@@ -35,6 +36,21 @@ title = '关系模型与关系代数：理解 SQL 查询的计算骨架'
 能唯一标识一个元组的一组属性称为**超键**（superkey）。若从中去掉任何属性便不能唯一标识，则是**候选键**（candidate key）；从候选键中选作主要标识的一组是**主键**（primary key）。例如 ISBN 可以是图书的候选键，内部 `book_id` 也可以是候选键；若选 `book_id` 作为主键，ISBN 仍应由 `UNIQUE` 约束保护。订单项通常由 `(order_id, book_id)` 联合唯一标识，或使用独立 `order_item_id` 并额外限制同一订单不重复购买同一本书。
 
 空值 `NULL` 表示未知、尚未提供或不适用，绝不是空字符串和数字 0。SQL 的空值还会带来三值逻辑：`NULL = NULL` 的结果是未知而非真，所以必须用 `IS NULL` 判断。不要用 `0` 或 `'未知'` 冒充缺失值，那会混淆真正的业务值与未提供值。
+
+## 关系操作全景：基本运算与派生运算
+
+关系代数把查询看成“关系输入、关系输出”的组合。每一步输入和输出都是关系，因此一个操作的结果还能继续作为下一个操作的输入；这正是复杂查询仍可被拆解、验证和优化的原因。教材中常将选择、投影、并、差、笛卡尔积和重命名视为一组基础操作，连接、交、除则可以由它们组合而来。
+
+| 类别 | 运算与记号 | 作用 | 常见 SQL 对应 |
+| ---- | ---------- | ---- | ------------- |
+| 单关系 | 选择 `σ` | 按谓词保留元组 | `WHERE` |
+| 单关系 | 投影 `π` | 保留所需属性 | `SELECT DISTINCT` |
+| 单关系 | 重命名 `ρ` | 重命名关系或属性 | `AS` 别名 |
+| 二元集合 | 并 `∪`、差 `−` | 合并兼容关系，或排除已有事实 | `UNION`、`EXCEPT` / `NOT EXISTS` |
+| 二元组合 | 笛卡尔积 `×` | 每一行与另一关系的每一行配对 | `CROSS JOIN` |
+| 派生组合 | 交 `∩`、连接 `⋈`、除 `÷` | 找共同元组、匹配事实、满足“全部条件”的对象 | `INTERSECT`、`JOIN`、双重 `NOT EXISTS` |
+
+关系代数默认采用集合语义：同一元组不会重复出现。SQL 默认通常采用多重集（bag）语义，因此要注意 `UNION ALL`、重复连接行与 `DISTINCT` 的差异。两者并不矛盾；SQL 是面向实际系统的语言，需要保留重复来表达计数和明细，但把它与关系代数对照时必须先问清楚是否去重。
 
 ## 选择与投影：先决定行，再决定列
 
@@ -120,6 +136,159 @@ WHERE b.stock > 0
 
 不要轻易改用 `NOT IN (SELECT oi.book_id ...)`。若子查询意外产生 `NULL`，三值逻辑可能让 `NOT IN` 没有返回任何行。`NOT EXISTS` 直接问“是否不存在一条匹配记录”，语义通常更贴合业务。
 
+### 差集运算的并兼容要求：以教师关系为说明
+
+关系代数不是把符号随意排在一起；它有递归的表达式语法。先把 `R`、`S` 看成关系名，`E` 看成任意一个已经合法的关系代数表达式，常见骨架可以写为：
+
+```text
+E ::= R
+   |  σ_条件(E)
+   |  Π_属性列表(E)
+   |  ρ_新名称(E)
+   |  (E ∪ E) | (E − E) | (E × E) | (E ⋈条件 E)
+```
+
+这段写法读作“一个合法表达式 `E`，要么是一个关系名；要么是在一个合法表达式外套一个单目运算；要么是把两个合法表达式用二元运算连接起来”。所有这些运算的结果仍然是关系，所以才可以继续嵌套。例如选择的结果能再投影，投影的结果又能作为差集的左操作数。
+
+符号的语法位置也有固定含义：
+
+- `instructor` 是**操作数**，即输入关系名；可以理解为教师表。
+- `Π`、`σ` 写在操作数前，是**前缀单目运算符**；圆括号中必须放一个关系或另一个合法表达式。
+- 下标是运算符的参数：`Π` 的下标是属性列表，`σ` 的下标是布尔条件。它们不是结果列名的随意注释。
+- `−` 写在两个完整关系表达式中间，是**中缀二元运算符**；左右两边都必须先各自产生一个关系。
+- 括号决定嵌套边界。`Π_{ID,name}(instructor)` 的意思是“把投影应用到 `instructor`”；并不是“把 `ID,name` 当作一张关系”。
+
+从“表达式树”看，下面的式子有三个中间结果：
+
+```text
+E0 = instructor
+E1 = Π_ID,name(E0)                    -- 只留下编号、姓名
+E2 = σ_dept_name='Physics'(E0)        -- 只留下 Physics 系教师
+E3 = E1 − E2                          -- 对两个结果做差
+```
+
+差集的两个操作数必须具有相同的关系模式。下面以常见的 `instructor` 教师关系说明这一要求：
+
+$$
+\Pi_{ID,\;name}(instructor) - \sigma_{dept\_name = \text{Physics}}(instructor)
+$$
+
+这个表达式的业务意图是“找出不属于 Physics 系的教师的 `ID` 与 `name`”，但严格来说**不能直接相减**。左侧投影后的模式是 `(ID, name)`，右侧选择后的模式却仍是完整的 `instructor(ID, name, dept_name, salary, ...)`。列数和属性都不同，因而两个关系不并兼容，这个差集表达式不合法。
+
+要使差集合法，必须先把右侧也投影到同一模式：
+
+$$
+\Pi_{ID,\;name}(instructor)
+-
+\Pi_{ID,\;name}
+\bigl(
+  \sigma_{dept\_name = \text{Physics}}(instructor)
+\bigr)
+$$
+
+计算顺序是：先取所有教师的 `ID`、`name`；再取 Physics 系教师的 `ID`、`name`；最后做差，留下不在 Physics 系的教师。它也可以读成：
+
+```text
+所有教师的姓名与编号
+减去
+Physics 系教师的姓名与编号
+```
+
+若数据库支持集合差集，SQL 可以直观地写为：
+
+```sql
+SELECT instructor_id, name
+FROM instructor
+
+EXCEPT
+
+SELECT instructor_id, name
+FROM instructor
+WHERE dept_name = 'Physics';
+```
+
+许多 MySQL 项目会更常用 `NOT EXISTS` 来表达同一含义，并避免不同版本的集合运算支持差异：
+
+```sql
+SELECT i.instructor_id, i.name
+FROM instructor AS i
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM instructor AS physics_instructor
+    WHERE physics_instructor.instructor_id = i.instructor_id
+      AND physics_instructor.dept_name = 'Physics'
+);
+```
+
+这里假定 `instructor_id` 是教师主键。一名教师只有一条教师记录时，较简单的 `WHERE dept_name <> 'Physics'` 也能工作；但若 `dept_name` 可能为 `NULL`，它会因 SQL 三值逻辑把 `NULL` 一并过滤。关系代数的经典模型不含 `NULL`，实际 SQL 写法却必须明确“部门未知的教师是否也应保留”这一业务规则。
+
+### 重命名与交：避免歧义，找出共同事实
+
+**重命名**（rename）用 `ρ` 表示，可以修改关系名、属性名或两者。它在自连接中不可省略：若要找出购买过同一本书的两位不同客户，必须把“订单项”视为两个不同角色的关系，概念上可写成 `ρA(OrderItem)` 与 `ρB(OrderItem)`。SQL 中的 `AS a`、`AS b` 就承担这个职责。
+
+```sql
+SELECT DISTINCT a.order_id AS first_order_id,
+       b.order_id AS second_order_id,
+       a.book_id
+FROM order_item AS a
+JOIN order_item AS b
+  ON a.book_id = b.book_id
+ AND a.order_id < b.order_id;
+```
+
+这里的 `a`、`b` 不是给表起一个好看的短名字，而是在同一个关系的两次出现之间建立可区分的身份。没有重命名，`order_item.book_id = order_item.book_id` 只是在比较同一列，无法表达两个角色的匹配。
+
+**交集** `R ∩ S` 返回同时属于 R 和 S 的元组，也要求两侧并兼容。它可由差集推导：`R ∩ S = R − (R − S)`。例如找出既在“新书推荐”又在“编辑精选”清单中的 `book_id`。较新的 MySQL 支持 `INTERSECT`，但为了兼容更多版本，也可以用 `EXISTS`：
+
+```sql
+SELECT n.book_id
+FROM new_book AS n
+WHERE EXISTS (
+    SELECT 1
+    FROM featured_book AS f
+    WHERE f.book_id = n.book_id
+);
+```
+
+`EXISTS` 表达的是集合意义的“存在一个相同键”，不会因为右表有两条相同记录而把左表行放大；若业务允许清单重复，则应先决定重复本身是否有意义，再选择是否 `DISTINCT`。
+
+### 除法：把“全部满足”翻译为查询
+
+**除法**是关系代数中很有辨识度、却经常被遗漏的派生运算。若 `Purchase(customer_id, book_id)` 表示客户购买过某书，`RequiredBook(book_id)` 表示一组指定图书，那么：
+
+```text
+Purchase ÷ RequiredBook
+```
+
+返回“买过 `RequiredBook` 中**所有**图书的客户”。它不是“买过其中任意一本”，所以一个普通 `JOIN` 不够。用基本操作表示时，其逻辑是：先列出所有客户与必读书的应有组合，减去实际购买过的组合，再从全部客户中排除仍有缺项的人。
+
+```text
+π customer_id(Purchase)
+− π customer_id(
+    (π customer_id(Purchase) × RequiredBook)
+    − Purchase
+  )
+```
+
+SQL 常使用双重 `NOT EXISTS`，直译为“并不存在某一本必读书，是该客户没有买过的”：
+
+```sql
+SELECT DISTINCT p.customer_id
+FROM purchase AS p
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM required_book AS r
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM purchase AS bought
+        WHERE bought.customer_id = p.customer_id
+          AND bought.book_id = r.book_id
+    )
+);
+```
+
+若 `required_book` 为空，经典关系代数的结果会包含所有出现在 `Purchase` 中的客户；产品需求可能反而希望返回空结果。因此“全部”查询还应明确空集合时的业务语义，而不能只复制模板。除法的价值不在于背出符号，而在于识别“对每一个条件都满足”的量词结构；权限齐全、完成所有课程、覆盖全部地区等问题都属于这一类。
+
 ## 从关系代数到 SQL 的阅读框架
 
 面对一条 SQL，可按下面顺序还原它的逻辑，而不是死记关键字位置：
@@ -146,7 +315,7 @@ GROUP BY oi.order_id;
 
 - 关系由属性组织元组；关系没有天然行序，域与约束共同定义合法取值。
 - 主键标识元组，候选键与唯一约束保护其他业务上的唯一性；`NULL` 需按三值逻辑谨慎处理。
-- 选择对应筛行，投影对应取列，连接以明确条件将相关事实配对。
-- 笛卡尔积解释了漏掉连接条件的危险；集合运算则要求参与关系语义兼容。
+- 选择、投影、重命名、并、差和笛卡尔积构成可组合的基本运算；连接、交和除法是常用派生运算。
+- 笛卡尔积解释了漏掉连接条件的危险；集合运算则要求参与关系语义兼容。除法对应“满足全部条件”，SQL 中常写成双重 `NOT EXISTS`。
 
 下一篇[ER 建模到关系模式](03-er-modeling-and-schema-design.md)将从书店需求出发，决定哪些概念应该成为实体、联系和最终的表。

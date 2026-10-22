@@ -131,6 +131,30 @@ python -c "import torch, torchvision; from PIL import Image; print(torch.__versi
 
 ## 案例一：ResNet 分类推理
 
+### 先认识 ResNet-18：这段代码的模型意图
+
+`resnet18` 是 torchvision 提供的 **ResNet-18 残差卷积网络**。它的原始任务是 ImageNet 的单标签 1,000 类图像分类：一张 RGB 图像经过卷积特征提取后，得到 1,000 个类别的原始分数。因此本节的 `softmax`、`topk` 和类别名称查询，是在回答“这张图最像 ImageNet 标签中的哪几类”，并不是通用的物体检测、图像修复或用户自定义分类器。
+
+`ResNet` 的核心是残差连接。一个残差块不只计算 $F(x)$，还把输入直接加回去：
+
+$$
+y=F(x)+x
+$$
+
+这样网络学习的是“在已有特征上补充什么”。信息和梯度都有一条较直接的 shortcut 路径，深层网络因而更容易训练；当通道数或空间尺寸发生变化时，shortcut 会用投影把 shape 对齐。名称中的 `18` 是这套变体按惯例计数的 18 个带权重层（17 个卷积层加末端全连接层），不是 18 个类别，也不是 18 个独立模型。
+
+对权重推荐的 `224×224` 输入，可将 `print(model)` 看到的结构先压缩为：
+
+```text
+[B, 3, 224, 224]
+  → stem：7×7 卷积、归一化、激活、最大池化        [B, 64, 56, 56]
+  → layer1 / layer2 / layer3 / layer4：残差 stage   [B, 64/128/256/512, 56/28/14/7, 56/28/14/7]
+  → avgpool：每通道做全局平均                       [B, 512, 1, 1]
+  → fc：Linear(512, 1000)                           [B, 1000] logits
+```
+
+前面的卷积和残差 stage 是通用视觉 **backbone（主干）**：从像素提取边缘、纹理、部件和更抽象的特征；最后 `fc` 是 ImageNet 的 **分类 head（任务头）**。本节只使用现成权重推理，不训练或重写这些层。后续迁移学习把 `fc` 替换为新的 `Linear(512, 类别数)`，正是“保留主干、替换任务头”，而非随意改一个层名。
+
 ### 下载模型并查看结构
 
 ```python
@@ -223,6 +247,10 @@ print(probability)
 ## 案例三：TorchScript 图像修复模型
 
 CleanCanvas 的 LaMa 路径使用 TorchScript。与 ResNet 分类不同，它需要两个输入：完整图像和 mask。模型不是只看被框选的小矩形，而是看完整图像，同时根据 mask 决定哪些位置允许生成补全。
+
+**TorchScript 是什么？** 可以把它理解成将一个 PyTorch `nn.Module` 的可执行计算和参数导出为可加载工件的方式。训练/导出端通常通过 `torch.jit.script`（分析可脚本化代码）或 `torch.jit.trace`（记录示例输入走过的算子路径）生成它；部署端用 `torch.jit.load()` 恢复一个可调用的 ScriptModule，因此当前项目不必重新写出 LaMa 的 Python 网络类再注入参数。它仍依赖 PyTorch 运行时，也不会自动知道图片应为 RGB、mask 怎样二值化或尺寸如何补齐；这些输入/输出契约仍由模型发布者和引擎代码共同负责。`.pt`、`.pth` 这样的后缀本身不能区分 TorchScript 与普通权重文件，下一案例正好展示另一种格式。
+
+LaMa（*Resolution-robust Large Mask Inpainting*）的任务是 **mask 引导的整图修复**：`完整图像 + 待修复 mask → 完整图像`。所以代码把整张图和同尺寸 mask 一起送入网络，而不是只裁出白色区域再放大；框外真实内容为模型补全洞内区域提供上下文。最终业务代码又强制恢复 mask 外像素，确保“网络能看全图”和“产品只允许改选区”这两件事并不冲突。
 
 ### 从 OpenCV 图像建立模型输入
 
@@ -336,6 +364,12 @@ cv2.imwrite('repaired.png', result_bgr)
 ## 案例四：Real-ESRGAN 的 `state_dict` 推理
 
 Real-ESRGAN 与 LaMa 的区别在于：项目保存的是 checkpoint，而不是完整 TorchScript 模块。因此加载顺序是：**构造正确网络 → 在 CPU 读取 checkpoint → 取出参数字典 → 严格加载 → 迁移设备 → 推理**。
+
+**checkpoint（检查点）** 是“某个训练或发布时刻保存下来的状态包”的泛称，不是单一的文件格式。一个用于断点续训的完整 checkpoint 可能包括模型参数、优化器状态、epoch、学习率调度器、随机数状态和配置；而本例为了部署推理，只从 checkpoint 中取 `params_ema` 或 `params` 这一组模型参数。`state_dict` 是“名称到 Tensor”的状态映射，常是 checkpoint 的全部或其中一个字段；二者不能机械地视为同义词。
+
+Real-ESRGAN 是**单图像超分辨率**模型：输入一张低分辨率 RGB 图，输出一张更大的 RGB 图；它不接收修复 mask，也不保证找回真实历史细节。项目的 Anime 权重配 `RRDBNet`（Residual-in-Residual Dense Block 网络：密集连接复用中间特征，残差连接让深层特征变换更稳定），General 权重配 `SRVGGNetCompact`（紧凑的 VGG 风格卷积/激活网络）。这两种网络结构和权重必须成对：前者不能因为文件也叫 `.pth` 就装进后者。
+
+例如 `RealESRGAN_x4plus_anime_6B` 中，`x4` 表示网络原生生成 4 倍宽高的输出，`6B` 对应本项目 Anime 构造器使用的 6 个 RRDB；它不表示用户可将同一权重任意改成 6 倍。若调用者请求 2 倍，项目仍先由 x4 网络生成原生结果，再在后处理阶段缩放到 2 倍。
 
 ```python
 checkpoint = torch.load('RealESRGAN_x4plus_anime_6B.pth', map_location='cpu', weights_only=True)

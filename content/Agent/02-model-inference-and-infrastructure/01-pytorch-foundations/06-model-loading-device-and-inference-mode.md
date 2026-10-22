@@ -25,11 +25,16 @@ title = '预训练模型如何下载和使用：权重格式、设备、dtype �
 
 `.pt`、`.pth`、`.jit` 只是命名习惯。加载前要看发布方的序列化格式和输入说明，而不是根据后缀猜 API。
 
-| 类型 | 文件包含什么 | 谁创建结构 | 加载 API | 项目实例 |
+先把三个相近词拆开：**`state_dict`** 是一份“状态名称 → Tensor”的映射；**checkpoint** 是某次训练或发布保存下来的状态包，可能把一个或多个 `state_dict` 连同 epoch、优化器、调度器和配置装在一起；**TorchScript** 则是可被 `torch.jit.load()` 恢复为可调用模块的导出工件。它们描述的是文件里装了什么，而不是 `.pt` 或 `.pth` 的后缀。
+
+| 类型 | 文件包含什么 | 谁创建可调用结构 | 能否直接 `model(...)` | 典型用途与项目实例 |
 | --- | --- | --- | --- | --- |
-| `state_dict` / checkpoint | 参数名到 Tensor 的映射，可能外包元数据字典 | 应用代码 | `torch.load()` + `load_state_dict()` | Real-ESRGAN `.pth` |
-| TorchScript 模块 | 可执行的图及参数 | TorchScript 反序列化器 | `torch.jit.load()` | LaMa `.pt`、Manga `.jit` |
-| Python 整对象 pickle | Python 对象及其引用 | 依赖原始 Python 类 | `torch.load()` | 本项目未使用；不应加载不可信来源 |
+| 仅模型 `state_dict` | 参数/buffer 名称到 Tensor 的映射 | 应用代码先实例化 `nn.Module` | 不能 | 部署权重；Real-ESRGAN checkpoint 中取出的 `params_ema` / `params` |
+| 完整训练 checkpoint | 模型状态，常另含优化器、epoch、调度器、配置等 | 取出模型状态后仍由应用代码实例化 | 不能 | 断点续训或发布状态包；本项目只消费其中模型权重 |
+| TorchScript 模块 | 可执行图、方法与参数 | TorchScript 反序列化器 | 可以，但仍须满足输入契约 | LaMa `.pt`、Manga `.jit` |
+| Python 整对象 pickle | Python 对象及其引用 | 依赖原始 Python 类 | 可能可以，但耦合很强 | 本项目未使用；不应加载不可信来源 |
+
+因此，看到“checkpoint”不要自动理解成“已经能推理的模型”。反过来，能被 `torch.jit.load()` 加载的 TorchScript 也不是可继续恢复优化器状态的训练 checkpoint。先问“这个文件保存了哪一种工件”，再选择 API，才不会用文件扩展名赌运气。
 
 ### `state_dict` 只保存参数，不会替你猜网络
 
@@ -50,6 +55,8 @@ model.eval()
 
 `strict=True` 会在缺键、多键或张量 shape 不符时立刻失败。它阻止 Anime 权重被误装进 General 网络后，带着错误继续跑。
 
+若目标是**继续训练**，保存模型权重还不够。以 AdamW 为例，优化器还持有每个参数的动量统计；从不完整权重恢复后直接训练，数值轨迹不会等同于原训练在该时刻继续。完整训练 checkpoint 通常至少保存并恢复 `model_state`、`optimizer_state`、`epoch`，以及需要的 scheduler、随机数状态、配置和数据版本。CleanCanvas 的 Real-ESRGAN 不做断点续训，它只是为了推理取出已经选好的模型参数，所以不创建也不恢复 optimizer。
+
 CleanCanvas 的 `backend/enhance/realesrgan.py` 在 `_load_model()` 中的真实逻辑是：
 
 ```python
@@ -65,6 +72,18 @@ loaded = model.to(device).eval()
 - `.to(device)` 迁移已登记的参数和 buffer，`.eval()` 切换层行为；它们都还没有执行图像推理。
 
 ### TorchScript 恢复可调用模块，仍要遵守输入契约
+
+它的形成过程可概念性地写成：
+
+```text
+训练时的 nn.Module
+  ── torch.jit.script（分析可脚本化控制流）或 torch.jit.trace（记录示例路径）──→
+TorchScript 工件（图 + 参数）
+  ── torch.jit.load(...) ──→
+当前进程中可调用的 ScriptModule
+```
+
+`script` 与 `trace` 是两种导出路径，不是推理时的两个模型。`trace` 主要记录给定示例输入实际执行过的算子路径，带有数据相关分支的模型不能不加检查地把它当作完整逻辑；`script` 则要求代码满足可脚本化约束。作为模型使用者通常不需要重新导出 LaMa，但应知道：TorchScript 解决的是“怎样携带可执行网络”，不是 TensorRT，也不是会自动推断预处理的万能文件。
 
 LaMa、Anime-LaMa、Manga 使用：
 

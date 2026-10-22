@@ -92,6 +92,30 @@ return np.pad(image, padding, mode="constant" if constant else "symmetric")
 
 调用图像时 `constant=False`，`symmetric` 会镜像边界值；调用 mask 时 `constant=True`，补出的像素必为 0。这里的参数差异是语义，而不仅是图像处理技巧：镜像图像可给卷积边缘一个较自然的上下文，而扩张 mask 到虚拟 padding 区会改变模型的修复条件。二维 mask 进入该函数时会先临时扩成 `[H,W,1]`，所以之后的 `[:, :, 0]` 正是去掉这个辅助通道，不是随意索引。
 
+### 三种名字相近的 padding，不能混为一谈
+
+后续代码还会出现 `Conv2d(padding=1)` 和 Real-ESRGAN 的 `tile_pad`。它们都含有 “padding” 一词，却发生在不同位置、解决不同问题：
+
+| 名称 | 发生位置 | 本质 | 目的 |
+| ---- | -------- | ---- | ---- |
+| 卷积 padding | 网络内部，例如 `Conv2d(..., padding=1)` | 在卷积计算边界时按层规则扩展特征图 | 控制卷积后的尺寸，并让边缘像素能参与足够的卷积窗口 |
+| 输入倍数 padding | LaMa 调用前的 `_pad_to_modulo(..., 8)` | 在整张输入图/mask 外增加少量像素 | 满足此网络下采样、上采样尺度链的 shape 契约 |
+| tile padding / halo | Real-ESRGAN 每个小块四周多读取 `tile_pad` 个像素 | 从**原图真实邻域**取重叠上下文 | 防止独立分块在边缘缺少邻居而产生接缝 |
+
+第二种是本节的预处理：它真正给整张图增加了虚拟边缘，前向后必须裁回。第三种不是“把每个 tile 补黑边或镜像边”；它是在图像内部多取相邻的真实像素，模型推理后再丢弃这圈上下文对应的输出。把两者都理解成“图片四周补一点东西”，就会错过它们的输入来源和坐标规则。Real-ESRGAN 的完整分块坐标会在[网络、权重与分块推理](07-realesrgan-network-and-tiled-inference.md)中展开。
+
+边界模式也不只是泛泛的“镜像”。对一维序列 `[A, B, C]` 在右侧补两个位置，常见效果为：
+
+```text
+原序列：                 [A, B, C]
+symmetric（包含边界）： [A, B, C, C, B]
+reflect（不含边界）：   [A, B, C, B, A]
+edge（重复边界）：      [A, B, C, C, C]
+constant（值为 0）：    [A, B, C, 0, 0]
+```
+
+这里给图像选 `symmetric`，是让最外侧纹理自然延续，避免卷积突然看见一条纯黑边；给 mask 选常量 `0`，是因为原图外的虚拟区域绝不能被解释成“用户要求修复”。实现只向下、向右补齐，因此原图左上角 `(0, 0)` 的坐标不移动；最终取 `result[:height, :width]` 就能严格回到用户的原始坐标系。`8` 是这份 LaMa 网络的输入契约，可用“三次 2 倍尺度变化需要 $2^3$ 对齐”作直觉理解，但不能泛化为所有视觉模型都必须补到 8 的倍数。
+
 ## 第三步：HWC 变 CHW，整数变浮点数
 
 核心转换为：
@@ -294,6 +318,8 @@ assert result.device.type == self.device
 `MangaEngine` 先执行 `BGR → GRAY`，构造 `[1, 1, H, W]` 灰度张量；除主修复网络外还调用一份线稿模型，生成 `lines`。灰度和线稿归一化到 `[-1, 1]` 后，与二值 mask、随机噪声和全 1 张量一起喂给漫画修复网络。
 
 因此彩色画面不适合 Manga：mask 内输出来自灰度模型，最终再 `GRAY → BGR` 后三个通道相同，色相和饱和度无法凭配置找回来。这不是“GPU 算得不够好”，而是输入信息在最开始就被丢弃了。
+
+本节只在图像预处理的视角解释 Manga 的灰度输入；若需要选择 `lama`、`anime_lama`、`manga` 三种模式，并沿实际引擎理解权重、线稿模型、命令行/GUI 使用方式和结果边界，请继续阅读[LaMa、Anime-LaMa 与 Manga 图像修复模型详解](05b-lama-anime-lama-and-manga-inpainting-guide.md)。
 
 ## 小结
 

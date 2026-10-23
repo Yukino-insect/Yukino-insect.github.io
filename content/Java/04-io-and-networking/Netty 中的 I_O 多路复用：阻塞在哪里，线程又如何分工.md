@@ -8,7 +8,7 @@ title = 'Netty 中的 I/O 多路复用：阻塞在哪里，线程又如何分工
 
 更准确的结论是：**I/O 多路复用仍是同步 I/O 模型中的一种等待方式。它让少量线程能够阻塞等待许多连接的就绪事件，减少的是“一个空闲连接占一个等待线程”的成本，而不是网络传输、内核处理、数据复制或业务计算的成本。**
 
-放到 Netty 中，还要再补上一句：**默认情况下，`EventLoop` 不只负责等 I/O 事件，也会执行该连接 Pipeline 中的处理器。只有显式配置执行器，或自行提交任务到业务线程池，业务代码才会离开 I/O 线程。**把这两层区分清楚，才谈得上正确地使用 Netty。
+放到 Netty 中，还要再补上一句：**默认情况下，`EventLoop` 不只负责等 I/O 事件，也会执行该连接 Pipeline 中的处理器。只有显式配置执行器，或自行提交任务到业务线程池，业务代码才会离开 I/O 线程**。把这两层区分清楚，才谈得上正确地使用 Netty。
 
 ## 一、先区分：阻塞的是哪一步
 
@@ -53,7 +53,7 @@ title = 'Netty 中的 I/O 多路复用：阻塞在哪里，线程又如何分工
 
 ## 二、操作系统究竟替 Netty 做了什么
 
-**操作系统负责维护网络连接及其 I/O 状态；Netty 会通过 Java NIO 的 `Selector`，或通过 Netty 的原生传输实现，把“我关心哪些 socket 的哪些状态变化”登记给操作系统，并等待其返回已经就绪的 socket。**Netty 因而能够知道哪些连接现在值得读、写或接受，但它不是绕过操作系统去侦测网卡，更不会接管 TCP 协议栈。
+**操作系统负责维护网络连接及其 I/O 状态；Netty 会通过 Java NIO 的 `Selector`，或通过 Netty 的原生传输实现，把“我关心哪些 socket 的哪些状态变化”登记给操作系统，并等待其返回已经就绪的 socket**。Netty 因而能够知道哪些连接现在值得读、写或接受，但它不是绕过操作系统去侦测网卡，更不会接管 TCP 协议栈。
 
 先把三个容易混淆的对象分开：
 
@@ -65,7 +65,7 @@ title = 'Netty 中的 I/O 多路复用：阻塞在哪里，线程又如何分工
 
 以 Netty 的 NIO 传输为例，`NioEventLoop` 会把 `Channel` 注册到一个 JDK `Selector`；Netty 的 API 也明确将它描述为“把 Channel 注册到 Selector 并在事件循环中完成多路复用”的单线程 EventLoop。[Netty NIO 包说明](https://netty.io/4.1/api/io/netty/channel/nio/package-summary.html) 当 EventLoop 调用 `Selector.select()` 时，JDK 会查询底层操作系统关于已注册 Channel 的就绪状态，并把符合关注条件的 `SelectionKey` 放入已选择集合；这正是 `Selector` 的定义行为。[Java `Selector` API](https://docs.oracle.com/en/java/javase/26/docs/api/java.base/java/nio/channels/Selector.html)
 
-在 Linux 上，JDK 的 Selector 实现通常会利用 `epoll` 这类内核接口；而 macOS、BSD、Windows 上的具体后端则由相应 JDK 与平台决定。另一方面，Netty 也提供 Linux `epoll`、BSD/macOS `kqueue` 等原生传输。两条路径的封装层不同，但本质相同：**最后作出“这个内核 socket 现在可读/可写/可接受”判断的仍是操作系统内核。**因此，不能把 `Selector` 和 `epoll` 简单地画成两个必然串联的应用层组件；对于 NIO 传输，前者是 Java API，后者可能是其在 Linux 上使用的底层实现。
+在 Linux 上，JDK 的 Selector 实现通常会利用 `epoll` 这类内核接口；而 macOS、BSD、Windows 上的具体后端则由相应 JDK 与平台决定。另一方面，Netty 也提供 Linux `epoll`、BSD/macOS `kqueue` 等原生传输。两条路径的封装层不同，但本质相同：**最后作出“这个内核 socket 现在可读/可写/可接受”判断的仍是操作系统内核**。因此，不能把 `Selector` 和 `epoll` 简单地画成两个必然串联的应用层组件；对于 NIO 传输，前者是 Java API，后者可能是其在 Linux 上使用的底层实现。
 
 ### 从建立连接到读事件：内核与 Netty 的接力
 
@@ -114,7 +114,7 @@ worker EventLoop 的 Selector.select() 返回 OP_READ
 这些 ready 操作的精确定义可见 [Java `SelectionKey` API](https://docs.oracle.com/javase/7/docs/api/java/nio/channels/SelectionKey.html)。注意两个细节：
 
 1. **就绪是一次“现在可以尝试”的提示，不是完整消息通知。**`OP_READ` 不承诺正好有一个完整 HTTP 请求；TCP 只提供连续字节，可能要多次读取和解码才组成消息。读取时也必须正确处理 `0`、`-1`（EOF）与异常。
-2. **`OP_WRITE` 通常不应永久关注。**TCP 发送缓冲区大部分时间都有空间，因此持续订阅可写事件可能让事件循环反复被唤醒。Netty 通常会先尽量直接写；只有内核暂时无法接收更多字节、存在待发送数据时，才关注写就绪，并在缓冲区腾出空间后继续写。这也是为什么“socket 可写”不等价于“对端已经收到响应”。
+2. **`OP_WRITE` 通常不应永久关注**。TCP 发送缓冲区大部分时间都有空间，因此持续订阅可写事件可能让事件循环反复被唤醒。Netty 通常会先尽量直接写；只有内核暂时无法接收更多字节、存在待发送数据时，才关注写就绪，并在缓冲区腾出空间后继续写。这也是为什么“socket 可写”不等价于“对端已经收到响应”。
 
 在 Linux `epoll` 的语义中，`EPOLLIN` 表示关联文件描述符可供读操作，`EPOLLOUT` 表示可供写操作；`epoll_wait` 会阻塞到有事件、信号中断或超时为止，并从内核维护的就绪列表返回事件。[`epoll_ctl(2)`](https://man7.org/linux/man-pages/man2/epoll_ctl.2.html) 与 [`epoll_wait(2)`](https://man7.org/linux/man-pages/man2/epoll_wait.2.html) 这正是“操作系统确认哪些 socket 可以操作”的平台级版本。Java/Netty 会屏蔽许多平台差异，但不会改变这种责任分界。
 
@@ -126,7 +126,7 @@ worker EventLoop 的 Selector.select() 返回 OP_READ
 - **可写**：内核告诉你发送缓冲区暂有空间；用户态仍要调用 `write`。写入内核缓冲区后，真正的网卡发送、对端接收、TCP 确认乃至必要的重传仍由内核继续推进。
 - **可接受**：内核告诉你监听队列中已有可取走的连接；用户态仍要调用 `accept`，再初始化该连接的用户态对象。
 
-所以更精确的说法是：**Netty 不是不断轮询每个 socket 来猜测状态，而是把兴趣集合交给操作系统，阻塞等待操作系统报告就绪集合；随后由 EventLoop 对报告的 socket 执行实际的非阻塞 I/O。**这便是 I/O 多路复用中“复用”的完整含义。
+所以更精确的说法是：**Netty 不是不断轮询每个 socket 来猜测状态，而是把兴趣集合交给操作系统，阻塞等待操作系统报告就绪集合；随后由 EventLoop 对报告的 socket 执行实际的非阻塞 I/O**。这便是 I/O 多路复用中“复用”的完整含义。
 
 ## 三、多路复用没有消灭哪些成本
 
@@ -169,7 +169,7 @@ worker EventLoop 的 Selector.select() 返回 OP_READ
 
 这里的 `workerGroup` 容易被误称为“业务工作线程池”，但默认情况下它不是这个含义。根据 Netty 的 `EventLoop` 约定，一个 `EventLoop` 在 `Channel` 注册后负责该 `Channel` 的全部 I/O；一个 `EventLoop` 通常会管理多个 `Channel`。`NioEventLoop` 则是在单线程事件循环中将多个 `Channel` 注册给 `Selector` 并进行多路复用。[Netty EventLoop API](https://netty.io/4.1/api/io/netty/channel/EventLoop.html) 与 [NioEventLoop API](https://netty.io/4.1/api/io/netty/channel/nio/NioEventLoop.html) 对此有明确说明。
 
-这带来一个非常重要的性质：**同一条连接上的事件通常由同一个 EventLoop 串行执行。**这样可以减少同一 `Channel` 上的并发协调，也使 Pipeline 中大量状态不必处处加锁。但代价是，该 EventLoop 上任意一个处理器运行太久，都会拖慢它管理的其他连接。
+这带来一个非常重要的性质：**同一条连接上的事件通常由同一个 EventLoop 串行执行**。这样可以减少同一 `Channel` 上的并发协调，也使 Pipeline 中大量状态不必处处加锁。但代价是，该 EventLoop 上任意一个处理器运行太久，都会拖慢它管理的其他连接。
 
 ## 五、Netty 默认并不会自动把请求分发到业务线程
 

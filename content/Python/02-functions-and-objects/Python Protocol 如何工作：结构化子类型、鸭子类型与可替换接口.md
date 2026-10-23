@@ -16,7 +16,7 @@ class InpaintEngine(Protocol):
     def inpaint(self, image_bgr: np.ndarray, mask: np.ndarray) -> np.ndarray: ...
 ```
 
-它表达的契约是：**任何对象只要能以兼容的签名提供 `inpaint(image_bgr, mask)`，并返回 `np.ndarray`，就可以在静态类型检查中被当作 `InpaintEngine` 使用。**实现类不必显式写 `class SomeEngine(InpaintEngine)`。
+它表达的契约是：**任何对象只要能以兼容的签名提供 `inpaint(image_bgr, mask)`，并返回 `np.ndarray`，就可以在静态类型检查中被当作 `InpaintEngine` 使用**。实现类不必显式写 `class SomeEngine(InpaintEngine)`。
 
 这是 Python 类型提示中的**结构化子类型**（structural subtyping）：看对象“具有什么形状和能力”，而不是只看它是否声明继承了某个名字。它将 Python 传统的鸭子类型——“像鸭子一样走和叫，就把它当作鸭子”——以可检查、可导航的接口形式写进类型系统。
 

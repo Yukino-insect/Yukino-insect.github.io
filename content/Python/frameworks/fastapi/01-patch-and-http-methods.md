@@ -13,7 +13,7 @@ aliases = [
 @router.patch("/users/{user_id}")
 ```
 
-两种理解都不对。**`@router.patch(...)` 是路径操作装饰器（path operation decorator）：它在应用导入和装配阶段，把紧随其后的函数注册为一个仅处理 HTTP `PATCH` 请求的路由。**它决定“哪种请求会到达这个函数”，并参与生成 OpenAPI 和 `/docs` 文档；它不会自行查数据库、合并字段、校验权限或提交事务。部分更新的具体语义仍必须由端点、Pydantic 模型和业务层共同实现。
+两种理解都不对。**`@router.patch(...)` 是路径操作装饰器（path operation decorator）：它在应用导入和装配阶段，把紧随其后的函数注册为一个仅处理 HTTP `PATCH` 请求的路由**。它决定“哪种请求会到达这个函数”，并参与生成 OpenAPI 和 `/docs` 文档；它不会自行查数据库、合并字段、校验权限或提交事务。部分更新的具体语义仍必须由端点、Pydantic 模型和业务层共同实现。
 
 本文从 `@router.patch` 出发，解释 `PATCH`、`PUT` 的区别，给出一套安全的 FastAPI 部分更新实现，并梳理 FastAPI 中常用的 HTTP 请求方法。HTTP 动词并不是装饰性的命名习惯；它影响调用方如何理解重试、缓存、并发和错误处理。接口契约若从一开始就含糊，后面无论补多少注释都很难挽回。
 
@@ -460,7 +460,7 @@ def test_patch_rejects_server_managed_field() -> None:
 
 ## 十、总结
 
-`@router.patch` 的作用可以浓缩为一句话：**它将一个 Python 函数注册为处理指定路径 `PATCH` 请求的 FastAPI 路径操作，并把相关契约信息纳入 OpenAPI 文档。**它不是数据库更新函数，也不会自动替你实现部分更新。
+`@router.patch` 的作用可以浓缩为一句话：**它将一个 Python 函数注册为处理指定路径 `PATCH` 请求的 FastAPI 路径操作，并把相关契约信息纳入 OpenAPI 文档**。它不是数据库更新函数，也不会自动替你实现部分更新。
 
 写一个可靠的 `PATCH` 端点，需要同时做到：
 

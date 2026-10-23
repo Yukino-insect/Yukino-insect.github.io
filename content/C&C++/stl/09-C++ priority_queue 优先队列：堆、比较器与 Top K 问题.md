@@ -63,7 +63,7 @@ std::priority_queue<int, std::vector<int>, std::less<int>> max_heap;
 std::priority_queue<int, std::vector<int>, std::greater<int>> min_heap;
 ```
 
-记忆方式不必绕进“比较器返回 true 到底代表什么”的内部细节：**写 `std::greater<T>` 时，`top()` 是最小元素；写 `std::less<T>` 或省略比较器时，`top()` 是最大元素。**每次写完可用两个值心算验证一下：若放入 `2` 和 `5`，你期待 `top()` 返回哪个？
+记忆方式不必绕进“比较器返回 true 到底代表什么”的内部细节：**写 `std::greater<T>` 时，`top()` 是最小元素；写 `std::less<T>` 或省略比较器时，`top()` 是最大元素**。每次写完可用两个值心算验证一下：若放入 `2` 和 `5`，你期待 `top()` 返回哪个？
 
 对自定义对象，更推荐把比较逻辑写成独立的可命名类型：
 

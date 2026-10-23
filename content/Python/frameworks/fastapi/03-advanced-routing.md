@@ -275,7 +275,7 @@ async def read_metrics() -> dict[str, int]:
 
 没有合格 `X-API-Key` 的请求不会进入 `read_metrics`。依赖内部抛出的 `HTTPException` 会短路请求；这正适合无法通过就没有必要运行端点的前置条件。
 
-但有一个常被忽略的区别：**写在 `dependencies=[...]` 中的依赖会执行，其返回值不会作为端点形参提供。**若端点本身需要当前用户对象，应在函数签名中声明该依赖：
+但有一个常被忽略的区别：**写在 `dependencies=[...]` 中的依赖会执行，其返回值不会作为端点形参提供**。若端点本身需要当前用户对象，应在函数签名中声明该依赖：
 
 ```python
 from typing import Annotated

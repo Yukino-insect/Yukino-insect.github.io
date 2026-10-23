@@ -29,7 +29,7 @@ main.o、driver.o、libfoo.a
 | VMA | 运行时地址 | 程序执行/访问 `.data` 使用的地址 | 镜像中保存初始字节的位置 |
 | LMA | 装载地址 | 固件镜像中 `.data` 初值的存放位置 | VMA、文件偏移、物理地址 |
 
-**section 是链接和调试的组织单位，segment 是装载器的组织单位。**一个 `PT_LOAD` 常包含连续的 `.text` 与 `.rodata`，也可能包含 `.data`；具体如何分组由默认规则、脚本和链接器决定。运行 ELF 时，操作系统通常依据 program headers 建立映射，不会逐个读取 section 名称。
+**section 是链接和调试的组织单位，segment 是装载器的组织单位**。一个 `PT_LOAD` 常包含连续的 `.text` 与 `.rodata`，也可能包含 `.data`；具体如何分组由默认规则、脚本和链接器决定。运行 ELF 时，操作系统通常依据 program headers 建立映射，不会逐个读取 section 名称。
 
 ## 二、为什么需要脚本：默认布局只适合默认运行环境
 
@@ -344,7 +344,7 @@ void runtime_init(void)
 
 ### 3. VMA/LMA 与 Linux 进程不是简单的一一对应
 
-在带操作系统和 MMU 的用户进程中，ELF 文件中的 `PT_LOAD` segment、文件偏移、进程 VMA、物理页和页缓存之间由装载器与内核处理；链接器脚本里所谓 LMA 的固件复制模型不应机械套用。仍然通用的原则是：**运行地址与初始内容来源可以不同。**在裸机里常是 Flash→RAM 复制；在 Linux 中常是文件页按需映射到进程虚拟地址，再由页缓存和物理页面支撑。
+在带操作系统和 MMU 的用户进程中，ELF 文件中的 `PT_LOAD` segment、文件偏移、进程 VMA、物理页和页缓存之间由装载器与内核处理；链接器脚本里所谓 LMA 的固件复制模型不应机械套用。仍然通用的原则是：**运行地址与初始内容来源可以不同**。在裸机里常是 Flash→RAM 复制；在 Linux 中常是文件页按需映射到进程虚拟地址，再由页缓存和物理页面支撑。
 
 GNU `ld` 将 VMA 作为输出段地址，并允许用 `AT`/`AT>` 指定 LMA；这正是 `.data` 在 RAM 运行、初值在 Flash 保存的脚本基础。[GNU ld：Output Section VMA/LMA](https://sourceware.org/binutils/docs/ld.html)
 

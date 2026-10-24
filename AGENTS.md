@@ -68,7 +68,7 @@ title = '文章标题'
 
 ### Mermaid 流程图
 
-- 全站 Mermaid 流程图在 `layouts/_default/baseof.html` 中统一配置为 `curve: "linear"`，使用直线箭头连接节点。除非用户明确要求特定曲线样式，文章中的 Mermaid 图不应覆盖这一全局配置。
+- 全站 Mermaid 流程图在 `layouts/_default/baseof.html` 中统一配置为 `curve: "step"`，使用由水平、垂直直线段组成的阶梯式箭头连接节点。除非用户明确要求特定曲线样式，文章中的 Mermaid 图不应覆盖这一全局配置。
 
 ### LaTeX / MathJax 公式
 

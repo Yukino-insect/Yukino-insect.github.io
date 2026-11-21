@@ -24,7 +24,7 @@ title = '医院病房管理系统 ER 图：从需求到关系模式与 MySQL 约
 
 ## 二、识别实体：谁有独立身份，谁描述一次事件
 
-能依靠自身标识独立存在的对象，建模为强实体集。这里有五个：
+能依靠自身标识独立存在的对象，建模为强实体集。这里有六个：
 
 | 强实体集 | 主键 | 主要属性 |
 | --- | --- | --- |
@@ -33,6 +33,7 @@ title = '医院病房管理系统 ER 图：从需求到关系模式与 MySQL 约
 | `BED` | `bed_id` | `bed_type` |
 | `DOCTOR` | `doctor_id` | `doctor_name`、`birth_date`、`professional_title`、`education` |
 | `PATIENT` | `patient_id` | `patient_name`、`gender`、`birth_date` |
+| `HOSPITALIZATION` | `admission_no` | `admission_time`、`admission_reason`、`admission_diagnosis`、`diagnosis_conclusion`、`discharge_time` |
 
 它们在 Chen E-R 图中画成单矩形，键属性名画实线下划线。 `phone_number` 不是第六个强实体：题目只要求保存号码值，并未赋予号码独立生命周期，因此它是患者的多值属性。
 
@@ -54,15 +55,14 @@ PATIENT(
 
 它隐含“一个患者只能住院一次”。患者再次入院时，新的床位、医生和时间会覆盖旧值；若重复增加 `bed_1`、`bed_2`、`admission_time_1` 等列，则只是把可重复的业务事实伪装成固定数量的字段。
 
-因此应增加 `HOSPITALIZATION`（住院记录）。本例不额外虚构全局住院 ID，而是在每位患者内部用 `admission_no` 区分第几次住院：
+因此应增加 `HOSPITALIZATION`（住院记录）。医院为每一次住院分配一个全院唯一的 `admission_no`；它既是业务上的住院号，也是该实体的主键：
 
 ```text
 PATIENT 的键：             patient_id
-HOSPITALIZATION 的部分键： admission_no
-完整标识：                 (patient_id, admission_no)
+HOSPITALIZATION 的键：     admission_no
 ```
 
-`HOSPITALIZATION` 依赖患者才能被完整识别，因此可在 Chen 图中建模为弱实体：画双矩形；`HAS_ADMISSION` 画双菱形；弱实体一侧连接标识联系时画双线。 `admission_no` 是部分键，不是可以全局唯一识别住院记录的独立主键。
+患者是住院记录的必需关联对象，但不是其身份组成部分。由于 `admission_no` 本身即可全局唯一地识别一次住院，`HOSPITALIZATION` 应在 Chen 图中建模为强实体：画单矩形，`admission_no` 画实线下划线；`HAS_ADMISSION` 是普通的一对多联系，画单菱形。
 
 ## 三、确定联系、基数与参与约束
 
@@ -88,23 +88,23 @@ HOSPITALIZATION 的部分键： admission_no
 [DEPARTMENT] 1 ── EMPLOYS ───────═ N [DOCTOR]
 [SICKROOM]   1 ── CONTAINS_BED ──═ N [BED]
 
-[PATIENT]    1 ── HAS_ADMISSION ══ N [[HOSPITALIZATION]]
-[DOCTOR]     1 ── ATTENDS ───────═ N [[HOSPITALIZATION]]
-[BED]        1 ── ASSIGNED_TO ───═ N [[HOSPITALIZATION]]
+[PATIENT]    1 ── HAS_ADMISSION ══ N [HOSPITALIZATION]
+[DOCTOR]     1 ── ATTENDS ───────═ N [HOSPITALIZATION]
+[BED]        1 ── ASSIGNED_TO ───═ N [HOSPITALIZATION]
 ```
 
 约定如下：
 
-- `[ENTITY]` 表示强实体的单矩形；`[[ENTITY]]` 表示弱实体的双矩形。
-- `HAS_ADMISSION` 在实际图中是双菱形，其他联系是单菱形。
+- `[ENTITY]` 表示强实体的单矩形；本例没有弱实体。
+- 所有联系在实际图中都使用单菱形，其中 `HAS_ADMISSION` 也是普通联系。
 - `═` 表示双线，即该实体对该联系完全参与；普通横线表示部分参与。
 - `PATIENT`、`DOCTOR`、`BED` 可以暂时没有住院记录，所以它们在后三个联系中使用单线。
 
 `PATIENT` 还应连接双线椭圆 `phone_number`；`HOSPITALIZATION` 连接虚线椭圆 `stay_days`。后者由时间计算，属于派生属性。
 
-## 四、给实体和弱实体安排属性
+## 四、给实体安排属性
 
-在 Chen 图中，强实体的键属性为实线下划线；弱实体的部分键用虚线下划线。可以按以下清单作图：
+在 Chen 图中，强实体的键属性用实线下划线。可以按以下清单作图：
 
 ```text
 DEPARTMENT
@@ -123,8 +123,8 @@ DOCTOR
 PATIENT
   _patient_id_, patient_name, gender, birth_date, ((phone_number))
 
-HOSPITALIZATION（弱实体）
-  admission_no（部分键）, admission_time, admission_reason,
+HOSPITALIZATION
+  _admission_no_, admission_time, admission_reason,
   admission_diagnosis, diagnosis_conclusion, discharge_time,
   stay_days（派生属性）
 ```
@@ -138,7 +138,7 @@ HOSPITALIZATION（弱实体）
 1. 每个强实体变成一张关系，实体键成为主键。
 2. 对没有自身属性的 `1:N` 联系，把 `1` 端主键放入 `N` 端作为外键。
 3. 多值属性单独成为关系，其主键通常为“拥有者主键 + 属性值”。
-4. 弱实体关系包含拥有者主键和部分键；两者合成完整主键。
+4. `1:N` 联系自身的属性通常随该联系的外键一起放入 `N` 端。
 5. 派生属性通常不作为可编辑列存储，而是在查询或视图中计算。
 
 得到的关系模式如下。这里使用 `PK`、`FK` 直接标记键；既是主键又是外键的 `patient_id` 必须同时标出。
@@ -187,8 +187,8 @@ PATIENT_PHONE(
 )
 
 HOSPITALIZATION(
-  patient_id PK, FK → PATIENT(patient_id),
   admission_no PK,
+  patient_id FK → PATIENT(patient_id),
   attending_doctor_id FK → DOCTOR(doctor_id),
   bed_id FK → BED(bed_id),
   admission_time,
@@ -269,8 +269,8 @@ CREATE TABLE patient_phone (
 ) ENGINE = InnoDB;
 
 CREATE TABLE hospitalization (
+  admission_no BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   patient_id BIGINT UNSIGNED NOT NULL,
-  admission_no SMALLINT UNSIGNED NOT NULL,
   attending_doctor_id BIGINT UNSIGNED NOT NULL,
   bed_id BIGINT UNSIGNED NOT NULL,
   admission_time DATETIME NOT NULL,
@@ -278,7 +278,7 @@ CREATE TABLE hospitalization (
   admission_diagnosis VARCHAR(500),
   diagnosis_conclusion TEXT,
   discharge_time DATETIME,
-  PRIMARY KEY (patient_id, admission_no),
+  PRIMARY KEY (admission_no),
   KEY idx_hospitalization_doctor_time (attending_doctor_id, admission_time),
   KEY idx_hospitalization_bed_time (bed_id, admission_time),
   CONSTRAINT ck_hospitalization_time
@@ -330,9 +330,9 @@ FROM hospitalization;
 
 `phone_1`、`phone_2`、`phone_3` 会人为限制号码数量。正确的 E-R 表达是多值属性，正确的关系模型表达是 `PATIENT_PHONE(patient_id, phone_number)`。
 
-### 把弱实体误认为“任何复合主键表”
+### 把患者外键误当成住院记录主键
 
-`HOSPITALIZATION` 是弱实体，是因为它的身份在语义上依赖患者及标识联系；不是仅仅因为它的主键恰好有两列。反过来，联合主键关系表也不一定是弱实体。
+`HOSPITALIZATION` 虽然必须关联一位患者，但它由全院唯一的 `admission_no` 独立识别，因此是强实体。`patient_id` 应作为 `NOT NULL` 外键，而不是与 `admission_no` 共同组成主键；只有当住院号仅在单个患者范围内编号时，才需要使用 `(patient_id, admission_no)` 的联合主键并将其建模为弱实体。
 
 ### 只写 `1:N`，漏掉最低参与次数
 
@@ -340,7 +340,7 @@ FROM hospitalization;
 
 ## 小结
 
-- 医院案例应将科室、病房、病床、医生和患者建模为强实体，将一次住院建模为带部分键的弱实体。
+- 医院案例应将科室、病房、病床、医生、患者和一次住院都建模为强实体；`HOSPITALIZATION` 以全院唯一的 `admission_no` 为主键。
 - 床位、主治医生、入出院时间和诊断结论属于住院记录，不属于患者的永久属性。
-- `1:N` 联系通常把 `1` 端主键作为 `N` 端外键；多值电话需要独立关系；弱实体的拥有者键同时是外键和联合主键的一部分。
+- `1:N` 联系通常把 `1` 端主键作为 `N` 端外键；多值电话需要独立关系；`HOSPITALIZATION.patient_id` 是关联患者的外键，不属于其主键。
 - `NOT NULL`、主键、外键和 `CHECK` 能落实许多图中规则，但时间区间不重叠等跨行约束仍需额外机制。
